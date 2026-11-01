@@ -1,0 +1,24 @@
+{
+ "mode": "off",
+ "runtime_revision": "0148b2ebee40bf5ddecd92f612806856ec7d0feb",
+ "candidate_order_revision": "8abd4c69b1c6aadbfdd551696211d1d52b6c4520",
+ "baseline": "3cc12c6f8d93ffd6eae91d1bd44efe74134ae195",
+ "burndown_commit": "8abd4c69b1c6aadbfdd551696211d1d52b6c4520",
+ "command": "./scripts/find-qjsng-gaps.sh --exact --all --no-recommend --out-dir target/final3-exact-off",
+ "environment": {
+  "QJS_AGENTS": "1",
+  "QJS_CLI_PROFILE": "release",
+  "QJS_CLI_BIN": "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/target/final3-agents/release/qjs",
+  "TEST262_BASELINE_JOBS": "6",
+  "TEST262_TIMEOUT_RETRIES": "1",
+  "TEST262_CASE_TIMEOUT_SECONDS": "20",
+  "QJS_DISABLE_IC": "1"
+ },
+ "binary_sha256": "494a48f452723f72cce74ec381207064166c0f042c84d406e8f6335515331db2",
+ "hashes": {
+  "summary.json": "cffdf394963ec66c41d006192593e9975e6b082a55483748550b7a9fb866e80f",
+  "cases.jsonl": "2263183d8df546cb37338205c107cc4614a7ddee069a711be6181c0e27c2f61a",
+  "baseline.log": "0fb3fdf045ed67a462225ba6e287f3b00d9cfa0c7a06436c24c358b36e6edbd5"
+ },
+ "case_map_equals_prior_complete_map_2263183d": true
+}

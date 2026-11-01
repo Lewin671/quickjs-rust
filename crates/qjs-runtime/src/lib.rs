@@ -10,9 +10,11 @@ mod async_function;
 mod async_generator;
 mod atomics;
 mod bigint;
+mod binding;
 mod boolean;
 mod builtins;
 mod bytecode;
+mod context;
 mod conversion;
 mod data_view;
 mod date;
@@ -62,10 +64,10 @@ pub(crate) use conversion::{
     to_length_with_env, to_number_with_env, to_primitive_with_env, to_primitive_with_hint,
     to_uint16_with_env, to_uint32_number, to_uint32_with_env,
 };
-pub(crate) use function::{
-    CallEnv, call_field_initializer, call_function, construct_function, ensure_constructor,
-};
 use function::{Function, NativeFunction};
+pub(crate) use function::{
+    call_field_initializer, call_function, construct_function, ensure_constructor,
+};
 pub(crate) use property::{
     PropertyKey, array_as_prototype_slot, array_has_own_property, array_own_property_descriptor,
     array_own_property_keys, array_own_property_names, array_prototype,
@@ -96,38 +98,7 @@ pub use bytecode::{
 };
 
 pub(crate) const GLOBAL_THIS_BINDING: &str = "\0global_this";
-pub(crate) const DIRECT_EVAL_BINDING: &str = "\0\0direct_eval";
-pub(crate) const DIRECT_EVAL_STRICT_BINDING: &str = "\0\0direct_eval_strict";
-pub(crate) const DIRECT_EVAL_ARGUMENTS_BINDING: &str = "\0\0direct_eval_arguments";
-/// Marks a direct eval that runs while evaluating a function's formal parameter
-/// list (a default initializer). Such an eval's `var`/`function` declarations
-/// live in the separate parameter environment, so a `var arguments` there
-/// collides with the parameter scope's `arguments` binding (EvalDeclaration-
-/// Instantiation SyntaxError) — a body-scope direct eval does not.
-pub(crate) const DIRECT_EVAL_IN_PARAMETER_SCOPE_BINDING: &str =
-    "\0\0direct_eval_in_parameter_scope";
-pub(crate) const DIRECT_EVAL_PARAMETER_VAR_BINDING_PREFIX: &str = "\0\0direct_eval_parameter_var:";
-/// Marks a function-scope `var` that a direct eval declared under the name of
-/// a sloppy-global fallback local: later assignments in the function write
-/// that variable, not the global of the same name.
-pub(crate) const DIRECT_EVAL_FUNCTION_VAR_BINDING_PREFIX: &str = "\0\0direct_eval_function_var:";
-pub(crate) const DIRECT_EVAL_FUNCTION_CONTEXT_BINDING: &str = "\0\0direct_eval_function_context";
-/// Per-frame marker used by direct eval to apply class-field-initializer early
-/// errors.
-pub(crate) const FIELD_INITIALIZER_EVAL_BINDING: &str = "\0field_initializer_eval";
-/// Per-frame `[[HomeObject]]` for resolving `super.x`. Single-null prefixed so
-/// it never collides with user identifiers but is not treated as an internal
-/// destructuring binding (which use a double-null prefix).
-pub(crate) const HOME_OBJECT_BINDING: &str = "\0home_object";
-/// Per-frame `new.target`, propagated through `super(...)`.
-pub(crate) const NEW_TARGET_BINDING: &str = "\0new_target";
-/// Per-frame parent constructor invoked by `super(...)` in a derived
-/// constructor.
-pub(crate) const SUPER_CONSTRUCTOR_BINDING: &str = "\0super_constructor";
-/// Per-frame class constructor currently executing, used so a derived
-/// constructor can initialize its instance fields once `super(...)` binds
-/// `this`.
-pub(crate) const ACTIVE_CONSTRUCTOR_BINDING: &str = "\0active_constructor";
+
 /// Runtime error.
 #[derive(Clone, Debug, PartialEq)]
 pub struct RuntimeError {

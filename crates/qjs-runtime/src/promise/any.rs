@@ -1,15 +1,14 @@
+use crate::function::NativeCaptures;
+use crate::function::PromiseElementCaptures;
 use std::collections::HashMap;
 
 use crate::{ArrayRef, Function, NativeFunction, ObjectRef, RuntimeError, Value, call_function};
 
 use super::{
-    PROMISE_AGGREGATE_ERROR, PROMISE_ALL_ALREADY_CALLED, PROMISE_ALL_CAPABILITY_RESOLVE,
-    PROMISE_ALL_INDEX, PROMISE_ALL_REMAINING, PROMISE_ALL_VALUES,
     all::already_called,
     capability::{self, PromiseCapability},
     perform::{self, ElementHandler},
 };
-use crate::CallEnv;
 
 /// `Promise.any` (ES2023 27.2.4.3): fulfils with the first input to fulfil, or
 /// rejects with an `AggregateError` collecting every rejection reason.
@@ -17,13 +16,13 @@ pub(crate) fn native_promise_any(
     function: &Function,
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let iterable = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let aggregate_error = function
-        .native_context
-        .get(PROMISE_AGGREGATE_ERROR)
-        .cloned();
+        .native_captures()
+        .promise_prototypes()
+        .and_then(|captures| captures.aggregate_error.clone());
     let handler = AnyHandler {
         errors: ArrayRef::new(env.realm(), Vec::new()),
         remaining: perform::new_remaining(1, env.realm().atoms()),
@@ -43,7 +42,7 @@ impl ElementHandler for AnyHandler {
         &mut self,
         index: usize,
         capability: &PromiseCapability,
-        _env: &mut CallEnv,
+        _env: &mut crate::context::Context<'_>,
     ) -> Result<(Value, Value), RuntimeError> {
         self.errors.set(index, Value::Undefined);
         perform::increment_remaining(&self.remaining);
@@ -56,28 +55,14 @@ impl ElementHandler for AnyHandler {
             false,
             _env.realm(),
         );
-        on_rejected
-            .insert_native_context(PROMISE_ALL_INDEX.to_owned(), Value::Number(index as f64));
-        on_rejected.insert_native_context(
-            PROMISE_ALL_VALUES.to_owned(),
-            Value::Array(self.errors.clone()),
-        );
-        on_rejected.insert_native_context(
-            PROMISE_ALL_REMAINING.to_owned(),
-            Value::Object(self.remaining.clone()),
-        );
-        on_rejected.insert_native_context(
-            PROMISE_ALL_ALREADY_CALLED.to_owned(),
-            Value::Object(already_called),
-        );
-        on_rejected.insert_native_context(
-            PROMISE_ALL_CAPABILITY_RESOLVE.to_owned(),
-            capability.reject.clone(),
-        );
-        if let Some(aggregate_error) = &self.aggregate_error {
-            on_rejected
-                .insert_native_context(PROMISE_AGGREGATE_ERROR.to_owned(), aggregate_error.clone());
-        }
+        on_rejected.set_native_captures(NativeCaptures::PromiseElement(PromiseElementCaptures {
+            index,
+            values: self.errors.clone(),
+            remaining: self.remaining.clone(),
+            already_called,
+            settle: capability.reject.clone(),
+            aggregate_error: self.aggregate_error.clone(),
+        }));
 
         // onFulfilled is the capability's resolve: the first fulfilment wins.
         Ok((capability.resolve.clone(), Value::Function(on_rejected)))
@@ -87,7 +72,7 @@ impl ElementHandler for AnyHandler {
         &mut self,
         _count: usize,
         capability: &PromiseCapability,
-        env: &mut CallEnv,
+        env: &mut crate::context::Context<'_>,
     ) -> Result<(), RuntimeError> {
         if perform::decrement_remaining(&self.remaining) == 0.0 {
             let error = build_aggregate_error(self.aggregate_error.clone(), &self.errors, env);
@@ -103,52 +88,28 @@ impl ElementHandler for AnyHandler {
 pub(crate) fn native_promise_any_reject_element(
     function: &Function,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if already_called(function) {
         return Ok(Value::Undefined);
     }
-    let index = match function.native_context.get(PROMISE_ALL_INDEX) {
-        Some(Value::Number(index)) if *index >= 0.0 => *index as usize,
-        _ => {
-            return Err(RuntimeError {
-                thrown: None,
-                message: "Promise.any reject element is missing its index".to_owned(),
-            });
-        }
-    };
-    let errors = match function.native_context.get(PROMISE_ALL_VALUES).cloned() {
-        Some(Value::Array(errors)) => errors,
-        _ => {
-            return Err(RuntimeError {
-                thrown: None,
-                message: "Promise.any reject element is missing errors".to_owned(),
-            });
-        }
-    };
-    let remaining = match function.native_context.get(PROMISE_ALL_REMAINING).cloned() {
-        Some(Value::Object(remaining)) => remaining,
-        _ => {
-            return Err(RuntimeError {
-                thrown: None,
-                message: "Promise.any reject element is missing remaining count".to_owned(),
-            });
-        }
-    };
+    let captures = function
+        .native_captures()
+        .promise_element()
+        .ok_or_else(|| RuntimeError {
+            thrown: None,
+            message: "Promise.any element is missing its capture payload".into(),
+        })?;
+    let index = captures.index;
+    let errors = captures.values.clone();
+    let remaining = captures.remaining.clone();
 
     let reason = argument_values.first().cloned().unwrap_or(Value::Undefined);
     errors.set(index, reason);
     if perform::decrement_remaining(&remaining) == 0.0 {
-        let aggregate = function
-            .native_context
-            .get(PROMISE_AGGREGATE_ERROR)
-            .cloned();
+        let aggregate = captures.aggregate_error.clone();
         let error = build_aggregate_error(aggregate, &errors, env);
-        let reject = function
-            .native_context
-            .get(PROMISE_ALL_CAPABILITY_RESOLVE)
-            .cloned()
-            .unwrap_or(Value::Undefined);
+        let reject = captures.settle.clone();
         call_function(reject, Value::Undefined, vec![error], env, false)?;
     }
     Ok(Value::Undefined)
@@ -157,7 +118,7 @@ pub(crate) fn native_promise_any_reject_element(
 fn build_aggregate_error(
     constructor: Option<Value>,
     errors: &ArrayRef,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Value {
     let errors_value = Value::Array(errors.clone());
     let message = Value::String("All promises were rejected".to_owned().into());

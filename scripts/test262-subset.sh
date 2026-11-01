@@ -329,7 +329,8 @@ var $262 = {
       enumerable: false,
       configurable: true
     });
-    var crossRealmFunctionPrototype = function() {};
+    // %Function.prototype% is callable but has no own "prototype" property.
+    var crossRealmFunctionPrototype = { [""]() {} }[""];
     Object.defineProperty(crossRealmFunctionPrototype, "constructor", {
       value: crossRealmFunction,
       writable: true,

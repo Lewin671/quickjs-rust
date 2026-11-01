@@ -1,0 +1,11 @@
+{
+  "cached_sha256": "2263183d8df546cb37338205c107cc4614a7ddee069a711be6181c0e27c2f61a",
+  "off_sha256": "2263183d8df546cb37338205c107cc4614a7ddee069a711be6181c0e27c2f61a",
+  "identical": true,
+  "case_rows": 53572,
+  "configured_cases": 42672,
+  "unchanged_configuration_skips": 10900,
+  "same_pins_and_case_inventory": true,
+  "no_lost_configured_passes": true,
+  "changed_rows": []
+}

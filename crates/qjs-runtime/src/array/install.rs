@@ -1,9 +1,12 @@
 use std::collections::HashMap;
 
-use crate::CallEnv;
 use crate::{Function, NativeFunction, ObjectRef, Property, Value, symbol};
 
-pub(crate) fn install_array(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
+pub(crate) fn install_array(
+    env: &mut crate::context::Context<'_>,
+    global_this: &Value,
+    object_prototype: ObjectRef,
+) {
     let array_prototype =
         ObjectRef::with_prototype(HashMap::new(), Some(object_prototype), env.realm().atoms());
     array_prototype.mark_array_prototype_exotic();
@@ -349,7 +352,7 @@ fn define_array_function(function: &Function, key: &str, length: usize, native: 
     );
 }
 
-fn define_array_unscopables(env: &CallEnv, prototype: &ObjectRef) {
+fn define_array_unscopables(env: &crate::context::Context<'_>, prototype: &ObjectRef) {
     let Some(symbol) = symbol::unscopables_symbol(env) else {
         return;
     };

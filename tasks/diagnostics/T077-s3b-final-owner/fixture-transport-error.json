@@ -1,0 +1,13 @@
+{
+  "runtime": "e1405670",
+  "source_at_attempt": "7ce2ab30",
+  "mode": "default",
+  "suite_exit": 1,
+  "fixture": "tests/fixtures/compare-qjs/s3b-property-equality-receiver-resume.js",
+  "diagnostic": "error: expected `RightBrace`",
+  "cause": "compare-qjs.sh flattens newlines; inline // comments swallow closing braces",
+  "fix_commit": "e9b52cf6",
+  "runtime_or_binary_change": false,
+  "following_result": "all 318 scripts pass in all seven modes",
+  "initial_log_sha256": "3d18180c06d350b71ecfb298a72c3096cc6763c94a15ec2575a11471216bd04b"
+}

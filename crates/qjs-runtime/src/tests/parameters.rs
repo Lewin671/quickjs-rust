@@ -694,3 +694,97 @@ fn default_initializers_run_on_the_direct_call_path() {
         Ok(Value::Number(2.0))
     );
 }
+
+#[test]
+fn retained_arguments_preserve_aliases_identity_and_parameter_body_boundaries() {
+    assert_eq!(
+        eval(include_str!(
+            "../../../../tests/fixtures/compare-qjs/s3b-scope-lazy-arguments.js"
+        )),
+        Ok(Value::String("true|2|9|3|true:2:body|11|false|8".into()))
+    );
+}
+
+#[test]
+fn expression_free_patterns_share_parameters_with_body_vars_and_eval() {
+    for (params, args) in [
+        ("c,...rest", "'kept'"),
+        ("{c}", "{c:'kept'}"),
+        ("[c]", "['kept']"),
+        ("...c", "'kept'"),
+    ] {
+        let source = format!("function f({params}){{eval('var c;');return c;}}String(f({args}));");
+        assert_eq!(eval(&source), Ok(Value::String("kept".into())), "{source}");
+    }
+    assert_eq!(
+        eval("function f(c,...rest){eval('var c=8;');return c;}f('kept');"),
+        Ok(Value::Number(8.0))
+    );
+}
+
+#[test]
+fn computed_keys_and_nested_defaults_keep_a_separate_body_var_environment() {
+    for (params, args) in [
+        ("c=1", "'kept'"),
+        ("{c=1}", "{c:'kept'}"),
+        ("[c=1]", "['kept']"),
+        ("{['c']:c}", "{c:'kept'}"),
+        ("...[c=1]", "'kept'"),
+    ] {
+        let source = format!("function f({params}){{eval('var c;');return typeof c;}}f({args});");
+        assert_eq!(
+            eval(&source),
+            Ok(Value::String("undefined".into())),
+            "{source}"
+        );
+    }
+}
+
+#[test]
+fn default_parameter_closures_keep_enclosing_cells_outside_body_declarations() {
+    for declaration in [
+        "var x='inner';",
+        "let x='inner';",
+        "const x='inner';",
+        "function x(){}",
+    ] {
+        let source = format!(
+            "function t(){{var x='outer';function f(a=()=>x){{{declaration}return a();}}return f()+':'+x;}}t();"
+        );
+        assert_eq!(
+            eval(&source),
+            Ok(Value::String("outer:outer".into())),
+            "{source}"
+        );
+    }
+    assert_eq!(
+        eval(
+            "function t(){var x='outer';function f(a=()=>x='changed'){var x='inner';return a()+':'+x;}return f()+':'+x;}t();"
+        ),
+        Ok(Value::String("changed:inner:changed".into()))
+    );
+}
+
+#[test]
+fn freezing_arguments_snapshots_and_severs_only_its_mapped_parameters() {
+    for target in ["arguments", "new Proxy(arguments,{})"] {
+        let source = format!(
+            "function f(a,b){{a=3;Object.freeze({target});a=5;b=6;return [a,b,arguments[0],arguments[1],Object.isFrozen(arguments)].join();}}f(1,2);"
+        );
+        assert_eq!(
+            eval(&source),
+            Ok(Value::String("5,6,3,2,true".into())),
+            "{source}"
+        );
+    }
+    assert_eq!(
+        eval("function f(a){Object.seal(arguments);a=5;return arguments[0];}f(1);"),
+        Ok(Value::Number(5.0))
+    );
+    assert_eq!(
+        eval(
+            "function f(a,a){Object.freeze(arguments);a=5;return [arguments[0],arguments[1],a].join();}f(1,2);"
+        ),
+        Ok(Value::String("1,2,5".into()))
+    );
+}

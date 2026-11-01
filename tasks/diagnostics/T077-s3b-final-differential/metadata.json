@@ -1,0 +1,11 @@
+{
+  "runtime_revision": "e1405670495aa0e75829996d51b797e211f16242",
+  "base_revision": "3cc12c6f8d93ffd6eae91d1bd44efe74134ae195",
+  "raw_cases_sha256": "ff780d26ddf1456cf940d01e3784ff6588d59f2beb30a794ef0de8b30d4e4e56",
+  "triaged_programs": 742,
+  "node_version": "v22.23.3",
+  "node_wrapper_policy": "script evaluation; on uncaught top-level error exit immediately like both CLIs, rather than draining pending jobs after the host catches it",
+  "candidate_only_nonlog_nonorder_unmatched_node": 1,
+  "unmatched_explanation": "binding-simple/170 inherited value-is-not-callable diagnostic; same exit and complete stdout as NG; base has the same message at an earlier output index",
+  "held_out": false
+}

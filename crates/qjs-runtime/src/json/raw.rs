@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{CallEnv, ObjectRef, RuntimeError, Value, to_js_string_with_env};
+use crate::{ObjectRef, RuntimeError, Value, to_js_string_with_env};
 
 use super::parser::parse_json_text;
 
@@ -8,7 +8,7 @@ const RAW_JSON_PROPERTY: &str = "rawJSON";
 
 pub(crate) fn native_json_raw_json(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let text = to_js_string_with_env(
         argument_values.first().cloned().unwrap_or(Value::Undefined),

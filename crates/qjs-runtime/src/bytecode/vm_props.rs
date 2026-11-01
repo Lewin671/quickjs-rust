@@ -22,10 +22,9 @@ use super::vm::Vm;
 
 use super::ir::NamedPropertyCache;
 use super::vm_set::property_set_uses_setter;
-use crate::CallEnv;
 use std::rc::Rc;
 
-impl Vm<'_> {
+impl Vm<'_, '_> {
     /// Stores a statically named property, reusing the paired read cache only
     /// after it has proved an ordinary own data-property slot.
     pub(super) fn set_named_prop(
@@ -91,38 +90,38 @@ impl Vm<'_> {
         )
     }
 
-    fn try_store_indexed_realm_global(
+    /// `store_global_binding`'s data-property write for a hoisted global
+    /// var whose slot holds the realm's own cell for it: the global object's
+    /// property is written by name and the cell through its handle, with no
+    /// realm-table lookup while the table's generation is the one the slot
+    /// was derived at, and one lookup of this name otherwise; either proves
+    /// the cell is still the realm's for `name` (so no global lexical shares
+    /// it). Never allocates the name. `None` leaves anything else to the
+    /// by-name path.
+    fn try_store_realm_var_cell(
         &mut self,
         slot: usize,
         name: &str,
         value: &Value,
         is_strict: bool,
     ) -> Option<Result<(), RuntimeError>> {
-        if !self.slot_is_realm_binding(slot) {
+        if !self.slot_is_realm_binding(slot) || !self.env.can_cache_realm_globals() {
             return None;
         }
-        let Some(Value::Object(global_this)) = self.env.global_this() else {
+        let cell = self.local_upvalue_cell(slot)?.clone();
+        if cell.metadata().kind != crate::binding::BindingKind::ObjectStorage
+            || self.env.realm().binding_cells().generation() != self.realm_binding_generation
+                && !self.env.is_realm_binding_cell(name, &cell)
+        {
+            return None;
+        }
+        let Some(Value::Object(global_this)) = self.env.selected_global_this() else {
             return None;
         };
         match global_this.write_existing_own_data_property(name, value) {
             OwnDataPropertyWrite::Written => {
-                // `slot_is_realm_binding` only sets its bit when this slot's
-                // upvalue is exactly the realm's binding cell for `name`
-                // (`initial_realm_binding_slots`), so it's already at hand
-                // here and `replace_existing_realm` would otherwise redo the
-                // same name-table hash lookup to re-derive it.
-                let synced = match self.local_upvalue_cell(slot) {
-                    Some(cell) => {
-                        self.env
-                            .replace_existing_realm_with_cell(name, value.clone(), cell)
-                    }
-                    None => self.env.replace_existing_realm(name, value.clone()),
-                };
-                if !synced {
-                    self.env.insert_realm(name.to_owned(), value.clone());
-                }
-                self.locals[slot] = Some(value.clone());
-                self.sync_marked_dynamic_global(name);
+                self.env
+                    .replace_existing_realm_with_cell(name, value.clone(), &cell);
                 Some(Ok(()))
             }
             OwnDataPropertyWrite::ReadOnly if is_strict => Some(Err(RuntimeError {
@@ -131,14 +130,6 @@ impl Vm<'_> {
             })),
             OwnDataPropertyWrite::ReadOnly => Some(Ok(())),
             OwnDataPropertyWrite::NeedsSlowPath => None,
-        }
-    }
-
-    fn primitive_prototype_env(&self) -> CallEnv {
-        if self.env.has_dynamic_function_realm_global() {
-            self.current_env()
-        } else {
-            self.realm_env()
         }
     }
 
@@ -158,10 +149,10 @@ impl Vm<'_> {
     /// stable realm intrinsics.
     pub(super) fn array_prototype_chain_has_index_hazard(&mut self) -> Option<bool> {
         if self.array_prototype_cache.is_none() {
-            self.array_prototype_cache = array_prototype(&self.env);
+            self.array_prototype_cache = array_prototype(&self.context());
         }
         if self.object_prototype_cache.is_none() {
-            self.object_prototype_cache = crate::object_prototype(&self.env);
+            self.object_prototype_cache = crate::object_prototype(&self.context());
         }
         let array_prototype = self.array_prototype_cache.as_ref()?;
         let object_prototype = self.object_prototype_cache.as_ref()?;
@@ -188,7 +179,7 @@ impl Vm<'_> {
     /// intrinsic `new Array(...)` constructor.
     pub(super) fn array_uses_realm_prototype(&mut self, array: &crate::ArrayRef) -> bool {
         if self.array_prototype_cache.is_none() {
-            self.array_prototype_cache = array_prototype(&self.env);
+            self.array_prototype_cache = array_prototype(&self.context());
         }
         self.array_prototype_cache
             .as_ref()
@@ -200,13 +191,13 @@ impl Vm<'_> {
     /// resolved once and never invalidated by mutable global rebinding.
     pub(super) fn cached_object_prototype(&mut self) -> Option<ObjectRef> {
         if self.object_prototype_cache.is_none() {
-            self.object_prototype_cache = crate::object_prototype(&self.env);
+            self.object_prototype_cache = crate::object_prototype(&self.context());
         }
         self.object_prototype_cache.clone()
     }
 
     pub(super) fn symbol_primitive_set_fails(
-        &self,
+        &mut self,
         object: &Value,
         key: &crate::PropertyKey,
     ) -> bool {
@@ -219,7 +210,7 @@ impl Vm<'_> {
         if matches!(key, crate::PropertyKey::String(_)) {
             return false;
         }
-        let env = self.current_env();
+        let env = self.context();
         if property_set_uses_setter(object, key, &env) {
             return false;
         }
@@ -244,9 +235,8 @@ impl Vm<'_> {
         let key_value = self.pop()?;
         let key = self.coerce_property_key(key_value)?;
         let object = self.pop()?;
-        let mut env = self.current_env();
+        let mut env = self.context();
         let result = delete_property_key(object, &key, &mut env)?;
-        self.apply_env(env);
         // Strict-mode `delete` of a non-configurable property is a TypeError.
         if is_strict && matches!(result, Value::Boolean(false)) {
             return Err(RuntimeError {
@@ -269,18 +259,18 @@ impl Vm<'_> {
     /// path retains the complete frame view. Ordinary frame bindings named
     /// `String`, `Number`, and so on cannot affect a primitive value's
     /// intrinsic prototype.
-    pub(super) fn try_direct_get(&self, object: &Value, key: &PropertyKey) -> Option<Value> {
+    pub(super) fn try_direct_get(&mut self, object: &Value, key: &PropertyKey) -> Option<Value> {
         match key {
             PropertyKey::String(name) => self.try_direct_get_string(object, name),
             PropertyKey::Symbol(symbol) => self.try_direct_get_symbol(object, symbol),
         }
     }
 
-    pub(super) fn try_direct_get_string(&self, object: &Value, key: &str) -> Option<Value> {
+    pub(super) fn try_direct_get_string(&mut self, object: &Value, key: &str) -> Option<Value> {
         match object {
             Value::Object(object) => {
                 if symbol::is_symbol_primitive(object) {
-                    let env = self.primitive_prototype_env();
+                    let env = self.context();
                     return data_property_value(inherited_primitive_prototype_descriptor(
                         &env, "Symbol", key,
                     ));
@@ -310,7 +300,7 @@ impl Vm<'_> {
                         crate::regexp::default_regexp_source_accessor_value(
                             object,
                             key,
-                            &self.realm_env(),
+                            &self.context(),
                         )
                     }
                 }
@@ -340,7 +330,7 @@ impl Vm<'_> {
                 if descriptor.is_some() {
                     return data_property_value(descriptor);
                 }
-                match elements.effective_prototype_slot(&self.realm_env()) {
+                match elements.effective_prototype_slot(&self.context()) {
                     Some(crate::Prototype::Object(prototype)) => {
                         match ordinary_chain_data_value(&prototype, key) {
                             Err(ProxyInChain) | Ok(DirectPropertyRead::NeedsSlowPath) => None,
@@ -381,7 +371,7 @@ impl Vm<'_> {
                     if let Some(property) = function_own_property_descriptor(function, key) {
                         Ok(Some(property))
                     } else {
-                        let env = self.realm_env();
+                        let env = self.context();
                         let prototype = match function.internal_prototype_slot() {
                             Some(prototype) => prototype,
                             None => crate::function_intrinsic_prototype_slot(&env),
@@ -407,7 +397,7 @@ impl Vm<'_> {
                 }
                 // Ordinary realms own a stable `%String.prototype%` slot. Walk
                 // that live object directly so primitive method reads do not
-                // rebuild a CallEnv and rediscover the mutable String binding
+                // rebuild a crate::context::ActivationContext and rediscover the mutable String binding
                 // on every iteration. Accessors, Proxies, and exotic links
                 // decline before observable work and replay the generic path.
                 if !self.env.has_dynamic_function_realm_global()
@@ -419,25 +409,25 @@ impl Vm<'_> {
                         Err(ProxyInChain) | Ok(DirectPropertyRead::NeedsSlowPath) => None,
                     };
                 }
-                let env = self.primitive_prototype_env();
+                let env = self.context();
                 data_property_value(inherited_primitive_prototype_descriptor(
                     &env, "String", key,
                 ))
             }
             Value::Number(_) => {
-                let env = self.primitive_prototype_env();
+                let env = self.context();
                 data_property_value(inherited_primitive_prototype_descriptor(
                     &env, "Number", key,
                 ))
             }
             Value::Boolean(_) => {
-                let env = self.primitive_prototype_env();
+                let env = self.context();
                 data_property_value(inherited_primitive_prototype_descriptor(
                     &env, "Boolean", key,
                 ))
             }
             Value::BigInt(_) => {
-                let env = self.primitive_prototype_env();
+                let env = self.context();
                 data_property_value(inherited_primitive_prototype_descriptor(
                     &env, "BigInt", key,
                 ))
@@ -454,23 +444,16 @@ impl Vm<'_> {
     /// live through the function object. Accessors outside that contract and
     /// any exotic or Proxy-bearing chain retain the generic path.
     pub(super) fn try_direct_leaf_getter(
-        &self,
+        &mut self,
         receiver: &Value,
         key: &str,
     ) -> Option<Result<Value, RuntimeError>> {
-        direct_leaf_getter(
-            receiver,
-            key,
-            &self.env,
-            self.module_host.clone(),
-            #[cfg(feature = "agents")]
-            self.agent_context.clone(),
-        )
+        direct_leaf_getter(receiver, key, &mut self.context())
     }
 
     #[inline(always)]
     pub(super) fn try_cached_get_named(
-        &self,
+        &mut self,
         object: &Value,
         name: &crate::property::atom::Atom,
         cache: &NamedPropertyCache,
@@ -482,17 +465,16 @@ impl Vm<'_> {
             && receiver.is_typed_array_exotic()
             && name.as_str() == "length"
         {
-            return self.cached_typed_array_length(object, receiver, cache);
+            return Self::cached_typed_array_length(object, receiver, cache);
         }
         cache
-            .get_value(object, Some(&self.env))
+            .get_value(object, Some(&self.context()))
             .or_else(|| self.cached_get_named_miss(object, name, cache))
     }
     /// The IC proves the current accessor before this side-effect-free builtin
     /// shortcut; custom accessors still execute through the ordinary call path.
     #[inline(never)]
-    fn cached_typed_array_length(
-        &self,
+    pub(super) fn cached_typed_array_length(
         value: &Value,
         object: &ObjectRef,
         cache: &NamedPropertyCache,
@@ -511,17 +493,17 @@ impl Vm<'_> {
     #[cold]
     #[inline(never)]
     fn cached_get_named_miss(
-        &self,
+        &mut self,
         object: &Value,
         name: &crate::property::atom::Atom,
         cache: &NamedPropertyCache,
     ) -> Option<Value> {
         cache
-            .read_value(object, name, Some(&self.env))
+            .read_value(object, name, Some(&self.context()))
             .or_else(|| self.try_direct_get_string(object, name.as_str()))
     }
 
-    fn try_direct_get_symbol(&self, object: &Value, symbol: &ObjectRef) -> Option<Value> {
+    fn try_direct_get_symbol(&mut self, object: &Value, symbol: &ObjectRef) -> Option<Value> {
         match object {
             Value::Object(object) => match ordinary_chain_symbol_property(object, symbol) {
                 Err(ProxyInChain) => None,
@@ -539,7 +521,7 @@ impl Vm<'_> {
                 if let Some(property) = elements.symbol_property(symbol) {
                     return data_property_value(Some(property));
                 }
-                match elements.effective_prototype_slot(&self.realm_env()) {
+                match elements.effective_prototype_slot(&self.context()) {
                     Some(crate::Prototype::Object(prototype)) => {
                         match ordinary_chain_symbol_property(&prototype, symbol) {
                             Err(ProxyInChain) => None,
@@ -583,110 +565,58 @@ impl Vm<'_> {
         name: &str,
         value: Value,
     ) -> Result<(), RuntimeError> {
+        if let Some(reference) = self.resolve_scope_binding(name, true)? {
+            return self.assign_scope_binding(&reference, value, true);
+        }
+        if !self.env.can_cache_realm_globals() && !self.env.has_module_import(name) {
+            return self.store_global_binding(name, value, true);
+        }
+        if self.env.has_global_binding_root() {
+            return self.store_global_binding(name, value, true);
+        }
         if self.env.has_module_import(name) {
             return Err(RuntimeError {
                 thrown: None,
                 message: "TypeError: assignment to constant variable".to_owned(),
             });
         }
-        if self.env.is_immutable_lexical_binding(name) {
-            return Err(RuntimeError {
-                thrown: None,
-                message: "TypeError: assignment to constant variable".to_owned(),
-            });
-        }
-        // The inner name of a named function expression is immutable; a strict
-        // assignment to it is a TypeError.
-        if self.env.is_immutable_function_name(name) {
-            return Err(RuntimeError {
-                thrown: None,
-                message: "TypeError: assignment to constant variable".to_owned(),
-            });
-        }
-        // A caller-scope binding carried in this frame's locals layer is written
-        // there (and propagated back to the caller on return); only a true realm
-        // global goes to the shared cell.
-        if let Some(slot) = self.bytecode.local_slot(name)
-            && self.locals.get(slot).is_some_and(Option::is_some)
+        let slot = self
+            .bytecode
+            .local_slot(name)
+            .filter(|&slot| self.is_global_mirror_slot(slot));
+        self.store_bound_global(slot, name, value, true)
+    }
+
+    /// The global store every interpreter path takes once no scope, module
+    /// import or binding root intercepts `name`. A realm var slot whose cell
+    /// provably still names an own writable data property of the global
+    /// object (no global lexical can share the name) is written through that
+    /// cell; anything else is the exact
+    /// [`crate::binding::set_bound_global`]. Either way a frame copy of the
+    /// binding in `slot` is then refreshed so later loads see the canonical
+    /// binding.
+    pub(super) fn store_bound_global(
+        &mut self,
+        slot: Option<usize>,
+        name: &str,
+        value: Value,
+        strict: bool,
+    ) -> Result<(), RuntimeError> {
+        if let Some(slot) = slot
+            && let Some(result) = self.try_store_realm_var_cell(slot, name, &value, strict)
         {
-            if let Some(result) = self.try_store_indexed_realm_global(slot, name, &value, true) {
-                return result;
+            if let Some(local) = self.locals.get_mut(slot) {
+                *local = None;
             }
-            if self.local_slot_targets_non_writable_global(slot, name) {
-                return Err(RuntimeError {
-                    thrown: None,
-                    message: format!("TypeError: Cannot assign to read only property '{name}'"),
-                });
-            }
-            let local = self.locals.get_mut(slot).ok_or_else(|| RuntimeError {
-                thrown: None,
-                message: "bytecode local index out of bounds".to_owned(),
-            })?;
-            *local = Some(value.clone());
-            self.env.insert(name.to_owned(), value.clone());
-            if self.bytecode.global_scope
-                && self.bytecode.local_is_body_hoist_only(slot)
-                && !self.bytecode.local_is_compiler_temporary(slot)
-            {
-                if self.realm.contains(name) {
-                    self.env.insert_realm(name.to_owned(), value.clone());
-                }
-                if let Some(global_this) = self.cached_global_this()
-                    && global_this.has_own_property(name)
-                {
-                    global_this.set(name.to_owned(), value.clone());
-                }
-            }
-            self.write_through_module_live_binding(name, value);
             self.sync_marked_dynamic_global(name);
-            return Ok(());
-        }
-        if !self.env.has_local_binding(name)
-            && let Some(result) = self.store_global_this_accessor(name, &value, true)
-        {
             return result;
         }
-        // Reject writes to non-writable global properties (e.g. NaN, Infinity,
-        // undefined) before any env/realm write. In strict mode this is a
-        // TypeError per the spec.
-        if let Some(property) = self.global_this_own_property(name) {
-            if !property.writable {
-                return Err(RuntimeError {
-                    thrown: None,
-                    message: format!("TypeError: Cannot assign to read only property '{name}'"),
-                });
-            }
-        }
-        if self.env.has_local_binding(name) {
-            self.env.insert(name.to_owned(), value.clone());
-            self.write_through_module_live_binding(name, value.clone());
-            if self.realm.contains(name) {
-                self.env.insert_realm(name.to_owned(), value.clone());
-            }
-            if let Some(global_this) = self.cached_global_this()
-                && global_this.has_own_property(name)
-            {
-                global_this.set(name.to_owned(), value);
-            }
-            self.sync_marked_dynamic_global(name);
-            return Ok(());
-        }
-        if !self.realm.contains(name) && self.global_this_property(name).is_none() {
-            return Err(RuntimeError {
-                thrown: None,
-                message: format!("ReferenceError: undefined identifier `{name}`"),
-            });
-        }
-        self.env.insert_realm(name.to_owned(), value.clone());
-        self.write_through_module_live_binding(name, value.clone());
-        let global_this = self.cached_global_this();
-        if let Some(global_this) = global_this
-            && global_this.has_own_property(name)
-        {
-            global_this.set(name.to_owned(), value);
+        let result = self.store_global_binding(name, value, strict);
+        if let Some(slot) = slot {
+            self.refresh_global_slot_copy(slot, name);
         }
         self.sync_marked_dynamic_global(name);
-        Ok(())
+        result
     }
 
     /// Resolves the local slot by name before delegating. Used only by
@@ -724,118 +654,37 @@ impl Vm<'_> {
         name: &str,
         value: Value,
     ) -> Result<(), RuntimeError> {
+        if let Some(reference) = self.resolve_scope_binding(name, false)? {
+            return self.assign_scope_binding(&reference, value, false);
+        }
+        if self.uses_selected_object_binding(name) {
+            return self.store_global_binding(name, value, false);
+        }
+        if self.env.has_global_binding_root() {
+            if let Some(slot) = slot
+                && let Some(result) = self.try_store_realm_var_cell(slot, name, &value, false)
+            {
+                return result;
+            }
+            return self.store_global_binding(name, value, false);
+        }
         if self.env.has_module_import(name) {
             return Err(RuntimeError {
                 thrown: None,
                 message: "TypeError: assignment to constant variable".to_owned(),
             });
         }
-        if self.env.is_immutable_lexical_binding(name) {
-            return Err(RuntimeError {
-                thrown: None,
-                message: "TypeError: assignment to constant variable".to_owned(),
-            });
-        }
-        // The inner name of a named function expression is immutable; a sloppy
-        // assignment to it is a silent no-op, even from a nested function.
-        if self.env.is_immutable_function_name(name) {
-            return Ok(());
-        }
-        if let Some(slot) = slot {
-            if let Some(result) = self.try_store_indexed_realm_global(slot, name, &value, false) {
-                return result;
-            }
-            if self.locals.get(slot).is_some_and(Option::is_some) {
-                if self.local_slot_targets_non_writable_global(slot, name) {
-                    return Ok(());
-                }
-                let local = self.locals.get_mut(slot).ok_or_else(|| RuntimeError {
-                    thrown: None,
-                    message: "bytecode local index out of bounds".to_owned(),
-                })?;
-                *local = Some(value.clone());
-                self.env.insert(name.to_owned(), value.clone());
-                if self.bytecode.global_scope
-                    && self.bytecode.local_is_body_hoist_only(slot)
-                    && !self.bytecode.local_is_compiler_temporary(slot)
-                {
-                    if self.realm.contains(name) {
-                        self.env.insert_realm(name.to_owned(), value.clone());
-                    }
-                    if let Some(global_this) = self.cached_global_this()
-                        && global_this.has_own_property(name)
-                    {
-                        global_this.set(name.to_owned(), value.clone());
-                    }
-                }
-                self.write_through_module_live_binding(name, value);
-                self.sync_marked_dynamic_global(name);
-                return Ok(());
-            }
-        }
-        if !self.env.has_local_binding(name)
-            && let Some(result) = self.store_global_this_accessor(name, &value, false)
-        {
-            return result;
-        }
-        // Silently reject writes to non-writable global properties (e.g. NaN,
-        // Infinity, undefined) in sloppy mode.
-        if let Some(property) = self.global_this_own_property(name) {
-            if !property.writable {
-                return Ok(());
-            }
-        }
-        if self.env.has_local_binding(name) {
-            self.env.insert(name.to_owned(), value.clone());
-            self.write_through_module_live_binding(name, value.clone());
-            if self.realm.contains(name) {
-                self.env.insert_realm(name.to_owned(), value.clone());
-            }
-            if let Some(global_this) = self.cached_global_this()
-                && global_this.has_own_property(name)
-            {
-                global_this.set(name.to_owned(), value);
-            }
-            self.sync_marked_dynamic_global(name);
-            return Ok(());
-        }
-        if self.realm.contains(name) {
-            self.env.insert_realm(name.to_owned(), value.clone());
-            self.write_through_module_live_binding(name, value.clone());
-            let global_this = self.cached_global_this();
-            if let Some(global_this) = global_this
-                && global_this.has_own_property(name)
-            {
-                global_this.set(name.to_owned(), value);
-            }
-            self.sync_marked_dynamic_global(name);
-            return Ok(());
-        }
-        let global_this = self.cached_global_this();
-        if let Some(global_this) = global_this {
-            global_this.set(name.to_owned(), value.clone());
-        }
-        self.env.insert_realm(name.to_owned(), value.clone());
-        self.write_through_module_live_binding(name, value);
-        self.sync_marked_dynamic_global(name);
-        Ok(())
+        let slot = slot.filter(|&slot| self.is_global_mirror_slot(slot));
+        self.store_bound_global(slot, name, value, false)
     }
 
     /// Dynamic Function constructors can be evaluated against an explicitly
     /// marked realm object while the engine's intrinsic realm remains shared.
     /// Keep that object's existing globals live at the write site; generator
     /// suspension no longer performs a later name-based writeback pass.
-    pub(super) fn sync_marked_dynamic_global(&self, name: &str) {
-        // `dynamic_function_realm_global()` is a field read (a
-        // `frame_bindings` linear scan then a plain `RefCell` clone kept in
-        // sync with the same-named realm entry) instead of a name-table hash
-        // — this function runs after every global var store, and the marked
-        // dynamic-function realm feature is unset in the overwhelming common
-        // case, so the fast `None` here must stay cheap. `GLOBAL_THIS_BINDING`
-        // is intentionally still read through `env.get`, not the realm's
-        // fixed `global_this`: a dynamically-constructed function body's own
-        // frame overrides this binding to the marked realm object, and that
-        // frame-local override is exactly what this comparison must observe.
+    pub(super) fn sync_marked_dynamic_global(&mut self, name: &str) {
+        // Typed selection names the actual global object. Never enumerate its
+        // values into an activation before/after callbacks.
         let Some(global) = self.env.dynamic_function_realm_global() else {
             return;
         };
@@ -939,9 +788,7 @@ pub(super) fn ordinary_chain_data_value(
 pub(super) fn direct_leaf_getter(
     receiver: &Value,
     key: &str,
-    env: &CallEnv,
-    module_host: Option<crate::module::ModuleHostRef>,
-    #[cfg(feature = "agents")] agent_context: Option<crate::agent::AgentContextRef>,
+    env: &mut crate::context::Context<'_>,
 ) -> Option<Result<Value, RuntimeError>> {
     let Value::Object(object) = receiver else {
         return None;
@@ -963,9 +810,6 @@ pub(super) fn direct_leaf_getter(
         receiver.clone(),
         &[],
         env,
-        module_host,
-        #[cfg(feature = "agents")]
-        agent_context,
     ))
 }
 
@@ -986,7 +830,7 @@ pub(super) fn ordinary_chain_property(
 fn prototype_chain_property(
     mut current: Option<crate::Prototype>,
     key: &str,
-    function_env: Option<&CallEnv>,
+    function_env: Option<&crate::context::Context<'_>>,
 ) -> Result<Option<Property>, ProxyInChain> {
     loop {
         match current {
@@ -1313,7 +1157,7 @@ pub(super) fn ordinary_chain_symbol_property(
 pub(super) fn get_property(
     object: Value,
     key: &str,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     match object {
         Value::Array(elements) if key == "length" => Ok(Value::Number(elements.len() as f64)),
@@ -1359,7 +1203,7 @@ pub(super) fn get_property(
 pub(super) fn get_property_key(
     object: Value,
     key: &PropertyKey,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     match key {
         PropertyKey::String(key) => get_property(object, key, env),
@@ -1370,7 +1214,7 @@ pub(super) fn get_property_key(
 pub(super) fn delete_property_key(
     object: Value,
     key: &PropertyKey,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     match key {
         PropertyKey::String(key) => delete_property(object, key, env),
@@ -1378,7 +1222,11 @@ pub(super) fn delete_property_key(
     }
 }
 
-fn delete_property(object: Value, key: &str, env: &mut CallEnv) -> Result<Value, RuntimeError> {
+fn delete_property(
+    object: Value,
+    key: &str,
+    env: &mut crate::context::Context<'_>,
+) -> Result<Value, RuntimeError> {
     match object {
         Value::Object(object) => {
             if crate::typed_array::is_typed_array_object(&object)
@@ -1429,7 +1277,7 @@ fn delete_property(object: Value, key: &str, env: &mut CallEnv) -> Result<Value,
 fn delete_symbol_property(
     object: Value,
     symbol: &ObjectRef,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     match object {
         Value::Object(object) => Ok(Value::Boolean(object.delete_own_symbol_property(symbol))),
@@ -1456,7 +1304,10 @@ fn delete_symbol_property(
     }
 }
 
-pub(super) fn enumerable_keys(value: Value, env: &mut CallEnv) -> Result<Vec<Value>, RuntimeError> {
+pub(super) fn enumerable_keys(
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<Vec<Value>, RuntimeError> {
     // EnumerateObjectProperties walks the prototype chain, collecting each
     // layer's enumerable own string keys (shadowing already-seen names). An
     // exotic Proxy in the chain is consulted through its ownKeys /
@@ -1581,7 +1432,7 @@ fn proxy_enumerable_layer(
     proxy: crate::proxy::ProxyRef,
     keys: &mut Vec<Rc<str>>,
     seen: &mut crate::value::name_hash::NameSet<Rc<str>>,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     for key in crate::proxy::proxy_own_keys(proxy.clone(), env)? {
         let PropertyKey::String(name) = key else {

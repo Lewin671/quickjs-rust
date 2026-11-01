@@ -55,6 +55,10 @@ declare_counters! {
     property_array_named_materializations,
     property_constructor_prototype_hits,
     property_constructor_prototype_misses,
+    /// Lazy implicit arguments values prepared at function entry.
+    arguments_recipes,
+    /// Arguments objects constructed by a binding value read.
+    arguments_materializations,
     property_arguments_template_hits,
     property_arguments_template_misses,
     property_arguments_templates_inserted,
@@ -62,6 +66,8 @@ declare_counters! {
     /// body, before any tier decides how to run it. A workload that claims N
     /// calls must report about N here, or the workload is not measuring calls.
     ordinary_call_attempts,
+    /// Host/callback forwarding to the direct-leaf entry; not a second JS call.
+    ordinary_call_forwardings,
     /// Calls answered by a closed-form leaf evaluator without building any
     /// frame. This is the tier that makes a foldable benchmark look free.
     closed_form_leaf_evaluations,
@@ -77,9 +83,52 @@ declare_counters! {
     /// Always zero: no counting site exists, because no call routes through
     /// the frame-stack driver (`bytecode/frame_stack.rs`).
     same_vm_frame_entries,
-    /// Generic calls whose environment could carry a direct-eval marker and
-    /// therefore paid the pre-call scrub. An ordinary workload should report
-    /// zero: every environment it hands over is built empty.
+    /// Successful numeric-plan root executions (already attributed at entry).
+    numeric_plan_roots,
+    /// Numeric-plan internal call probes, including discarded speculation.
+    numeric_plan_call_probes,
+    /// Internal callee entries retained by a successful numeric plan; root excluded.
+    numeric_plan_call_entries,
+    /// Actual non-recycled variable-identity tokens minted in the atom domain.
+    typed_variable_identities,
+    /// Rc allocations for nonempty typed native closure payloads.
+    native_capture_payload_allocations,
+    /// Actual slot-to-cell authority transfers at first exposure.
+    binding_promotions,
+    /// Actual Rc<CellStorage> allocations, including canonical object caches.
+    binding_cell_allocations,
+    /// Actual Rc<ScopeLease> allocations; cached reuse does not increment.
+    scope_lease_allocations,
+    /// Function creations retaining a lexical scope, not lease allocations.
+    function_scope_retentions,
+    /// Actual inline lexical call owners promoted into Rc storage.
+    lexical_owner_allocations,
+    /// Existing local-vector pool requests, including hits and zero-length requests.
+    local_slot_pool_requests,
+    /// New nonempty local-vector storage, separate from pool requests.
+    local_slot_allocations,
+    /// Operand-stack bank requests and initial capacity allocations; excludes growth.
+    operand_stack_pool_requests,
+    operand_stack_pool_allocations,
+    /// Cold-frame recycler requests and actual new Box<ColdFrame> allocations.
+    cold_frame_pool_requests,
+    cold_frame_allocations,
+    /// Retired CallEnv construction event; no counting site remains.
+    call_env_constructions,
+    /// Retired CallEnv Clone event; no counting site remains.
+    call_env_clones,
+    /// Retired caller/callee environment equality proof; no counting site remains.
+    call_env_equality_proofs,
+    /// Retired execution projection/fork/apply-back boundaries; no sites remain.
+    legacy_binding_snapshot_calls,
+    legacy_frame_fork_calls,
+    legacy_applyback_calls,
+    /// S3a-retired native argument ownership/family dispatch; no sites remain.
+    argument_vec_native_pop,
+    native_family_probes,
+    native_family_declines,
+    /// Retired direct-eval marker scrub event, retained during the Context
+    /// migration audit. Typed eval sites have no counting site for this event.
     call_env_marker_scrubs,
     /// Statically named property reads and writes.
     named_property_reads,
@@ -158,6 +207,32 @@ declare_counters! {
     /// Backward edges where both accelerators were consulted and both
     /// declined. On such an edge the entire probe chain is overhead.
     declined_loop_plan_edges,
+    /// Backward edges never offered to an accelerator because the activation
+    /// resolves names through a dynamic scope chain.
+    scope_blocked_loop_edges,
+    /// Backward edges never offered to an accelerator because a reference
+    /// site in the region could not be elided at entry.
+    reference_blocked_loop_edges,
+    /// Scope proofs that kept a closure over an extensible chain on the
+    /// general path: a holder or fixed cell binds one of its free names, a
+    /// with object or a suspendable holder is in the chain.
+    lexical_scope_entry_rejections,
+    /// Activation admissions that need the VM's dynamic reference resolver
+    /// (with/eval/parameter sites or a dynamic scope chain).
+    reference_admission_dynamic,
+    /// Activation admissions that run with per-start reference checkpoints
+    /// because some checked global site is bound but configurable, or absent.
+    reference_admission_checkpoints,
+    /// Structural reference proofs answered from a plan's cache.
+    reference_admission_cache_hits,
+    /// Structural reference proofs recomputed by name.
+    reference_admission_cache_misses,
+    /// Tier checkpoints whose start could not be elided and selected its
+    /// reference through ordered resolution instead.
+    reference_checkpoint_selections,
+    /// Standalone tier entries declined because the activation can still
+    /// resolve a name dynamically (`indexed_bindings_only`).
+    indexed_binding_admission_rejections,
     /// Bytecode instructions actually dispatched by the interpreter loop.
     executed_ops,
     /// Generic-dispatch opcode families. Together these counters partition
@@ -194,9 +269,7 @@ declare_counters! {
     /// building neither a frame nor an environment. This is a tier
     /// attribution: such a call is counted here and nowhere else.
     compact_direct_calls,
-    /// Direct-leaf calls from the ordinary interpreter or a loop plan that a
-    /// compact tier ran in the caller's own environment, with no frame built.
-    /// Also a tier attribution: counted here and nowhere else.
+    /// Retired caller-environment tier substitution; no counting site remains.
     compact_caller_env_calls,
 }
 

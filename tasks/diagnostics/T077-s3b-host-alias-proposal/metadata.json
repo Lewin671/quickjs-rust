@@ -1,0 +1,10 @@
+{
+  "candidate": "ca5ab643c2de99d7268df7022c3370596f7b8b41",
+  "status": "unapplied; explicit approval pending",
+  "live_guard_sha256": "72105eb1160682e3620b6725d7e8efb77f5e27338e9001061464eab84bfbb62c",
+  "files": {
+    "offline-results.json": "3473b552c4df3aafd5c4a05ee09d9026ab9de3ce0af9d54c8ad95108ab5b4fa3",
+    "proposal.patch": "73476a2d813906f372f240770c83fbc05f11320e05a88dcbc49e53af88677602",
+    "check-proposal.py": "e166ad9a3c444bbb6808929a1f474cf117c8321c8332b3ea7cf71c3db4510106"
+  }
+}

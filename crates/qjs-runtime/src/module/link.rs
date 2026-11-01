@@ -63,11 +63,10 @@ struct Module {
     function_hoists_instantiated: bool,
     /// Resolved canonical key per requested specifier.
     resolved_requests: HashMap<String, String>,
-    /// The module's exported binding values, populated after evaluation:
-    /// export name -> value.
-    exports: HashMap<String, Value>,
+    /// Compiled once before linking creates any namespace or import routes.
+    compiled: Option<std::rc::Rc<bytecode::Bytecode>>,
     /// Live lexical binding storage shared with closures created by this
-    /// module body. Export reads consult this before falling back to the realm.
+    /// module body. All exports and namespace aliases read these cells.
     live_lexical: DynamicBindings,
     /// Cached namespace object, built lazily.
     namespace: Option<Value>,
@@ -242,6 +241,21 @@ impl ModuleGraph {
         if self.modules.contains_key(&key) {
             return Ok(());
         }
+        let compiled =
+            std::rc::Rc::new(bytecode::compile_module(&record.body).map_err(|error| {
+                LinkError {
+                    kind: LinkErrorKind::Syntax,
+                    message: error.message,
+                    thrown: error.thrown,
+                }
+            })?);
+        let live_lexical = DynamicBindings::new();
+        let imports: Vec<_> = record
+            .import_entries
+            .iter()
+            .map(|entry| entry.local_name.clone())
+            .collect();
+        bytecode::initialize_module_cells(&compiled, &live_lexical, &imports);
         let requested = record.requested_modules.clone();
         self.modules.insert(
             key.clone(),
@@ -250,8 +264,8 @@ impl ModuleGraph {
                 status: Status::Unlinked,
                 function_hoists_instantiated: false,
                 resolved_requests: HashMap::new(),
-                exports: HashMap::new(),
-                live_lexical: DynamicBindings::new(),
+                compiled: Some(compiled),
+                live_lexical,
                 namespace: None,
                 module_host: None,
                 async_result_promise: None,
@@ -301,9 +315,10 @@ impl ModuleGraph {
     }
 
     fn insert_bytes_module(&mut self, key: String, bytes: Vec<u8>) {
-        let env = crate::CallEnv::new(self.realm.clone());
+        let mut root = crate::context::HostRoot::new(self.realm.clone());
         let value = Value::Object(crate::typed_array::create_immutable_uint8_array(
-            &bytes, &env,
+            &bytes,
+            &root.context(),
         ));
         let mut exports = HashMap::new();
         exports.insert("default".to_owned(), value);
@@ -311,12 +326,15 @@ impl ModuleGraph {
     }
 
     fn insert_json_module(&mut self, key: String, source: &str) -> Result<(), LinkError> {
-        let env = crate::CallEnv::new(self.realm.clone());
-        let value = crate::json::parse_host_json_text(source, &env).map_err(|error| LinkError {
-            kind: LinkErrorKind::Parse,
-            message: error.message,
-            thrown: error.thrown,
-        })?;
+        let mut root = crate::context::HostRoot::new(self.realm.clone());
+        let value =
+            crate::json::parse_host_json_text(source, &root.context()).map_err(|error| {
+                LinkError {
+                    kind: LinkErrorKind::Parse,
+                    message: error.message,
+                    thrown: error.thrown,
+                }
+            })?;
         let mut exports = HashMap::new();
         exports.insert("default".to_owned(), value);
         self.insert_synthetic_default_module(key, exports);
@@ -357,7 +375,7 @@ impl ModuleGraph {
                 status: Status::Evaluated,
                 function_hoists_instantiated: true,
                 resolved_requests: HashMap::new(),
-                exports,
+                compiled: None,
                 live_lexical: DynamicBindings::from_values(live),
                 namespace: None,
                 module_host: None,
@@ -552,37 +570,15 @@ impl ModuleGraph {
             let module = &self.modules[key];
             bytecode::compile_module_function_hoists(&module.record.body)?
         };
-        // Function declarations are instantiated in this separate frame, but
-        // every module-local binding they capture must be the same cell later
-        // used by the body frame. Seed all top-level module bindings here, not
-        // only exported names. Imports are already backed by the exporting
-        // module's cells and must not be replaced with importer-owned cells.
-        let import_names = self.modules[key]
-            .record
-            .import_entries
-            .iter()
-            .map(|import| import.local_name.as_str())
-            .collect::<std::collections::HashSet<_>>();
-        let live_names: Vec<String> = compiled
-            .local_names()
-            .filter(|name| !import_names.contains(name))
-            .map(str::to_owned)
-            .collect();
+        // Hoists and body attach to the cells created before namespace linking.
         let live_bindings = self.modules[key].live_lexical.clone();
-        // ModuleDeclarationInstantiation creates every lexical binding in its
-        // TDZ before any body executes. A hoisted function and the later body
-        // frame can therefore attach to the same cell even for an unexported
-        // or immutable module local.
-        let seed_tdz_markers = true;
         let live_imports = self.import_live_bindings(key);
-        let live_exports = bytecode::ModuleLiveExports {
-            names: live_names,
+        let module_bindings = bytecode::ModuleBindings {
             bindings: live_bindings,
-            seed_tdz_markers,
             imports: live_imports,
         };
         let host = self.module_host(key);
-        bytecode::eval_module_function_hoists(&compiled, &self.realm, host, live_exports)?;
+        bytecode::eval_module_function_hoists(&compiled, &self.realm, host, module_bindings)?;
         self.modules
             .get_mut(key)
             .expect("module exists")
@@ -590,56 +586,23 @@ impl ModuleGraph {
         Ok(())
     }
 
-    /// Compiles and runs one module body against a fresh realm seeded with its
-    /// resolved imports, then records its exported binding values.
+    /// Runs the already compiled body against its canonical module cells.
     fn evaluate_body(&mut self, key: &str, drain: bool) -> Result<(), RuntimeError> {
-        let compiled = {
-            let module = &self.modules[key];
-            bytecode::compile_module(&module.record.body)?
-        };
-        let live_names: Vec<String> = self.modules[key]
-            .record
-            .local_exports
-            .iter()
-            .map(|export| export.local_name.clone())
-            .collect();
+        let compiled = self.modules[key]
+            .compiled
+            .clone()
+            .expect("source module has code");
         let live_bindings = self.modules[key].live_lexical.clone();
-        let seed_tdz_markers = self.needs_module_live_tdz_seed(key);
-        let imports = self.import_bindings(key)?;
         let live_imports = self.import_live_bindings(key);
-        let live_exports = bytecode::ModuleLiveExports {
-            names: live_names,
+        let module_bindings = bytecode::ModuleBindings {
             bindings: live_bindings,
-            seed_tdz_markers,
             imports: live_imports,
         };
-        bytecode::seed_module_live_bindings(&compiled, &live_exports);
         let host = self.module_host(key);
         let evaluation =
-            bytecode::eval_module_body(&compiled, &self.realm, imports, host, live_exports, drain)?;
-        {
-            let mut live = evaluation.live_bindings.borrow_mut();
-            for (name, value) in evaluation.env.binding_snapshot() {
-                live.entry(name.clone()).or_insert_with(|| value.clone());
-            }
-        }
-        // Snapshot exported binding values from the module's frame environment.
-        let export_pairs = self.collect_export_values(key, &evaluation.env)?;
-        {
-            let mut live = evaluation.live_bindings.borrow_mut();
-            for local in &self.modules[key].record.local_exports {
-                if let Some((_, value)) = export_pairs
-                    .iter()
-                    .find(|(export_name, _)| export_name == &local.export_name)
-                {
-                    live.insert(local.local_name.clone(), value.clone());
-                }
-            }
-        }
+            bytecode::eval_module_body(&compiled, &self.realm, host, module_bindings, drain)?;
         let module = self.modules.get_mut(key).expect("module exists");
-        module.live_lexical = evaluation.live_bindings;
         module.async_result_promise = evaluation.async_result_promise;
-        module.exports = export_pairs.into_iter().collect();
         Ok(())
     }
 
@@ -676,7 +639,8 @@ impl ModuleGraph {
     }
 
     fn settle_started_async_dependencies(&self, include_dynamic: bool) -> Result<(), RuntimeError> {
-        let mut drain_env = crate::CallEnv::new(self.realm.clone());
+        let mut root = crate::context::HostRoot::new(self.realm.clone());
+        let mut drain_env = root.context();
         if let Some(host) = &self.host {
             drain_env.set_module_host(host.clone());
         }
@@ -685,23 +649,6 @@ impl ModuleGraph {
             return Err(error);
         }
         Ok(())
-    }
-
-    /// Builds the local-name -> value map seeded into the module realm: each
-    /// import entry resolved to the exporting module's already-evaluated value
-    /// (or namespace object).
-    fn import_bindings(&mut self, key: &str) -> Result<HashMap<String, Value>, RuntimeError> {
-        let entries = self.modules[key].record.import_entries.to_vec();
-        let mut bindings = HashMap::new();
-        for entry in entries {
-            let target = self.resolved(key, &entry.module_request.cache_key());
-            let value = match &entry.import_name {
-                ImportName::Namespace => self.namespace(&target),
-                ImportName::Named(name) => self.export_value(&target, name),
-            };
-            bindings.insert(entry.local_name, value);
-        }
-        Ok(bindings)
     }
 
     fn import_live_bindings(&mut self, key: &str) -> Vec<bytecode::ModuleLiveImport> {
@@ -728,6 +675,13 @@ impl ModuleGraph {
                 continue;
             };
             if export_name == NAMESPACE_BINDING {
+                let bindings = DynamicBindings::new();
+                bindings.insert(NAMESPACE_BINDING.to_owned(), self.namespace(&module_key));
+                imports.push(bytecode::ModuleLiveImport {
+                    local_name: entry.local_name,
+                    bindings,
+                    binding_name: NAMESPACE_BINDING.to_owned(),
+                });
                 continue;
             }
             let Some(binding_name) = self.modules[&module_key]
@@ -746,15 +700,6 @@ impl ModuleGraph {
             });
         }
         imports
-    }
-
-    fn needs_module_live_tdz_seed(&self, key: &str) -> bool {
-        self.modules[key]
-            .record
-            .import_entries
-            .iter()
-            .any(|entry| self.resolved(key, &entry.module_request.cache_key()) == key)
-            || self.modules[key].namespace.is_some()
     }
 
     /// Reads the value of `name` exported by `key`, following indirect/star
@@ -782,55 +727,11 @@ impl ModuleGraph {
             .find(|local| local.export_name == export_name)
             .map(|local| local.local_name.as_str())
         {
-            if let Some(value) = module.live_lexical.borrow().get(local_name) {
-                return value.clone();
-            }
-            if let Some(value) = self.realm.get_value(local_name) {
+            if let Some(value) = module.live_lexical.get(local_name) {
                 return value;
             }
         }
-        module
-            .exports
-            .get(export_name)
-            .cloned()
-            .unwrap_or(Value::Undefined)
-    }
-
-    /// Reads the local export values from a freshly evaluated module frame.
-    fn collect_export_values(
-        &self,
-        key: &str,
-        env: &crate::CallEnv,
-    ) -> Result<Vec<(String, Value)>, RuntimeError> {
-        let module = &self.modules[key];
-        let mut pairs = Vec::new();
-        for local in &module.record.local_exports {
-            let mut value = module
-                .live_lexical
-                .borrow()
-                .get(&local.local_name)
-                .filter(|value| **value != Value::Undefined)
-                .cloned()
-                .or_else(|| env.get(&local.local_name))
-                .unwrap_or(Value::Undefined);
-            if value == Value::Undefined
-                && let Some(global_value) = self.global_this_property(&local.local_name)
-            {
-                value = global_value;
-            }
-            pairs.push((local.export_name.clone(), value));
-        }
-        Ok(pairs)
-    }
-
-    fn global_this_property(&self, name: &str) -> Option<Value> {
-        let global_this = match self.realm.global_this() {
-            Some(Value::Object(global_this)) => Some(global_this),
-            _ => None,
-        }?;
-        global_this
-            .own_property(name)
-            .map(|property| property.value)
+        Value::Undefined
     }
 
     /// The module namespace object for `key`, built (and cached) lazily from its
@@ -839,10 +740,9 @@ impl ModuleGraph {
         if let Some(namespace) = &self.modules[key].namespace {
             return namespace.clone();
         }
-        let env = crate::CallEnv::new(self.realm.clone());
         let live_bindings =
             ModuleNamespaceBindings::new(self.modules[key].live_lexical.clone(), HashMap::new());
-        let namespace = empty_namespace(live_bindings, env.realm().atoms());
+        let namespace = empty_namespace(live_bindings, self.realm.atoms());
         self.modules.get_mut(key).expect("module exists").namespace =
             Some(Value::Object(namespace.clone()));
 
@@ -877,7 +777,7 @@ impl ModuleGraph {
         let live_bindings =
             ModuleNamespaceBindings::new(self.modules[key].live_lexical.clone(), aliases);
         namespace.set_module_namespace_bindings(live_bindings);
-        populate_namespace(&namespace, &mut bindings, &env);
+        populate_namespace(&namespace, &mut bindings, &self.realm);
         Value::Object(namespace)
     }
 

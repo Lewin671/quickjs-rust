@@ -31,7 +31,7 @@ fn constant_binary_init_hits() -> usize {
     TEST_CONSTANT_BINARY_INIT_HITS.get()
 }
 
-impl<'a> Vm<'a> {
+impl<'a, 's> Vm<'a, 's> {
     /// Re-selects lowered code after generator setup/resume changes the frame's
     /// real binding authority. Instruction offsets are identical in both
     /// streams, and the analysis never carries a virtual candidate across a
@@ -42,8 +42,8 @@ impl<'a> Vm<'a> {
         // live `FrameProgramView` must never have code replaced underneath it.
         // Every caller runs during generator setup or resume, before the
         // dispatch loop starts, so there is no live view to invalidate.
-        self.current.virtual_function_context_safe = self.env.deopt_bindings().is_none()
-            && self.env.immutable_function_name().is_none()
+        self.current.virtual_function_context_safe = self.env.scope_cursor().is_none()
+            && !self.bytecode.has_dynamic_scope_tree()
             && self.with_stack().is_empty();
         self.virtual_values.clear();
     }
@@ -492,7 +492,12 @@ impl<'a> Vm<'a> {
         let result = match argc {
             0 => {
                 self.pop()?;
-                crate::function::call_direct_function_literal(&params, &bytecode, &[], &self.env)
+                crate::function::call_direct_function_literal(
+                    &params,
+                    &bytecode,
+                    &[],
+                    &mut self.context(),
+                )
             }
             1 => {
                 let first = self.pop()?;
@@ -501,7 +506,7 @@ impl<'a> Vm<'a> {
                     &params,
                     &bytecode,
                     std::slice::from_ref(&first),
-                    &self.env,
+                    &mut self.context(),
                 )
             }
             2 => {
@@ -512,7 +517,7 @@ impl<'a> Vm<'a> {
                     &params,
                     &bytecode,
                     &[first, second],
-                    &self.env,
+                    &mut self.context(),
                 )
             }
             3 => {
@@ -524,14 +529,17 @@ impl<'a> Vm<'a> {
                     &params,
                     &bytecode,
                     &[first, second, third],
-                    &self.env,
+                    &mut self.context(),
                 )
             }
             _ => {
                 let arguments = self.pop_arguments(argc)?;
                 self.pop()?;
                 crate::function::call_direct_function_literal(
-                    &params, &bytecode, &arguments, &self.env,
+                    &params,
+                    &bytecode,
+                    &arguments,
+                    &mut self.context(),
                 )
             }
         };
@@ -569,7 +577,8 @@ impl<'a> Vm<'a> {
 #[cfg(test)]
 mod tests {
     use super::{constant_binary_init_hits, reset_constant_binary_init_hits};
-    use crate::{Value, eval};
+    use crate::Value;
+    use crate::bytecode::vm_binding_debug::eval_with_slots_for_test as eval;
 
     #[test]
     fn folds_forwarded_literal_constants_into_binary_assignments() {

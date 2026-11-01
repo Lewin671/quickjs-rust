@@ -7,7 +7,7 @@
 //! layouts separately retain the owning domain.
 
 use std::borrow::Cow;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 #[cfg(test)]
 use std::collections::HashMap;
 use std::fmt;
@@ -194,12 +194,16 @@ pub(crate) struct IcPolicy {
 }
 
 struct DomainState {
+    next_variable: Cell<u64>,
+    /// Bumped whenever any extensible variable holder in the domain gains or
+    /// loses a binding (`binding::VarHolder`); scope proofs cache it.
+    holder_epoch: Cell<u64>,
+    runtime_group: RefCell<Weak<crate::context::GroupState>>,
     ic_policy: IcPolicy,
     table: RefCell<AtomTable>,
     free_ids: RefCell<Vec<KeyId>>,
     // Only an attachment, never a strong root: layout owners retain the domain.
     shape_owner: RefCell<Weak<crate::value::layout::OwnerState>>,
-    empty_native_context: RefCell<Weak<crate::function::NativeContextData>>,
 }
 
 /// An owned atom interning domain. Cloning shares the domain.
@@ -207,6 +211,30 @@ struct DomainState {
 pub(crate) struct AtomDomain(Rc<DomainState>);
 
 impl AtomDomain {
+    /// Logical activation identities share the communicating-realm boundary.
+    /// Never recycle or wrap an identity while a scope can retain it.
+    pub(crate) fn next_variable_identity(&self) -> u64 {
+        let current = self.0.next_variable.get();
+        let Some(next) = current.checked_add(1) else {
+            std::process::abort();
+        };
+        self.0.next_variable.set(next);
+        crate::diagnostics::count!(typed_variable_identities);
+        current
+    }
+
+    /// The current extensible-holder structure epoch.
+    pub(crate) fn holder_epoch(&self) -> u64 {
+        self.0.holder_epoch.get()
+    }
+
+    pub(crate) fn bump_holder_epoch(&self) {
+        let Some(next) = self.0.holder_epoch.get().checked_add(1) else {
+            std::process::abort();
+        };
+        self.0.holder_epoch.set(next);
+    }
+
     pub(crate) fn new() -> Self {
         Self::with_limit(u32::MAX)
     }
@@ -218,13 +246,16 @@ impl AtomDomain {
 
     fn with_limit(limit: u32) -> Self {
         Self(Rc::new(DomainState {
+            next_variable: Cell::new(1),
+            holder_epoch: Cell::new(0),
+            runtime_group: RefCell::new(Weak::new()),
             ic_policy: IcPolicy {
                 enabled: std::env::var_os("QJS_DISABLE_IC").is_none(),
                 verify: cfg!(debug_assertions) && std::env::var_os("QJS_VERIFY_IC").is_some(),
             },
             free_ids: RefCell::new(Vec::new()),
             shape_owner: RefCell::new(Weak::new()),
-            empty_native_context: RefCell::new(Weak::new()),
+
             table: RefCell::new(AtomTable {
                 entries: NameMap::default(),
                 symbols: NameMap::default(),
@@ -358,10 +389,8 @@ impl AtomDomain {
     pub(crate) fn ic_policy(&self) -> IcPolicy {
         self.0.ic_policy
     }
-    pub(crate) fn empty_native_context(
-        &self,
-    ) -> &RefCell<Weak<crate::function::NativeContextData>> {
-        &self.0.empty_native_context
+    pub(crate) fn runtime_group(&self) -> &RefCell<Weak<crate::context::GroupState>> {
+        &self.0.runtime_group
     }
 
     pub(crate) fn shape_owner(&self) -> &RefCell<Weak<crate::value::layout::OwnerState>> {

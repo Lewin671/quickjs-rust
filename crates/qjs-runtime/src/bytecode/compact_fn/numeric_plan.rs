@@ -24,7 +24,7 @@ use crate::bytecode::ir::Bytecode;
 use crate::bytecode::typed_loop::helper_graph::numeric::{
     Cmp, NumOp, binary as lower_binary, first_free_register, optimize,
 };
-use crate::function::Upvalue;
+use crate::function::BindingCell;
 
 mod from_bytecode;
 
@@ -248,11 +248,11 @@ thread_local! {
 pub(in crate::bytecode) fn run(
     plan: &Rc<NumericPlan>,
     root_bytecode: &Bytecode,
-    cells: &[Upvalue],
+    cells: &[BindingCell],
     args: &[f64],
 ) -> Option<Value> {
-    let result = if plan.leaf {
-        run_leaf(plan, args)?
+    let (result, entered) = if plan.leaf {
+        (run_leaf(plan, args)?, 0)
     } else {
         let mut scratch = SCRATCH.with(|slot| slot.take());
         let result = run_with(plan, root_bytecode, cells, args, &mut scratch);
@@ -262,6 +262,14 @@ pub(in crate::bytecode) fn run(
         SCRATCH.with(|slot| slot.replace(scratch));
         result?
     };
+    crate::diagnostics::count!(numeric_plan_roots);
+    #[cfg(feature = "perf-counters")]
+    crate::diagnostics::update(|counts| {
+        counts.numeric_plan_call_entries += entered;
+        counts.ordinary_call_attempts += entered;
+    });
+    #[cfg(not(feature = "perf-counters"))]
+    let _ = entered;
     Some(if plan.returns == BOOLEAN {
         Value::Boolean(result != 0.0)
     } else {
@@ -292,10 +300,10 @@ fn run_leaf(plan: &NumericPlan, args: &[f64]) -> Option<f64> {
 fn run_with(
     plan: &Rc<NumericPlan>,
     root_bytecode: &Bytecode,
-    cells: &[Upvalue],
+    cells: &[BindingCell],
     args: &[f64],
     scratch: &mut Scratch,
-) -> Option<f64> {
+) -> Option<(f64, u64)> {
     let Scratch {
         registers,
         frames,
@@ -320,6 +328,10 @@ fn run_with(
     for (&register, &argument) in plan.parameters.iter().zip(args) {
         *registers.get_mut(usize::from(register))? = argument;
     }
+    #[cfg(feature = "perf-counters")]
+    let mut entered = 0_u64;
+    #[cfg(not(feature = "perf-counters"))]
+    let entered = 0_u64;
     let mut body = 0_usize;
     let mut pc = 0_usize;
     let mut base = 0_usize;
@@ -341,6 +353,7 @@ fn run_with(
         };
         match call {
             Some((dst, slot, args, argc)) => {
+                crate::diagnostics::count!(numeric_plan_call_probes);
                 if frames.len() >= MAX_DEPTH {
                     return None;
                 }
@@ -363,6 +376,10 @@ fn run_with(
                     let value = *registers.get(base + usize::from(args) + index)?;
                     *registers.get_mut(callee_base + usize::from(parameter))? = value;
                 }
+                #[cfg(feature = "perf-counters")]
+                {
+                    entered += 1;
+                }
                 frames.push(Frame {
                     body: u16::try_from(body).ok()?,
                     pc: u32::try_from(pc).ok()?,
@@ -375,7 +392,7 @@ fn run_with(
             }
             None => {
                 let Some(frame) = frames.pop() else {
-                    return Some(returned);
+                    return Some((returned, entered));
                 };
                 body = usize::from(frame.body);
                 pc = frame.pc as usize;
@@ -533,7 +550,7 @@ fn resolve(
     caller: usize,
     slot: u16,
     root_bytecode: &Bytecode,
-    root_cells: &[Upvalue],
+    root_cells: &[BindingCell],
 ) -> Option<usize> {
     let caller_body = bodies.get(caller)?;
     if let Some(&(_, callee)) = caller_body
@@ -559,7 +576,7 @@ fn link(
     caller: usize,
     slot: u16,
     root_bytecode: &Bytecode,
-    root_cells: &[Upvalue],
+    root_cells: &[BindingCell],
 ) -> Option<usize> {
     let caller_body = bodies.get(caller)?;
     let bytecode: &Bytecode = caller_body.bytecode.as_deref().unwrap_or(root_bytecode);
@@ -578,11 +595,11 @@ fn link(
                 .as_ref()
                 .is_some_and(|function| function == callee)
         }))
-    })?;
+    })??;
     if let Some(existing) = existing {
         return Some(existing);
     }
-    let callee_value = cell.get();
+    let callee_value = cell.value_if_initialized()?;
     let Value::Function(callee) = &callee_value else {
         return None;
     };

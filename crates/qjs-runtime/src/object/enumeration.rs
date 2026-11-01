@@ -5,11 +5,10 @@ use crate::{
 };
 
 use super::descriptor::own_property_descriptor_key;
-use crate::CallEnv;
 
 pub(crate) fn native_object_keys(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     if matches!(target, Value::Null | Value::Undefined) {
@@ -28,7 +27,7 @@ pub(crate) fn native_object_keys(
 
 pub(crate) fn native_object_values(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     if matches!(target, Value::Null | Value::Undefined) {
@@ -47,7 +46,7 @@ pub(crate) fn native_object_values(
 
 pub(crate) fn native_object_entries(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     if matches!(target, Value::Null | Value::Undefined) {
@@ -74,7 +73,7 @@ pub(crate) fn native_object_entries(
 
 pub(crate) fn native_object_get_own_property_names(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     if matches!(target, Value::Null | Value::Undefined) {
@@ -104,7 +103,7 @@ pub(crate) fn native_object_get_own_property_names(
 
 pub(crate) fn native_object_get_own_property_symbols(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     if matches!(target, Value::Null | Value::Undefined) {
@@ -132,7 +131,7 @@ pub(crate) fn native_object_get_own_property_symbols(
 
 pub(crate) fn native_object_has_own(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     if matches!(target, Value::Null | Value::Undefined) {
@@ -153,7 +152,7 @@ pub(crate) fn native_object_has_own(
 
 pub(crate) fn enumerable_property_entries(
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Vec<(String, Value)>, RuntimeError> {
     let keys = own_property_keys_for_enumeration(value.clone(), false, env)?;
     let mut entries = Vec::with_capacity(keys.len());
@@ -177,7 +176,7 @@ pub(crate) fn enumerable_property_entries(
 
 pub(crate) fn enumerable_property_entries_with_symbols(
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Vec<(PropertyKey, Value)>, RuntimeError> {
     let keys = own_property_keys_for_enumeration(value.clone(), true, env)?;
     let mut entries = Vec::with_capacity(keys.len());
@@ -202,7 +201,7 @@ pub(crate) fn enumerable_property_entries_with_symbols(
 pub(crate) fn enumerable_property_entries_excluding(
     value: Value,
     excluded: &[PropertyKey],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Vec<(PropertyKey, Value)>, RuntimeError> {
     let keys = own_property_keys_for_enumeration(value.clone(), true, env)?;
     let mut entries = Vec::with_capacity(keys.len());
@@ -232,7 +231,10 @@ fn property_keys_equal(left: &PropertyKey, right: &PropertyKey) -> bool {
     }
 }
 
-fn enumerable_property_keys(value: Value, env: &mut CallEnv) -> Result<Vec<String>, RuntimeError> {
+fn enumerable_property_keys(
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<Vec<String>, RuntimeError> {
     let keys = own_property_keys_for_enumeration(value.clone(), false, env)?;
     let mut enumerable = Vec::with_capacity(keys.len());
     for key in keys {
@@ -255,7 +257,7 @@ fn enumerable_property_keys(value: Value, env: &mut CallEnv) -> Result<Vec<Strin
 pub(crate) fn own_property_keys_for_enumeration(
     value: Value,
     include_symbols: bool,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Vec<PropertyKey>, RuntimeError> {
     if let Value::Proxy(proxy) = value {
         return Ok(crate::proxy::proxy_own_keys(proxy, env)?
@@ -283,7 +285,7 @@ pub(crate) fn own_property_keys_for_enumeration(
 pub(crate) fn observable_own_property_descriptor(
     value: Value,
     key: &PropertyKey,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Option<Property>, RuntimeError> {
     if let Value::Proxy(proxy) = &value {
         return crate::proxy::proxy_get_own_property_descriptor(

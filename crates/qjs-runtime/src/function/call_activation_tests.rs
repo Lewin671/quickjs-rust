@@ -1,23 +1,24 @@
 //! Observable binding/context contracts for prepared synchronous calls.
-use super::{FunctionCallEnv, function_env};
-use crate::{Bytecode, CallEnv, Value, eval};
+use super::{PreparedFunctionActivation, enter_function_activation};
+use crate::{Bytecode, Value, eval};
 
-fn inspect(source: &str, check: impl FnOnce(&FunctionCallEnv<'_>, &Bytecode)) {
+fn inspect(source: &str, check: impl FnOnce(&PreparedFunctionActivation<'_>, &Bytecode)) {
     let callee = eval(source).expect("function source evaluates");
     let Value::Function(function) = &callee else {
         panic!("expected function");
     };
     let code = function.bytecode.as_ref().unwrap();
-    let env = CallEnv::new(function.realm.as_ref().unwrap().clone());
+    let mut root = crate::context::HostRoot::new(function.realm().unwrap().clone());
+    let mut env = root.context();
     let arguments = [Value::Number(7.0)];
-    let prepared = function_env(
+    let prepared = enter_function_activation(
         function,
         code,
         &callee,
         Value::Undefined,
         &arguments,
-        &env,
-        false,
+        &mut env,
+        None,
     );
     check(&prepared, code);
 }
@@ -26,24 +27,27 @@ fn inspect(source: &str, check: impl FnOnce(&FunctionCallEnv<'_>, &Bytecode)) {
 fn positional_entry_omits_parameter_names_and_static_eval_marker() {
     inspect(
         "(function ({x}, y = x + 1, ...tail) { return function () { return x + y + tail[0]; }; })",
-        |prepared, code| {
+        |prepared, _code| {
             assert!(prepared.direct_call_slots.is_none());
-            assert!(prepared.positional_arguments.is_some());
-            for name in code.positional_parameter_bindings() {
-                assert!(!prepared.env.has_frame_binding(name), "{name}");
+            assert!(prepared.call_inputs.is_some());
+            assert!(prepared.env.scope_cursor().is_none());
+            for name in ["x", "y", "tail"] {
+                assert!(!prepared.env.realm_contains(name));
             }
-            assert!(prepared.env.has_frame_binding("tail"));
-            assert!(
-                !prepared
-                    .env
-                    .has_frame_binding(crate::DIRECT_EVAL_FUNCTION_CONTEXT_BINDING)
+            assert_eq!(
+                prepared.call_inputs.as_ref().unwrap().arguments,
+                &[Value::Number(7.0)]
+            );
+            assert_eq!(
+                prepared.env.owner_kind(),
+                Some(crate::context::OwnerKind::Function)
             );
         },
     );
 }
 
 #[test]
-fn mapped_dynamic_and_suspended_parameters_keep_compatibility_bindings() {
+fn mapped_dynamic_and_suspended_parameters_use_positional_inputs() {
     for source in [
         "(function (value) { return arguments[0]; })",
         "(function (value) { return eval('value'); })",
@@ -56,13 +60,9 @@ fn mapped_dynamic_and_suspended_parameters_keep_compatibility_bindings() {
         "(async function (value) { return value; })",
     ] {
         inspect(source, |prepared, _| {
-            assert!(prepared.positional_arguments.is_none(), "{source}");
+            assert!(prepared.call_inputs.is_some(), "{source}");
             if prepared.direct_call_slots.is_none() {
-                assert_eq!(
-                    prepared.env.get_local("value"),
-                    Some(Value::Number(7.0)),
-                    "{source}"
-                );
+                assert!(prepared.env.scope_cursor().is_none(), "{source}");
             }
         });
     }
@@ -71,7 +71,10 @@ fn mapped_dynamic_and_suspended_parameters_keep_compatibility_bindings() {
 #[test]
 fn parameter_metadata_distinguishes_binding_names_from_property_keys() {
     for (source, shadows) in [
-        ("(function ({arguments: other}) { return other; })", false),
+        (
+            "(function ({arguments: other}) { return arguments; })",
+            false,
+        ),
         ("(function ({arguments}) { return arguments; })", true),
         ("(function ([arguments]) { return arguments; })", true),
         (
@@ -80,7 +83,7 @@ fn parameter_metadata_distinguishes_binding_names_from_property_keys() {
         ),
     ] {
         inspect(source, |_, code| {
-            assert_eq!(code.parameters_shadow_arguments(), shadows)
+            assert_eq!(!code.needs_arguments_object(), shadows)
         });
     }
 }
@@ -334,5 +337,96 @@ fn static_coercion_hooks_update_the_shared_parameter_cell() {
             "function outer(value) { let read = function () { return value; }; let object = { valueOf() { value += 2; return 1; } }; let result = +object; return read() + ':' + result; } outer(5);"
         ),
         Ok(Value::String("7:1".to_owned().into()))
+    );
+}
+
+#[test]
+fn class_key_arrows_retain_one_lexical_owner_across_resume() {
+    let value = eval(
+        r#"let first, second; const receiver = {};
+        function* g() { class C { #p;
+            [(first = () => this, #p in {}, yield 'key', second = () => this, 'm')]() {}
+        } }
+        const it = g.call(receiver); it.next(); it.next(); [first, second, receiver];"#,
+    )
+    .unwrap();
+    let Value::Array(values) = value else {
+        panic!("array result");
+    };
+    let values = values.to_vec();
+    let (Value::Function(first), Value::Function(second)) = (&values[0], &values[1]) else {
+        panic!("key closures");
+    };
+    let first = first.lexical_call().unwrap();
+    let second = second.lexical_call().unwrap();
+    assert!(std::rc::Rc::ptr_eq(&first, &second));
+    assert_eq!(first.this.read(), Ok(values[2].clone()));
+    assert_eq!(first.kind, crate::context::OwnerKind::Function);
+}
+
+#[test]
+fn parameter_only_arrow_does_not_retain_a_lexical_owner() {
+    let value = eval("(value => value + 1);").unwrap();
+    let Value::Function(function) = value else {
+        panic!("arrow");
+    };
+    assert!(function.lexical_call().is_none());
+    assert!(!function.has_cold_lexical_state());
+}
+
+#[test]
+fn nested_arrow_new_target_demand_retains_the_original_owner() {
+    let value = eval("function F() { return () => () => new.target; } new F();").unwrap();
+    let Value::Function(function) = value else {
+        panic!("outer arrow");
+    };
+    let owner = function.lexical_call().expect("nested new.target owner");
+    assert!(matches!(owner.new_target, Some(Value::Function(_))));
+}
+
+#[test]
+fn parameter_assignment_fallback_is_distinct_from_a_body_var_declaration() {
+    assert_eq!(
+        eval(
+            "var defaultTarget = 3; function f(value = (defaultTarget = 8)) { var defaultTarget; return String(defaultTarget); } f() + ':' + defaultTarget;"
+        ),
+        Ok(Value::String("undefined:8".into()))
+    );
+}
+
+#[test]
+fn non_simple_body_arguments_copy_preserves_value_identity_and_binding_independence() {
+    assert_eq!(
+        eval(
+            r#"
+        function f(read = () => arguments) {
+            var arguments; const initial = arguments; arguments = 'body';
+            return (read() === initial) + ':' + initial.length + ':' + arguments;
+        }
+        function g(value = (arguments = 11)) { var arguments; return arguments; }
+        f(undefined, 7) + '|' + g();
+    "#
+        ),
+        Ok(Value::String("true:2:body|11".into()))
+    );
+}
+
+#[test]
+fn non_simple_body_eval_can_shadow_parameter_arguments() {
+    assert_eq!(
+        eval(
+            r#"
+        function f(read = () => arguments) {
+            eval('var arguments = ["body"]'); arguments = ['changed'];
+            return arguments[0] + ':' + read()[1];
+        }
+        f(undefined, 'parameter');
+    "#
+        ),
+        Ok(Value::String("changed:parameter".into()))
+    );
+    assert_eq!(
+        eval("function f(value = 0) { eval('var arguments = [7]'); return arguments[0]; } f(3);"),
+        Ok(Value::Number(7.0))
     );
 }

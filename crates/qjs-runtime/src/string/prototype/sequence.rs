@@ -12,12 +12,11 @@ use super::super::{
     push_code_unit, string_code_unit_len, surrogate_escape_code_unit,
 };
 use super::MAX_STRING_LENGTH;
-use crate::CallEnv;
 
 pub(crate) fn native_string_prototype_concat(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let mut result = this_string_value(this_value, env)?;
     for value in argument_values.iter().cloned() {
@@ -29,7 +28,7 @@ pub(crate) fn native_string_prototype_concat(
 pub(crate) fn native_string_prototype_repeat(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let value = this_string_value(this_value, env)?;
     let count = to_number_with_env(
@@ -66,7 +65,7 @@ pub(crate) fn native_string_prototype_repeat(
 pub(crate) fn native_string_prototype_slice(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let value = string_sequence_value(this_value, env)?;
     let length = value.code_unit_len();
@@ -93,7 +92,7 @@ pub(crate) fn native_string_prototype_slice(
 pub(crate) fn native_string_prototype_split(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let separator_value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let limit_value = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
@@ -162,7 +161,10 @@ pub(crate) fn native_string_prototype_split(
     Ok(Value::Array(ArrayRef::new(env.realm(), parts)))
 }
 
-fn symbol_split_method(value: Value, env: &mut CallEnv) -> Result<Option<Value>, RuntimeError> {
+fn symbol_split_method(
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<Option<Value>, RuntimeError> {
     if !is_object_value(&value) {
         return Ok(None);
     }
@@ -197,7 +199,7 @@ fn string_split_regexp(
     input: String,
     separator: Value,
     limit: usize,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let regexp = string_split_regexp_clone(separator, env)?;
     let mut parts = Vec::new();
@@ -263,7 +265,10 @@ fn string_split_regexp(
     )))
 }
 
-fn string_split_regexp_clone(separator: Value, env: &mut CallEnv) -> Result<Value, RuntimeError> {
+fn string_split_regexp_clone(
+    separator: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<Value, RuntimeError> {
     let constructor = env.get("RegExp").ok_or_else(|| RuntimeError {
         thrown: None,
         message: "RegExp constructor is not available".to_owned(),
@@ -277,7 +282,10 @@ fn string_split_regexp_clone(separator: Value, env: &mut CallEnv) -> Result<Valu
     )
 }
 
-fn regexp_match_index(match_value: &Value, env: &mut CallEnv) -> Result<usize, RuntimeError> {
+fn regexp_match_index(
+    match_value: &Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<usize, RuntimeError> {
     let index = property_value(match_value.clone(), "index", env)?;
     let number = to_number_with_env(index, env)?;
     if number.is_nan() || number <= 0.0 {
@@ -291,7 +299,10 @@ fn input_char_slice(input: &str, start: usize, end: usize) -> String {
     input.chars().skip(start).take(end - start).collect()
 }
 
-fn string_split_limit(value: Value, env: &mut CallEnv) -> Result<usize, RuntimeError> {
+fn string_split_limit(
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<usize, RuntimeError> {
     if matches!(value, Value::Undefined) {
         return Ok(u32::MAX as usize);
     }
@@ -306,7 +317,7 @@ fn string_split_limit(value: Value, env: &mut CallEnv) -> Result<usize, RuntimeE
 pub(crate) fn native_string_prototype_substr(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let value = string_sequence_value(this_value, env)?;
     let length = value.code_unit_len();
@@ -332,7 +343,7 @@ pub(crate) fn native_string_prototype_substr(
 pub(crate) fn native_string_prototype_substring(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let value = string_sequence_value(this_value, env)?;
     let length = value.code_unit_len();
@@ -391,7 +402,7 @@ impl StringSequenceValue {
 
 fn string_sequence_value(
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<StringSequenceValue, RuntimeError> {
     match value {
         Value::String(value) => Ok(StringSequenceValue::Shared(value)),
@@ -458,7 +469,7 @@ fn string_slice_code_units(
 fn string_substr_start(
     length: usize,
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<usize, RuntimeError> {
     let number = to_number_with_env(value, env)?;
     if number.is_nan() {
@@ -476,7 +487,7 @@ fn string_substr_count(
     length: usize,
     start: usize,
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<usize, RuntimeError> {
     let remaining = length - start;
     if matches!(value, Value::Undefined) {

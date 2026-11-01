@@ -14,7 +14,7 @@
 
 use std::{
     cell::{OnceCell, RefCell},
-    collections::{BTreeSet, HashMap, HashSet},
+    collections::{BTreeSet, HashMap},
     rc::Rc,
 };
 
@@ -308,7 +308,6 @@ pub(super) enum Op {
     NewFunction {
         name: Option<String>,
         has_name_binding: bool,
-        immutable_name_binding: bool,
         params: Rc<FunctionParams>,
         local_names: Rc<Vec<String>>,
         lexical_captures: Vec<(String, usize)>,
@@ -330,6 +329,14 @@ pub(super) enum Op {
     NewClass {
         definition: Rc<ClassDefinition>,
     },
+    /// Resolves heritage before evaluating computed keys.
+    BeginClass,
+    /// Installs one element after its enclosing key expression completes.
+    DefineClassElement {
+        index: usize,
+    },
+    /// Initializes the class name and runs static initialization in source order.
+    FinishClass,
     /// Reads `super.<key>`: looks the property up on the current method's home
     /// object prototype, using `this` as the receiver. Pushes the value.
     SuperGet {
@@ -582,9 +589,9 @@ pub(super) enum Op {
 }
 
 pub(super) use super::ir_class::{
-    ClassComputedKeyDef, ClassConstructorDef, ClassDefinition, ClassElementDef, ClassFieldDef,
-    ClassFieldInitializerDef, ClassMemberKeyDef, ClassMethodDef, ClassMethodKind,
-    ClassPrivateElementDef, ClassStaticBlockDef,
+    ClassConstructorDef, ClassDefinition, ClassElementDef, ClassFieldDef, ClassFieldInitializerDef,
+    ClassMemberKeyDef, ClassMethodDef, ClassMethodKind, ClassPrivateElementDef,
+    ClassStaticBlockDef,
 };
 
 #[derive(Clone, Debug)]
@@ -683,7 +690,6 @@ pub struct Bytecode {
     /// The slot compiled for an own `this` local, if the body has one. Frame
     /// setup seeds the receiver here on every call, so it is resolved once
     /// rather than hashed per call.
-    this_slot: Option<usize>,
     /// `Some` when the whole body is `return <literal>`, the shape of a class
     /// field initializer like `x = 0` or `p = null`. A caller can use the value
     /// directly: such a body has no observable effect besides its result.
@@ -694,11 +700,11 @@ pub struct Bytecode {
     parameter_slots: Vec<usize>,
     /// Entry-only vectors stay out of the bytecode's hot payload. This one
     /// allocation belongs to the body, not to any of its activations.
-    pub(super) frame_init_plan: Box<super::frame_init_plan::FrameInitPlan>,
+    pub(super) binding_plan: Box<super::binding_plan::BindingPlan>,
     received_upvalue_slots: Vec<usize>,
     /// Whether direct-call frame setup may need per-local upvalue storage for
     /// an outer capture or sloppy global fallback. Module imports are tracked
-    /// by `CallEnv` and checked separately at call time.
+    /// by `crate::context::ActivationContext` and checked separately at call time.
     has_direct_local_upvalue_routes: bool,
     /// Received-upvalue slots that can share the callee's immutable upvalue
     /// vector for a direct leaf frame. Every admitted slot is below 128 and
@@ -717,7 +723,6 @@ pub struct Bytecode {
     global_names: Vec<String>,
     global_lexical_names: Vec<String>,
     sloppy_global_assignment_names: Vec<String>,
-    eval_deletable_local_names: BTreeSet<String>,
     /// Whether this bytecode is global script code (top-level scripts and
     /// eval bodies). Global `var`/function bindings live in the realm, and
     /// `this` resolves to the realm global; function bodies resolve `this`
@@ -784,11 +789,12 @@ pub struct Bytecode {
     cached_closure_referenced_global_names: Vec<String>,
     cached_written_binding_names: Vec<String>,
     cached_closure_written_binding_names: Vec<String>,
-    cached_writes_binding_set: crate::value::name_hash::NameSet<String>,
     cached_creates_closures: bool,
     cached_creates_capturing_closures: bool,
     cached_needs_arguments_object: bool,
     cached_contains_direct_eval: bool,
+    /// Whether this body contains a `yield`, `yield*` or `await`.
+    cached_can_suspend: bool,
     cached_contains_with: bool,
     cached_contains_super_operation: bool,
     cached_uses_lexical_this: bool,
@@ -801,82 +807,11 @@ pub struct Bytecode {
     cached_authoritative_mask_clean: u128,
     /// The top level of a direct eval's code (not a function inside it).
     direct_eval_code: bool,
-    /// Whether the body can suspend mid-way: a `yield`, `yield*` or `await`.
-    cached_suspends: bool,
 }
 
 impl Bytecode {
-    pub(super) fn new(constants: Vec<Value>, locals: Vec<Local>, code: Vec<Op>) -> Self {
-        Self::with_scope(constants, locals, code, false)
-    }
-
-    pub(super) fn new_function(
-        constants: Vec<Value>,
-        locals: Vec<Local>,
-        code: Vec<Op>,
-        parameter_slots: Vec<usize>,
-        params: &FunctionParams,
-    ) -> Self {
-        let mut bytecode = Self::with_scope_global_lexical_names_and_strict_with_parameter_slots(
-            constants,
-            locals,
-            code,
-            false,
-            Vec::new(),
-            false,
-            Some(parameter_slots),
-        );
-        bytecode.frame_init_plan.parameters =
-            super::frame_init_plan::ParameterInfo::compile(&bytecode, params);
-        bytecode
-    }
-
-    pub(super) fn with_scope(
-        constants: Vec<Value>,
-        locals: Vec<Local>,
-        code: Vec<Op>,
-        global_scope: bool,
-    ) -> Self {
-        Self::with_scope_and_global_lexical_names(constants, locals, code, global_scope, Vec::new())
-    }
-
-    pub(super) fn with_scope_and_global_lexical_names(
-        constants: Vec<Value>,
-        locals: Vec<Local>,
-        code: Vec<Op>,
-        global_scope: bool,
-        global_lexical_names: Vec<String>,
-    ) -> Self {
-        Self::with_scope_global_lexical_names_and_strict(
-            constants,
-            locals,
-            code,
-            global_scope,
-            global_lexical_names,
-            false,
-        )
-    }
-
-    pub(super) fn with_scope_global_lexical_names_and_strict(
-        constants: Vec<Value>,
-        locals: Vec<Local>,
-        code: Vec<Op>,
-        global_scope: bool,
-        global_lexical_names: Vec<String>,
-        strict: bool,
-    ) -> Self {
-        Self::with_scope_global_lexical_names_and_strict_with_parameter_slots(
-            constants,
-            locals,
-            code,
-            global_scope,
-            global_lexical_names,
-            strict,
-            None,
-        )
-    }
-
-    fn with_scope_global_lexical_names_and_strict_with_parameter_slots(
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn with_scope_global_lexical_names_and_strict_with_parameter_slots(
         constants: Vec<Value>,
         locals: Vec<Local>,
         mut code: Vec<Op>,
@@ -884,6 +819,7 @@ impl Bytecode {
         global_lexical_names: Vec<String>,
         strict: bool,
         parameter_slots: Option<Vec<usize>>,
+        scope_plan: Option<(crate::binding::ScopePlanBuilder, bool)>,
     ) -> Self {
         // Only a function body arrives with explicit parameter slots; script
         // and eval bodies derive them, and their completion values are
@@ -924,7 +860,6 @@ impl Bytecode {
         );
         let property_names = PropertyNamePool::assign(&mut code);
         let local_slots = collect_local_slots(&locals);
-        let this_slot = local_slots.get("this").copied();
         let constant_return = match code.as_slice() {
             [Op::LoadConst(index), Op::Return] => constants.get(*index).cloned(),
             _ => None,
@@ -932,10 +867,9 @@ impl Bytecode {
         let mut bytecode = Self {
             constants,
             local_slots,
-            this_slot,
             constant_return,
             parameter_slots,
-            frame_init_plan: Box::default(),
+            binding_plan: Box::default(),
             received_upvalue_slots,
             has_direct_local_upvalue_routes,
             direct_readonly_received_upvalue_slots: 0,
@@ -945,7 +879,6 @@ impl Bytecode {
             global_names: collect_global_names(&code),
             global_lexical_names,
             sloppy_global_assignment_names: collect_sloppy_global_assignment_names(&code),
-            eval_deletable_local_names: BTreeSet::new(),
             global_scope,
             dead_completion_slots,
             strict,
@@ -967,18 +900,17 @@ impl Bytecode {
             cached_closure_referenced_global_names: Vec::new(),
             cached_written_binding_names: Vec::new(),
             cached_closure_written_binding_names: Vec::new(),
-            cached_writes_binding_set: HashSet::default(),
             cached_creates_closures: false,
             cached_creates_capturing_closures: false,
             cached_needs_arguments_object: false,
             cached_contains_direct_eval: false,
+            cached_can_suspend: false,
             cached_contains_with: false,
             cached_contains_super_operation: false,
             cached_uses_lexical_this: false,
             cached_hoisted_slots: Vec::new(),
             cached_authoritative_mask_clean: 0,
             direct_eval_code: false,
-            cached_suspends: false,
         };
         // Order matters: closure/arguments metadata reads the simpler caches
         // (written-binding names, creates-closures) computed just above. Nested
@@ -989,7 +921,6 @@ impl Bytecode {
         bytecode.cached_written_binding_names = bytecode.compute_written_binding_names();
         bytecode.cached_closure_written_binding_names =
             bytecode.compute_closure_written_binding_names();
-        bytecode.cached_writes_binding_set = bytecode.compute_writes_binding_set();
         bytecode.cached_hoisted_slots = bytecode
             .locals
             .iter()
@@ -1000,13 +931,20 @@ impl Bytecode {
         bytecode.cached_authoritative_mask_clean = bytecode.compute_authoritative_mask_clean();
         bytecode.cached_creates_closures = bytecode.compute_creates_closures();
         bytecode.cached_creates_capturing_closures = bytecode.compute_creates_capturing_closures();
-        bytecode.cached_needs_arguments_object = bytecode.compute_needs_arguments_object();
+        bytecode.cached_needs_arguments_object = scope_plan.as_ref().map_or_else(
+            || bytecode.compute_needs_arguments_object(),
+            |(scopes, _)| scopes.implicit_arguments.is_some(),
+        );
         bytecode.cached_contains_direct_eval = bytecode.code.iter().any(|op| {
             matches!(
                 op,
                 Op::CallDirectEval { .. } | Op::CallDirectEvalSpread { .. }
             )
         });
+        bytecode.cached_can_suspend = bytecode
+            .code
+            .iter()
+            .any(|op| matches!(op, Op::Yield | Op::Await | Op::YieldDelegate { .. }));
         bytecode.cached_contains_with = bytecode
             .code
             .iter()
@@ -1026,10 +964,6 @@ impl Bytecode {
             )
         });
         bytecode.cached_uses_lexical_this = bytecode.compute_uses_lexical_this();
-        bytecode.cached_suspends = bytecode
-            .code
-            .iter()
-            .any(|op| matches!(op, Op::Yield | Op::Await | Op::YieldDelegate { .. }));
         bytecode.readonly_received_upvalue_slots =
             bytecode.compute_readonly_received_upvalue_slots();
         bytecode.cell_received_upvalue_slots = bytecode.compute_cell_received_upvalue_slots();
@@ -1042,8 +976,15 @@ impl Bytecode {
         } else {
             bytecode.readonly_received_upvalue_slots
         };
-        *bytecode.frame_init_plan = super::frame_init_plan::FrameInitPlan::compile(&bytecode);
+        *bytecode.binding_plan = super::binding_plan::BindingPlan::compile(&bytecode);
+        let (scopes, eval) = scope_plan.unwrap_or_default();
+        bytecode.install_scope_plan(scopes, eval);
+        super::binding_captures::link_children(&mut bytecode.code, &bytecode.locals, global_scope);
         bytecode
+    }
+
+    pub(crate) fn self_name_binding(&self) -> Option<&crate::binding::FunctionNamePlan> {
+        self.binding_plan.self_name.as_deref()
     }
 
     pub(crate) fn is_strict(&self) -> bool {
@@ -1071,16 +1012,6 @@ impl Bytecode {
 
     pub(crate) fn written_binding_names(&self) -> Vec<String> {
         self.cached_written_binding_names.clone()
-    }
-
-    /// Whether the code writes or deletes a binding by name -- anything a
-    /// direct eval's caller would need written back to its frame.
-    pub(crate) fn writes_bindings(&self) -> bool {
-        !self.cached_written_binding_names.is_empty()
-            || self
-                .code
-                .iter()
-                .any(|op| matches!(op, Op::DeleteIdent(_) | Op::DeleteIdentWith { .. }))
     }
 
     fn compute_written_binding_names(&self) -> Vec<String> {
@@ -1159,11 +1090,6 @@ impl Bytecode {
 
     pub(crate) fn local_slot(&self, name: &str) -> Option<usize> {
         self.local_slots.get(name).copied()
-    }
-
-    /// The slot of an own `this` local, precomputed at build time.
-    pub(crate) fn this_slot(&self) -> Option<usize> {
-        self.this_slot
     }
 
     /// The literal a `return <literal>` body produces, if that is the whole
@@ -1266,19 +1192,6 @@ impl Bytecode {
         self.locals
             .get(slot)
             .is_some_and(|local| local.compiler_temporary)
-    }
-
-    pub(crate) fn mark_eval_deletable_locals<I>(&mut self, names: I)
-    where
-        I: IntoIterator<Item = String>,
-    {
-        self.eval_deletable_local_names.extend(names);
-    }
-
-    pub(crate) fn local_is_eval_deletable(&self, slot: usize) -> bool {
-        self.locals
-            .get(slot)
-            .is_some_and(|local| self.eval_deletable_local_names.contains(&local.name))
     }
 
     pub(crate) fn local_is_sloppy_global_fallback(&self, slot: usize) -> bool {
@@ -1465,32 +1378,18 @@ impl Bytecode {
         self.cached_contains_direct_eval
     }
 
-    pub(super) fn mark_direct_eval_code(&mut self) {
-        self.direct_eval_code = true;
+    /// Whether this body can suspend after its scopes exist.
+    pub(crate) fn can_suspend(&self) -> bool {
+        self.cached_can_suspend
     }
 
-    /// Whether the body can suspend mid-way (`yield`, `yield*`, `await`).
-    pub(super) fn suspends(&self) -> bool {
-        self.cached_suspends
+    pub(super) fn mark_direct_eval_code(&mut self) {
+        self.direct_eval_code = true;
     }
 
     /// Whether this is the top level of a direct eval's code.
     pub(super) fn is_direct_eval_code(&self) -> bool {
         self.direct_eval_code
-    }
-
-    /// Every name the body resolves through its environment at run time
-    /// rather than through a slot: its free-name reads, writes and `typeof`s,
-    /// and its `delete`s by name. Nested function bodies' names are included
-    /// only through `global_names`.
-    pub(super) fn names_resolved_by_name(&self) -> impl Iterator<Item = &str> {
-        self.global_names
-            .iter()
-            .map(String::as_str)
-            .chain(self.code.iter().filter_map(|op| match op {
-                Op::DeleteIdent(name) | Op::DeleteIdentWith { name, .. } => Some(name.as_str()),
-                _ => None,
-            }))
     }
 
     pub(crate) fn contains_with(&self) -> bool {
@@ -1552,44 +1451,6 @@ impl Bytecode {
         };
         self.code.iter().any(|op| op_touches_local_slot(op, slot))
     }
-
-    pub(crate) fn writes_binding(&self, binding_name: &str) -> bool {
-        self.cached_writes_binding_set.contains(binding_name)
-    }
-
-    /// Builds the set of every binding name written anywhere in this body,
-    /// including nested function and class bodies. `writes_binding(name)` is
-    /// then a `HashSet` membership test. The direct (this-level) store names are
-    /// exactly what `collect_written_binding_names_from_ops` gathers; nested
-    /// contributions come from already-cached child sets.
-    fn compute_writes_binding_set(&self) -> crate::value::name_hash::NameSet<String> {
-        let mut direct = BTreeSet::new();
-        collect_written_binding_names_from_ops(self, &self.code, &mut direct);
-        let mut set: crate::value::name_hash::NameSet<String> =
-            direct.into_iter().map(str::to_owned).collect();
-        for op in &self.code {
-            match op {
-                Op::NewFunction { bytecode, .. } => {
-                    set.extend(bytecode.cached_writes_binding_set.iter().cloned());
-                }
-                Op::NewClass { definition } => {
-                    set.extend(
-                        definition
-                            .constructor
-                            .bytecode
-                            .cached_writes_binding_set
-                            .iter()
-                            .cloned(),
-                    );
-                    for element in &definition.elements {
-                        collect_class_element_writes_binding(element, &mut set);
-                    }
-                }
-                _ => {}
-            }
-        }
-        set
-    }
 }
 
 fn collect_local_slots(locals: &[Local]) -> crate::value::name_hash::NameMap<String, usize> {
@@ -1598,56 +1459,6 @@ fn collect_local_slots(locals: &[Local]) -> crate::value::name_hash::NameMap<Str
         slots.entry(local.name.clone()).or_insert(slot);
     }
     slots
-}
-
-fn collect_class_element_writes_binding(
-    element: &ClassElementDef,
-    set: &mut crate::value::name_hash::NameSet<String>,
-) {
-    match element {
-        ClassElementDef::Method(def) => {
-            set.extend(def.bytecode.cached_writes_binding_set.iter().cloned());
-        }
-        ClassElementDef::Field(def) => {
-            if let Some(initializer) = def.initializer.as_ref() {
-                set.extend(
-                    initializer
-                        .bytecode
-                        .cached_writes_binding_set
-                        .iter()
-                        .cloned(),
-                );
-            }
-        }
-        ClassElementDef::Private(def) => collect_private_class_element_writes_binding(def, set),
-        ClassElementDef::StaticBlock(def) => {
-            set.extend(def.bytecode.cached_writes_binding_set.iter().cloned());
-        }
-    }
-}
-
-fn collect_private_class_element_writes_binding(
-    element: &ClassPrivateElementDef,
-    set: &mut crate::value::name_hash::NameSet<String>,
-) {
-    match element {
-        ClassPrivateElementDef::Field { initializer, .. } => {
-            if let Some(initializer) = initializer.as_ref() {
-                set.extend(
-                    initializer
-                        .bytecode
-                        .cached_writes_binding_set
-                        .iter()
-                        .cloned(),
-                );
-            }
-        }
-        ClassPrivateElementDef::Method { def, .. }
-        | ClassPrivateElementDef::Getter { def, .. }
-        | ClassPrivateElementDef::Setter { def, .. } => {
-            set.extend(def.bytecode.cached_writes_binding_set.iter().cloned());
-        }
-    }
 }
 
 /// Whether `op` names `slot` as a frame local it reads or writes.
@@ -1727,7 +1538,8 @@ fn collect_global_names_from_ops<'a>(code: &'a [Op], names: &mut BTreeSet<&'a st
             | Op::StoreGlobalStrict(name)
             | Op::StoreGlobalSloppy { name, .. }
             | Op::AppendStringLiteralGlobal { name, .. }
-            | Op::TypeofGlobal(name) => {
+            | Op::TypeofGlobal(name)
+            | Op::DeleteIdent(name) => {
                 names.insert(name.as_str());
             }
             Op::StoreLocalOrGlobalSloppy { name, .. } => {
@@ -1763,11 +1575,6 @@ fn collect_global_names_from_ops<'a>(code: &'a [Op], names: &mut BTreeSet<&'a st
                         .iter()
                         .map(String::as_str),
                 );
-                for key in &definition.computed_keys {
-                    if let ClassComputedKeyDef::Deferred { bytecode, .. } = key {
-                        names.extend(bytecode.global_names().iter().map(String::as_str));
-                    }
-                }
                 for element in &definition.elements {
                     match element {
                         ClassElementDef::Method(method) => {
@@ -1859,3 +1666,7 @@ fn collect_sloppy_global_assignment_names_from_ops(code: &[Op], names: &mut BTre
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+#[path = "ir/test_construction.rs"]
+mod test_construction;

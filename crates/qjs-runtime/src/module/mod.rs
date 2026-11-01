@@ -9,7 +9,7 @@
 //!
 //! A realm carries a [`ModuleHost`] (the shared module graph plus the owned host
 //! resolver), reachable from every call frame and the promise job queue through
-//! [`crate::CallEnv`]. A dynamic `import(specifier)` builds a `%Promise%`
+//! [`crate::context::ActivationContext`]. A dynamic `import(specifier)` builds a `%Promise%`
 //! capability, schedules a host load job, and — when that job runs as a
 //! microtask — resolves/links/evaluates the requested module against the same
 //! graph (so the same key yields the same namespace) and settles the promise
@@ -124,7 +124,8 @@ pub fn eval_module_with_prelude(
     };
     // Drain the deferred jobs (reactions and dynamic imports) with the graph
     // borrow released, so a dynamic-import job can re-borrow the graph.
-    let mut drain_env = crate::CallEnv::new(realm);
+    let mut service_root = crate::context::HostRoot::new(realm);
+    let mut drain_env = service_root.context();
     drain_env.set_module_host(host);
     crate::promise::drain_promise_jobs(&mut drain_env).map_err(|error| EvalError {
         kind: EvalErrorKind::Runtime,

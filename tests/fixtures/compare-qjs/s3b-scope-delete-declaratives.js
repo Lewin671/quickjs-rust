@@ -1,0 +1,1 @@
+(function() { return [(function named() { return delete named; })(), (function() { let value = 1; return () => delete value; })()(), (function() { return delete value; let value = 1; })(), (function named() { return () => delete named; })()(), (function() { return delete neverThere; })()].join(':'); })()

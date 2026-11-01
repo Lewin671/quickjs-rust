@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    CallEnv, NativeFunction, ObjectRef, Property, RuntimeError, Value, array_buffer, is_truthy,
+    NativeFunction, ObjectRef, Property, RuntimeError, Value, array_buffer, is_truthy,
     object_prototype, property_value,
 };
 
@@ -13,7 +13,7 @@ use super::{
 
 pub(crate) fn native_uint8_array_from_base64(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let source = base64_source(argument_values.first(), "Uint8Array.fromBase64")?;
     let options = from_base64_options(argument_values.get(1).cloned(), env)?;
@@ -37,7 +37,7 @@ pub(crate) fn native_uint8_array_from_base64(
 pub(crate) fn native_uint8_array_prototype_to_base64(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let object = uint8_array_receiver(&this_value, "toBase64")?;
     let options = to_base64_options(argument_values.first().cloned(), env)?;
@@ -66,7 +66,7 @@ pub(crate) fn native_uint8_array_prototype_to_base64(
 pub(crate) fn native_uint8_array_prototype_set_from_base64(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let object = uint8_array_receiver(&this_value, "setFromBase64")?;
     if super::typed_array_buffer_detached(&object) {
@@ -145,7 +145,7 @@ struct ToBase64Options {
 
 fn to_base64_options(
     value: Option<Value>,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<ToBase64Options, RuntimeError> {
     let mut options = ToBase64Options {
         alphabet: Base64Alphabet::Base64,
@@ -192,21 +192,21 @@ struct SetFromBase64Options {
 
 fn from_base64_options(
     value: Option<Value>,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<SetFromBase64Options, RuntimeError> {
     base64_decode_options(value, env, "Uint8Array.fromBase64")
 }
 
 fn set_from_base64_options(
     value: Option<Value>,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<SetFromBase64Options, RuntimeError> {
     base64_decode_options(value, env, "Uint8Array.prototype.setFromBase64")
 }
 
 fn base64_decode_options(
     value: Option<Value>,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     method: &str,
 ) -> Result<SetFromBase64Options, RuntimeError> {
     let mut options = SetFromBase64Options {
@@ -565,7 +565,7 @@ fn number_byte(value: u8) -> Value {
     Value::Number(value as f64)
 }
 
-fn set_from_base64_result(read: usize, written: usize, env: &CallEnv) -> Value {
+fn set_from_base64_result(read: usize, written: usize, env: &crate::context::Context<'_>) -> Value {
     let result =
         ObjectRef::with_prototype(HashMap::new(), object_prototype(env), env.realm().atoms());
     result.define_property(

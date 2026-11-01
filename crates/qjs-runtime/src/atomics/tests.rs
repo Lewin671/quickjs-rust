@@ -33,7 +33,7 @@ fn atomics_wait_throws_when_agent_cannot_block() {
 fn atomics_wait_throws_from_a_nested_user_frame_when_agent_cannot_block() {
     // The CanBlockIsFalse cases call Atomics.wait inside `assert.throws`'s
     // callback, two user frames below the script root; the agent context must
-    // survive the frame chain (it rides every CallEnv like the module host).
+    // survive the frame chain (it rides every crate::context::ActivationContext like the module host).
     assert_eq!(
         eval_in_agent(
             "function outer(fn) { return fn(); } \

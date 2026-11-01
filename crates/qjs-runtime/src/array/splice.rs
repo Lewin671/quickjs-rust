@@ -5,13 +5,12 @@ use super::{
     mutation::{delete_array_like_property, set_array_like_property},
     species::{array_species_create, create_data_property_or_throw},
 };
-use crate::CallEnv;
 
 const MAX_SAFE_INTEGER_LENGTH: usize = 9_007_199_254_740_991;
 pub(crate) fn native_array_prototype_splice(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if matches!(this_value, Value::String(_)) {
         return Err(splice_length_error());
@@ -72,7 +71,7 @@ pub(crate) fn native_array_prototype_splice(
 fn splice_plain_dense(
     array: &crate::ArrayRef,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Option<Value> {
     if !argument_values
         .iter()
@@ -108,7 +107,7 @@ fn splice_plain_dense(
 pub(super) fn splice_start_with_env(
     length: usize,
     start: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<usize, RuntimeError> {
     let number = match start {
         Value::Undefined => 0.0,
@@ -133,7 +132,7 @@ pub(super) fn splice_delete_count(
     length: usize,
     start: usize,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<usize, RuntimeError> {
     if argument_values.is_empty() {
         return Ok(0);
@@ -156,7 +155,7 @@ fn splice_removed_elements(
     receiver: Value,
     start: usize,
     delete_count: usize,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let removed = array_species_create(receiver.clone(), delete_count, "splice", env)?;
     for offset in 0..delete_count {
@@ -185,7 +184,7 @@ fn move_splice_tail(
     start: usize,
     delete_count: usize,
     item_count: usize,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<(), RuntimeError> {
     match item_count.cmp(&delete_count) {
         std::cmp::Ordering::Less => {
@@ -231,7 +230,7 @@ pub(super) fn to_spliced_delete_count(
     length: usize,
     start: usize,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<usize, RuntimeError> {
     if argument_values.is_empty() {
         return Ok(0);

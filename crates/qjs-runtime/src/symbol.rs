@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use crate::CallEnv;
 use crate::{
     Function, NativeFunction, ObjectRef, Property, RuntimeError, Value, function_prototype,
     to_js_string_with_env,
@@ -27,9 +26,17 @@ const WELL_KNOWN_SYMBOL_NAMES: &[&str] = &[
     "unscopables",
 ];
 
-pub(crate) fn install_symbol(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
+pub(crate) fn install_symbol(
+    env: &mut crate::context::Context<'_>,
+    global_this: &Value,
+    object_prototype: ObjectRef,
+) {
     let symbol_prototype =
         ObjectRef::with_prototype(HashMap::new(), Some(object_prototype), env.realm().atoms());
+    env.realm().initialize_other_primitive_prototype(
+        crate::context::PrimitiveIntrinsic::Symbol,
+        symbol_prototype.clone(),
+    );
     symbol_prototype.set_to_string_tag("Symbol");
 
     let symbol_function =
@@ -152,7 +159,7 @@ pub(crate) fn native_symbol(
     function: &Function,
     argument_values: &[Value],
     is_construct: bool,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if is_construct {
         return Err(RuntimeError {
@@ -174,7 +181,7 @@ pub(crate) fn native_symbol(
 
 pub(crate) fn native_symbol_for(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let key = to_js_string_with_env(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
@@ -196,7 +203,7 @@ pub(crate) fn native_symbol_for(
 
 pub(crate) fn native_symbol_key_for(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let Value::Object(target_object) = target else {
@@ -226,7 +233,7 @@ pub(crate) fn is_symbol_primitive(object: &ObjectRef) -> bool {
     object.is_symbol_primitive()
 }
 
-pub(crate) fn is_registered_symbol(object: &ObjectRef, env: &CallEnv) -> bool {
+pub(crate) fn is_registered_symbol(object: &ObjectRef, env: &crate::context::Context<'_>) -> bool {
     let Some(Value::Object(registry)) = env.get(SYMBOL_REGISTRY_BINDING) else {
         return false;
     };
@@ -238,7 +245,7 @@ pub(crate) fn is_registered_symbol(object: &ObjectRef, env: &CallEnv) -> bool {
     })
 }
 
-pub(crate) fn boxed_symbol(object: &ObjectRef, env: &CallEnv) -> Value {
+pub(crate) fn boxed_symbol(object: &ObjectRef, env: &crate::context::Context<'_>) -> Value {
     let description = symbol_description(object);
     let boxed = symbol_object(symbol_prototype(env), description, env.realm().atoms());
     boxed.mark_symbol_boxed();
@@ -260,70 +267,77 @@ pub(crate) fn symbol_function_name_description(object: &ObjectRef) -> Option<Str
     }
 }
 
-pub(crate) fn to_string_tag_symbol(env: &CallEnv) -> Option<ObjectRef> {
+pub(crate) fn realm_to_string_tag_symbol(realm: &crate::function::Realm) -> Option<ObjectRef> {
+    let index = WELL_KNOWN_SYMBOL_NAMES
+        .iter()
+        .position(|name| *name == "toStringTag")?;
+    realm.well_known_symbol(index)
+}
+
+pub(crate) fn to_string_tag_symbol(env: &crate::context::Context<'_>) -> Option<ObjectRef> {
     well_known_symbol(env, "toStringTag")
 }
 
-pub(crate) fn iterator_symbol(env: &CallEnv) -> Option<ObjectRef> {
+pub(crate) fn iterator_symbol(env: &crate::context::Context<'_>) -> Option<ObjectRef> {
     well_known_symbol(env, "iterator")
 }
 
-pub(crate) fn async_iterator_symbol(env: &CallEnv) -> Option<ObjectRef> {
+pub(crate) fn async_iterator_symbol(env: &crate::context::Context<'_>) -> Option<ObjectRef> {
     well_known_symbol(env, "asyncIterator")
 }
 
-pub(crate) fn dispose_symbol(env: &CallEnv) -> Option<ObjectRef> {
+pub(crate) fn dispose_symbol(env: &crate::context::Context<'_>) -> Option<ObjectRef> {
     well_known_symbol(env, "dispose")
 }
 
-pub(crate) fn async_dispose_symbol(env: &CallEnv) -> Option<ObjectRef> {
+pub(crate) fn async_dispose_symbol(env: &crate::context::Context<'_>) -> Option<ObjectRef> {
     well_known_symbol(env, "asyncDispose")
 }
 
-pub(crate) fn to_primitive_symbol(env: &CallEnv) -> Option<ObjectRef> {
+pub(crate) fn to_primitive_symbol(env: &crate::context::Context<'_>) -> Option<ObjectRef> {
     well_known_symbol(env, "toPrimitive")
 }
 
-pub(crate) fn has_instance_symbol(env: &CallEnv) -> Option<ObjectRef> {
+pub(crate) fn has_instance_symbol(env: &crate::context::Context<'_>) -> Option<ObjectRef> {
     well_known_symbol(env, "hasInstance")
 }
 
-pub(crate) fn is_concat_spreadable_symbol(env: &CallEnv) -> Option<ObjectRef> {
+pub(crate) fn is_concat_spreadable_symbol(env: &crate::context::Context<'_>) -> Option<ObjectRef> {
     well_known_symbol(env, "isConcatSpreadable")
 }
 
-pub(crate) fn match_symbol(env: &CallEnv) -> Option<ObjectRef> {
+pub(crate) fn match_symbol(env: &crate::context::Context<'_>) -> Option<ObjectRef> {
     well_known_symbol(env, "match")
 }
 
-pub(crate) fn match_all_symbol(env: &CallEnv) -> Option<ObjectRef> {
+pub(crate) fn match_all_symbol(env: &crate::context::Context<'_>) -> Option<ObjectRef> {
     well_known_symbol(env, "matchAll")
 }
 
-pub(crate) fn replace_symbol(env: &CallEnv) -> Option<ObjectRef> {
+pub(crate) fn replace_symbol(env: &crate::context::Context<'_>) -> Option<ObjectRef> {
     well_known_symbol(env, "replace")
 }
 
-pub(crate) fn search_symbol(env: &CallEnv) -> Option<ObjectRef> {
+pub(crate) fn search_symbol(env: &crate::context::Context<'_>) -> Option<ObjectRef> {
     well_known_symbol(env, "search")
 }
 
-pub(crate) fn species_symbol(env: &CallEnv) -> Option<ObjectRef> {
+pub(crate) fn species_symbol(env: &crate::context::Context<'_>) -> Option<ObjectRef> {
     well_known_symbol(env, "species")
 }
 
-pub(crate) fn split_symbol(env: &CallEnv) -> Option<ObjectRef> {
+pub(crate) fn split_symbol(env: &crate::context::Context<'_>) -> Option<ObjectRef> {
     well_known_symbol(env, "split")
 }
 
-pub(crate) fn unscopables_symbol(env: &CallEnv) -> Option<ObjectRef> {
+pub(crate) fn unscopables_symbol(env: &crate::context::Context<'_>) -> Option<ObjectRef> {
     well_known_symbol(env, "unscopables")
 }
 
 /// A well-known symbol is a realm intrinsic, fixed when the realm installs
 /// `Symbol`: it is read from the realm's table rather than through the
 /// current `Symbol` binding, which user code may rebind.
-fn well_known_symbol(env: &CallEnv, name: &str) -> Option<ObjectRef> {
+fn well_known_symbol(env: &crate::context::Context<'_>, name: &str) -> Option<ObjectRef> {
     if let Some(index) = WELL_KNOWN_SYMBOL_NAMES
         .iter()
         .position(|candidate| *candidate == name)
@@ -334,7 +348,10 @@ fn well_known_symbol(env: &CallEnv, name: &str) -> Option<ObjectRef> {
     well_known_symbol_from_binding(env, name)
 }
 
-fn well_known_symbol_from_binding(env: &CallEnv, name: &str) -> Option<ObjectRef> {
+fn well_known_symbol_from_binding(
+    env: &crate::context::Context<'_>,
+    name: &str,
+) -> Option<ObjectRef> {
     let Some(Value::Function(symbol_function)) = env.get("Symbol") else {
         return None;
     };
@@ -351,7 +368,7 @@ fn well_known_symbol_from_function(symbol_function: &Function, name: &str) -> Op
     }
 }
 
-fn install_function_has_instance(env: &CallEnv, symbol_function: &Function) {
+fn install_function_has_instance(env: &crate::context::Context<'_>, symbol_function: &Function) {
     let Some(symbol) = well_known_symbol_from_function(symbol_function, "hasInstance") else {
         return;
     };
@@ -393,7 +410,7 @@ fn install_function_has_instance(env: &CallEnv, symbol_function: &Function) {
 }
 
 pub(crate) fn define_well_known_iterator_alias(
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
     object: &ObjectRef,
     method_name: &str,
 ) {
@@ -406,7 +423,7 @@ pub(crate) fn define_well_known_iterator_alias(
     object.define_symbol_property(symbol, Property::non_enumerable(property.value));
 }
 
-pub(crate) fn define_species_accessor(env: &CallEnv, function: &Function) {
+pub(crate) fn define_species_accessor(env: &crate::context::Context<'_>, function: &Function) {
     let Some(symbol) = species_symbol(env) else {
         return;
     };
@@ -427,7 +444,11 @@ pub(crate) fn define_species_accessor(env: &CallEnv, function: &Function) {
     );
 }
 
-pub(crate) fn define_well_known_to_string_tag(env: &CallEnv, object: &ObjectRef, tag: &str) {
+pub(crate) fn define_well_known_to_string_tag(
+    env: &crate::context::Context<'_>,
+    object: &ObjectRef,
+    tag: &str,
+) {
     if let Some(symbol) = to_string_tag_symbol(env) {
         define_to_string_tag_property(object, symbol, tag);
     }
@@ -526,14 +547,11 @@ fn symbol_object(
     object
 }
 
-fn symbol_prototype(env: &CallEnv) -> Option<ObjectRef> {
-    let Some(Value::Function(symbol_function)) = env.get("Symbol") else {
-        return None;
-    };
-    function_prototype(&symbol_function)
+fn symbol_prototype(env: &crate::context::Context<'_>) -> Option<ObjectRef> {
+    env.primitive_prototype("Symbol")
 }
 
-fn symbol_registry(env: &mut CallEnv) -> ObjectRef {
+fn symbol_registry(env: &mut crate::context::Context<'_>) -> ObjectRef {
     if let Some(Value::Object(registry)) = env.get(SYMBOL_REGISTRY_BINDING) {
         return registry.clone();
     }

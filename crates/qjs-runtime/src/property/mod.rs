@@ -1,4 +1,3 @@
-use crate::CallEnv;
 use crate::{Property, RuntimeError, Value, call_function};
 
 mod array;
@@ -25,13 +24,17 @@ pub(crate) use prototype::{
     native_construct_prototype_slot, object_prototype, string_prototype, value_prototype_slot,
 };
 
-pub(crate) fn has_property(value: Value, env: &CallEnv, key: &str) -> Result<bool, RuntimeError> {
+pub(crate) fn has_property(
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+    key: &str,
+) -> Result<bool, RuntimeError> {
     has_property_key(value, env, &PropertyKey::String(key.to_owned()))
 }
 
 pub(crate) fn has_property_key(
     value: Value,
-    env: &CallEnv,
+    env: &mut crate::context::Context<'_>,
     key: &PropertyKey,
 ) -> Result<bool, RuntimeError> {
     let PropertyKey::String(key) = key else {
@@ -42,8 +45,8 @@ pub(crate) fn has_property_key(
         Value::Map(map) => object_has_property(&map.object(), env, key),
         Value::Set(set) => object_has_property(&set.object(), env, key),
         Value::Proxy(proxy) => {
-            let mut proxy_env = env.clone();
-            crate::proxy::proxy_has(proxy, &PropertyKey::String(key.to_owned()), &mut proxy_env)
+            let proxy_env = &mut *env;
+            crate::proxy::proxy_has(proxy, &PropertyKey::String(key.to_owned()), proxy_env)
         }
         Value::Array(elements) => {
             if array_has_own_property(&elements, key) {
@@ -73,7 +76,7 @@ pub(crate) fn has_property_key(
 
 fn object_has_property(
     object: &crate::ObjectRef,
-    env: &CallEnv,
+    env: &mut crate::context::Context<'_>,
     key: &str,
 ) -> Result<bool, RuntimeError> {
     if crate::typed_array::is_typed_array_object(object) {
@@ -97,7 +100,7 @@ fn object_has_property(
 
 fn prototype_has_property(
     prototype: Option<crate::Prototype>,
-    env: &CallEnv,
+    env: &mut crate::context::Context<'_>,
     key: &str,
 ) -> Result<bool, RuntimeError> {
     match prototype {
@@ -105,8 +108,8 @@ fn prototype_has_property(
         Some(crate::Prototype::Array(array)) => has_property(Value::Array(array.array()), env, key),
         Some(crate::Prototype::Function(function)) => function_has_property(&function, env, key),
         Some(crate::Prototype::Proxy(proxy)) => {
-            let mut proxy_env = env.clone();
-            crate::proxy::proxy_has(proxy, &PropertyKey::String(key.to_owned()), &mut proxy_env)
+            let proxy_env = &mut *env;
+            crate::proxy::proxy_has(proxy, &PropertyKey::String(key.to_owned()), proxy_env)
         }
         None => Ok(false),
 
@@ -124,7 +127,7 @@ fn prototype_has_property(
 
 fn function_has_property(
     function: &crate::Function,
-    env: &CallEnv,
+    env: &mut crate::context::Context<'_>,
     key: &str,
 ) -> Result<bool, RuntimeError> {
     if function_own_property_descriptor(function, key).is_some() {
@@ -247,7 +250,7 @@ fn prototype_symbol_descriptor_without_traps(
 
 fn has_symbol_property(
     value: Value,
-    env: &CallEnv,
+    env: &mut crate::context::Context<'_>,
     key: &PropertyKey,
 ) -> Result<bool, RuntimeError> {
     let PropertyKey::Symbol(symbol) = key else {
@@ -258,8 +261,8 @@ fn has_symbol_property(
         Value::Map(map) => object_has_symbol_property(&map.object(), env, symbol),
         Value::Set(set) => object_has_symbol_property(&set.object(), env, symbol),
         Value::Proxy(proxy) => {
-            let mut proxy_env = env.clone();
-            crate::proxy::proxy_has(proxy, key, &mut proxy_env)
+            let proxy_env = &mut *env;
+            crate::proxy::proxy_has(proxy, key, proxy_env)
         }
         Value::Function(function) => function_has_symbol_property(&function, env, symbol),
         Value::Array(elements) => {
@@ -283,7 +286,7 @@ fn has_symbol_property(
 
 fn object_has_symbol_property(
     object: &crate::ObjectRef,
-    env: &CallEnv,
+    env: &mut crate::context::Context<'_>,
     symbol: &crate::ObjectRef,
 ) -> Result<bool, RuntimeError> {
     if object.has_own_symbol_property(symbol) {
@@ -294,7 +297,7 @@ fn object_has_symbol_property(
 
 fn function_has_symbol_property(
     function: &crate::Function,
-    env: &CallEnv,
+    env: &mut crate::context::Context<'_>,
     symbol: &crate::ObjectRef,
 ) -> Result<bool, RuntimeError> {
     if function.has_own_symbol_property(symbol) {
@@ -309,7 +312,7 @@ fn function_has_symbol_property(
 
 fn prototype_has_symbol_property(
     prototype: Option<crate::Prototype>,
-    env: &CallEnv,
+    env: &mut crate::context::Context<'_>,
     symbol: &crate::ObjectRef,
 ) -> Result<bool, RuntimeError> {
     match prototype {
@@ -323,8 +326,8 @@ fn prototype_has_symbol_property(
             function_has_symbol_property(&function, env, symbol)
         }
         Some(crate::Prototype::Proxy(proxy)) => {
-            let mut proxy_env = env.clone();
-            crate::proxy::proxy_has(proxy, &PropertyKey::Symbol(symbol.clone()), &mut proxy_env)
+            let proxy_env = &mut *env;
+            crate::proxy::proxy_has(proxy, &PropertyKey::Symbol(symbol.clone()), proxy_env)
         }
         None => Ok(false),
 
@@ -343,7 +346,7 @@ fn prototype_has_symbol_property(
 pub(crate) fn property_value(
     receiver: Value,
     key: &str,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     property_value_key(receiver, &PropertyKey::String(key.to_owned()), env)
 }
@@ -351,7 +354,7 @@ pub(crate) fn property_value(
 pub(crate) fn property_value_key(
     receiver: Value,
     key: &PropertyKey,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     property_value_key_with_receiver(receiver.clone(), key, receiver, env)
 }
@@ -360,7 +363,7 @@ pub(crate) fn property_value_key_with_receiver(
     target: Value,
     key: &PropertyKey,
     receiver: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let PropertyKey::String(key) = key else {
         return symbol_property_value_with_receiver(target, key, receiver, env);
@@ -475,7 +478,7 @@ fn symbol_property_value_with_receiver(
     target: Value,
     key: &PropertyKey,
     receiver: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let PropertyKey::Symbol(symbol) = key else {
         unreachable!("symbol property helper should only receive symbol keys");
@@ -555,7 +558,7 @@ fn ordinary_object_property_value(
     object: crate::ObjectRef,
     key: &str,
     receiver: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if let Some(property) = object.own_property(key) {
         return property_descriptor_value(Some(property), receiver, env);
@@ -575,7 +578,7 @@ fn ordinary_object_symbol_value(
     object: crate::ObjectRef,
     key: &PropertyKey,
     receiver: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let PropertyKey::Symbol(symbol) = key else {
         unreachable!("symbol property helper should only receive symbol keys");
@@ -594,7 +597,7 @@ fn ordinary_object_symbol_value(
 pub(crate) fn property_descriptor_value(
     property: Option<Property>,
     receiver: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let Some(property) = property else {
         return Ok(Value::Undefined);

@@ -1,0 +1,14 @@
+   Compiling qjs-runtime v0.1.0 (/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/crates/qjs-runtime)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 8.45s
+     Running unittests src/lib.rs (target/debug/deps/qjs_runtime-75a63d361e38909b)
+
+running 6 tests
+test bytecode::compact_fn::wide::activation::owner_tests::inline_constructor_owner_keeps_receiver_and_new_target ... ok
+test bytecode::compact_fn::wide::activation::owner_tests::native_callback_standalone_entry_keeps_the_canonical_receiver ... ok
+test bytecode::compact_fn::wide::activation::owner_tests::inline_call_owner_and_vm_exit_keep_the_same_receiver ... ok
+test bytecode::compact_fn::wide::activation::owner_tests::implicit_bindings_keep_their_general_entry_when_wide_cannot_represent_them ... ok
+test bytecode::compact_fn::wide::activation::owner_tests::compound_member_assignments_after_deoptimization_keep_this ... ok
+test bytecode::compact_fn::wide::activation::owner_tests::equality_deoptimization_preserves_receivers_across_loop_and_call_forms ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 2637 filtered out; finished in 1.39s
+

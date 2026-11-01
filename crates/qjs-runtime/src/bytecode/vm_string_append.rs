@@ -13,7 +13,7 @@ use crate::{RuntimeError, Value, operations};
 
 use super::{ir::Op, vm::Vm};
 
-impl Vm<'_> {
+impl Vm<'_, '_> {
     /// Drops only engine-internal mirrors before a compound string assignment.
     /// The following store bytecode restores the binding immediately, with an
     /// optional preceding `Dup` when the assignment value remains observable.
@@ -50,7 +50,6 @@ impl Vm<'_> {
         if !local_meta.mutable
             || self.env.has_module_import(name)
             || self.env.is_immutable_lexical_binding(name)
-            || self.env.is_immutable_function_name(name)
             || self.local_slot_targets_non_writable_global(slot, name)
         {
             return false;
@@ -105,17 +104,20 @@ impl Vm<'_> {
         let matches = cell.with_value(|value| {
             matches!(value, Value::String(current) if crate::JsString::ptr_eq(current, expected))
         });
-        if !matches {
+        if matches != Some(true) {
             return false;
         }
 
         let name = self.bytecode.locals[slot].name.clone();
         let realm_cell = self.env.is_realm_binding_cell(&name, &cell);
-        let global_this = if realm_cell {
-            self.cached_global_this()
-        } else {
-            None
-        };
+        // Only an object-storage realm cell mirrors a global object property;
+        // a global lexical shadows a same-named property instead.
+        let global_this =
+            if realm_cell && cell.metadata().kind != crate::binding::BindingKind::Lexical {
+                self.cached_global_this()
+            } else {
+                None
+            };
         if let Some(property) = global_this
             .as_ref()
             .and_then(|global_this| global_this.own_property(&name))
@@ -124,7 +126,9 @@ impl Vm<'_> {
             return false;
         }
 
-        cell.set(Value::Undefined);
+        if cell.assign(Value::Undefined, false).is_err() {
+            return false;
+        }
         if let Some(Some(local)) = self.locals.get_mut(slot)
             && matches!(local, Value::String(current) if crate::JsString::ptr_eq(current, expected))
         {
@@ -152,8 +156,6 @@ impl Vm<'_> {
     fn detach_matching_realm_string(&mut self, name: &str, expected: &crate::JsString) -> bool {
         if self.env.has_module_import(name)
             || self.env.is_immutable_lexical_binding(name)
-            || self.env.is_immutable_function_name(name)
-            || self.env.has_local_binding(name)
             || self
                 .bytecode
                 .local_slot(name)
@@ -177,18 +179,24 @@ impl Vm<'_> {
         }
         let cell = self.env.realm_binding_cell(name);
         if let Some(cell) = &cell
-            && !cell.with_value(|value| {
+            && cell.with_value(|value| {
                 matches!(value, Value::String(current) if crate::JsString::ptr_eq(current, expected))
-            })
+            }) != Some(true)
         {
             return false;
         }
+        let lexical = cell
+            .as_ref()
+            .is_some_and(|cell| cell.metadata().kind == crate::binding::BindingKind::Lexical);
         if let Some(cell) = cell {
             // `cell` *is* the realm's canonical binding for `name` — no
             // separate raw map entry to mirror this into.
-            cell.set(Value::Undefined);
+            if cell.assign(Value::Undefined, false).is_err() {
+                return false;
+            }
         }
-        if let Some(global_this) = global_this
+        if !lexical
+            && let Some(global_this) = global_this
             && global_this
                 .own_property(name)
                 .is_some_and(|property| {
@@ -240,86 +248,44 @@ impl Vm<'_> {
                 thrown: None,
                 message: "bytecode local index out of bounds".to_owned(),
             })?;
-        if !local_meta.mutable {
-            return Err(RuntimeError {
-                thrown: None,
-                message: "TypeError: assignment to constant variable".to_owned(),
-            });
-        }
-        // The append opcode mutates the local string in place as a fast path.
-        // A received capture's authoritative value is its shared cell, not the
-        // compatibility slot snapshot left from function entry; refresh that
-        // one slot before taking the mutable string reference.
-        let shared_value = self.upvalue_slot_value(slot);
-        if shared_value.is_none()
-            && let Some(Some(Value::String(current))) = self.locals.get(slot)
-            && !current.is_unique()
+        if let Some(cell) = self.local_upvalue_cell(slot)
+            && !self.env.is_realm_binding_cell(&local_meta.name, cell)
+            && !self.env.has_module_import(&local_meta.name)
+            && let Some(result) = cell.try_assign_in_place(
+                self.execution_is_strict(),
+                |value| matches!(value, Value::String(_)),
+                |value| {
+                    let Value::String(string) = value else {
+                        unreachable!("admitted string")
+                    };
+                    crate::string::push_js_str(string.make_mut(), suffix);
+                    value.clone()
+                },
+            )?
         {
-            let expected = current.clone();
-            self.release_dead_completion_copies(&expected);
-        }
-        let local = self.locals.get_mut(slot).ok_or_else(|| RuntimeError {
-            thrown: None,
-            message: "bytecode local index out of bounds".to_owned(),
-        })?;
-        if let Some(value) = shared_value {
-            *local = Some(value);
-        }
-        let Some(value) = local else {
-            return Err(RuntimeError {
-                thrown: None,
-                message: format!("ReferenceError: undefined identifier `{}`", local_meta.name),
-            });
-        };
-        let Value::String(string) = value else {
-            let left = value.clone();
-            let mut env = self.current_env();
-            let result = operations::eval_binary(
-                left,
-                BinaryOp::Add,
-                Value::String(suffix.to_owned().into()),
-                &mut env,
-            )?;
-            self.apply_env(env);
-            self.store_local(slot, result.clone())?;
             return Ok(result);
-        };
-        crate::string::push_js_str(string.make_mut(), suffix);
-        let result = Value::String(string.clone());
-        if let Some(upvalue) = self.local_upvalues.get(slot).and_then(Option::as_ref) {
-            upvalue.set(result.clone());
         }
-        self.write_through_module_live_binding(&local_meta.name, result.clone());
-        if local_meta.from_env || self.bytecode.local_is_body_hoist_only(slot) {
-            let name = local_meta.name.clone();
-            if self.env.has_local_binding(&name) {
-                self.env.insert(name, result.clone());
+        if local_meta.mutable && self.slot_is_authoritative(slot) {
+            if let Some(Some(Value::String(current))) = self.locals.get(slot)
+                && !current.is_unique()
+            {
+                let expected = current.clone();
+                self.release_dead_completion_copies(&expected);
+            }
+            if let Some(Some(Value::String(string))) = self.locals.get_mut(slot) {
+                crate::string::push_js_str(string.make_mut(), suffix);
+                return Ok(Value::String(string.clone()));
             }
         }
-        let syncs_global_var = (local_meta.from_env && !local_meta.hoisted)
-            || (self.bytecode.global_scope
-                && self.bytecode.local_is_body_hoist_only(slot)
-                && !self.bytecode.local_is_compiler_temporary(slot));
-        let global_this = syncs_global_var
-            .then(|| self.cached_global_this())
-            .flatten();
-        if let Some(global_this) = global_this
-            && global_this.has_own_property(&local_meta.name)
-        {
-            global_this
-                .append_string_property(&local_meta.name, suffix)
-                .unwrap_or_else(|| {
-                    global_this.set(local_meta.name.clone(), result.clone());
-                    result.clone()
-                });
-            if self.realm.contains(&local_meta.name) {
-                // A top-level reader may already hold the realm binding's
-                // shared cell even when this older from-env frame still uses a
-                // compatibility slot. Route the mirror through CallEnv so the
-                // cell cannot retain the pre-append string.
-                self.env.insert_realm(local_meta.name, result.clone());
-            }
-        }
+        let left = self.load_local(slot)?;
+        let mut context = self.context();
+        let result = operations::eval_binary(
+            left,
+            BinaryOp::Add,
+            Value::String(suffix.to_owned().into()),
+            &mut context,
+        )?;
+        self.assign_local(slot, result.clone())?;
         Ok(result)
     }
 
@@ -329,7 +295,12 @@ impl Vm<'_> {
         suffix: &str,
         is_strict: bool,
     ) -> Result<Value, RuntimeError> {
-        if self.env.has_local_binding(name) {
+        if !self.env.is_global_lexical_binding(name)
+            && !self
+                .cached_global_this()
+                .and_then(|global| global.own_property(name))
+                .is_some_and(|property| !property.is_accessor() && property.writable)
+        {
             return self.append_string_literal_global_via_store(name, suffix, is_strict);
         }
         {
@@ -337,17 +308,30 @@ impl Vm<'_> {
             // in place needs no separate cell refresh afterward — unlike the
             // old two-map realm model, where `Rc::make_mut` on the raw map's
             // copy could detach the value from an already-captured cell.
-            let appended = self.realm.cell(name).and_then(|cell| {
-                cell.with_value_mut(|value| {
-                    let Value::String(string) = value else {
-                        return None;
-                    };
-                    crate::string::push_js_str(string.make_mut(), suffix);
-                    Some(value.clone())
-                })
-            });
+            let cell = self.realm.cell(name);
+            // A global lexical shadows any same-named property of the
+            // global object, which its write must leave untouched.
+            let lexical = cell
+                .as_ref()
+                .is_some_and(|cell| cell.metadata().kind == crate::binding::BindingKind::Lexical);
+            let appended = if let Some(cell) = cell {
+                cell.try_assign_in_place(
+                    is_strict,
+                    |value| matches!(value, Value::String(_)),
+                    |value| {
+                        let Value::String(string) = value else {
+                            unreachable!("admitted string")
+                        };
+                        crate::string::push_js_str(string.make_mut(), suffix);
+                        value.clone()
+                    },
+                )?
+            } else {
+                None
+            };
             if let Some(result) = appended {
-                if let Some(global_this) = self.cached_global_this()
+                if !lexical
+                    && let Some(global_this) = self.cached_global_this()
                     && global_this.has_own_property(name)
                 {
                     global_this
@@ -357,7 +341,7 @@ impl Vm<'_> {
                             result.clone()
                         });
                 }
-                self.write_through_module_live_binding(name, result.clone());
+
                 return Ok(result);
             }
         }
@@ -372,14 +356,13 @@ impl Vm<'_> {
         is_strict: bool,
     ) -> Result<Value, RuntimeError> {
         let left = self.load_global(name)?;
-        let mut env = self.current_env();
+        let mut env = self.context();
         let result = operations::eval_binary(
             left,
             BinaryOp::Add,
             Value::String(suffix.to_owned().into()),
             &mut env,
         )?;
-        self.apply_env(env);
         if is_strict {
             self.store_global_strict(name, result.clone())?;
         } else {

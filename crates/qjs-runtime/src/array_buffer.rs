@@ -1,4 +1,3 @@
-use crate::CallEnv;
 use std::cell::RefMut;
 use std::collections::HashMap;
 
@@ -32,7 +31,7 @@ const MAX_ARRAY_BUFFER_LENGTH: usize = 1_000_000;
 const MAX_SAFE_INTEGER_LENGTH: usize = 9_007_199_254_740_991;
 
 pub(crate) fn install_array_buffer(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     global_this: &Value,
     object_prototype: ObjectRef,
 ) {
@@ -179,7 +178,7 @@ pub(crate) fn native_array_buffer(
     this_value: Value,
     argument_values: &[Value],
     is_construct: bool,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if !is_construct {
         return Err(RuntimeError {
@@ -277,7 +276,7 @@ pub(crate) fn native_array_buffer_prototype_immutable(
 pub(crate) fn native_array_buffer_prototype_resize(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let object = array_buffer_object(&this_value)?;
     if is_immutable(&object) {
@@ -314,7 +313,7 @@ pub(crate) fn native_array_buffer_prototype_resize(
 pub(crate) fn native_array_buffer_prototype_slice(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let object = array_buffer_object(&this_value)?;
     if is_detached(&object) {
@@ -383,7 +382,7 @@ pub(crate) fn native_array_buffer_prototype_slice(
 pub(crate) fn native_array_buffer_prototype_slice_to_immutable(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let object = array_buffer_object(&this_value)?;
     if is_detached(&object) {
@@ -429,7 +428,7 @@ pub(crate) fn native_array_buffer_prototype_slice_to_immutable(
 pub(crate) fn native_array_buffer_prototype_transfer(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     array_buffer_copy_and_detach(
         this_value,
@@ -442,7 +441,7 @@ pub(crate) fn native_array_buffer_prototype_transfer(
 pub(crate) fn native_array_buffer_prototype_transfer_to_fixed_length(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     array_buffer_copy_and_detach(this_value, argument_values, env, TransferKind::FixedLength)
 }
@@ -450,7 +449,7 @@ pub(crate) fn native_array_buffer_prototype_transfer_to_fixed_length(
 pub(crate) fn native_array_buffer_prototype_transfer_to_immutable(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     array_buffer_copy_and_detach(this_value, argument_values, env, TransferKind::Immutable)
 }
@@ -464,7 +463,7 @@ enum TransferKind {
 fn array_buffer_copy_and_detach(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     kind: TransferKind,
 ) -> Result<Value, RuntimeError> {
     let object = array_buffer_object(&this_value)?;
@@ -512,7 +511,7 @@ fn array_buffer_copy_and_detach(
 
 pub(super) fn resizable_max_byte_length(
     options: Option<Value>,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Option<usize>, RuntimeError> {
     let Some(options) = options else {
         return Ok(None);
@@ -533,7 +532,7 @@ pub(super) fn resizable_max_byte_length(
 pub(super) fn species_constructor(
     value: Value,
     default: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let constructor = property_value(value, "constructor", env)?;
     if matches!(constructor, Value::Undefined) {
@@ -721,7 +720,7 @@ pub(crate) fn try_borrow_fixed_array_buffer_bytes_mut(
 
 /// Builds a fresh, zero-initialized `ArrayBuffer` inheriting from
 /// `%ArrayBuffer.prototype%`. Used when a TypedArray allocates its own buffer.
-pub(crate) fn new_array_buffer(env: &CallEnv, length: usize) -> ObjectRef {
+pub(crate) fn new_array_buffer(env: &crate::context::Context<'_>, length: usize) -> ObjectRef {
     let constructor = env.get("ArrayBuffer").unwrap_or(Value::Undefined);
     let prototype = crate::constructor_prototype(&constructor, env);
     let object = ObjectRef::with_prototype_slot(HashMap::new(), prototype, env.realm().atoms());
@@ -773,13 +772,19 @@ fn array_buffer_receiver_error() -> RuntimeError {
     }
 }
 
-pub(super) fn to_index(value: Value, env: &mut CallEnv) -> Result<usize, RuntimeError> {
+pub(super) fn to_index(
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<usize, RuntimeError> {
     let index = to_index_unbounded(value, env)?;
     ensure_array_buffer_allocation_length(index)?;
     Ok(index)
 }
 
-pub(super) fn to_index_unbounded(value: Value, env: &mut CallEnv) -> Result<usize, RuntimeError> {
+pub(super) fn to_index_unbounded(
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<usize, RuntimeError> {
     let number = to_number_with_env(value, env)?;
     let integer = if number.is_nan() { 0.0 } else { number.trunc() };
     if integer < 0.0 || !integer.is_finite() || integer > MAX_SAFE_INTEGER_LENGTH as f64 {
@@ -805,7 +810,7 @@ pub(super) fn slice_index(
     value: Value,
     length: usize,
     default: usize,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<usize, RuntimeError> {
     if matches!(value, Value::Undefined) {
         return Ok(default);

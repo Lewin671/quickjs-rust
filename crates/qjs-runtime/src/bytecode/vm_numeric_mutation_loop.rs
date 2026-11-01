@@ -79,7 +79,7 @@ impl SpecialPlan {
     }
 
     #[inline(never)]
-    fn try_run(&self, vm: &mut Vm<'_>) -> NumericMutationLoopRun {
+    fn try_run(&self, vm: &mut Vm<'_, '_>) -> NumericMutationLoopRun {
         match self {
             Self::PredicateScan(plan) => match plan.try_run(vm) {
                 PredicateScanRun::Handled => NumericMutationLoopRun::Handled,
@@ -196,7 +196,7 @@ impl NumericMutationLoopPlan {
         })
     }
 
-    fn try_run(&self, vm: &mut Vm<'_>) -> NumericMutationLoopRun {
+    fn try_run(&self, vm: &mut Vm<'_, '_>) -> NumericMutationLoopRun {
         match &self.kind {
             NumericMutationLoopKind::Dense(plan) => match plan.try_run(vm) {
                 DenseNumericMutationLoopRun::Handled => NumericMutationLoopRun::Handled,
@@ -218,7 +218,7 @@ enum NumericMutationLoopRun {
 }
 
 pub(super) fn try_run_numeric_mutation_loop(
-    vm: &mut Vm<'_>,
+    vm: &mut Vm<'_, '_>,
     plans: super::vm_loop_dispatch::LoopPlanView<'_>,
     header: usize,
     backedge: usize,
@@ -279,8 +279,9 @@ pub(super) fn try_run_numeric_mutation_loop(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Value;
     use crate::bytecode::compiler;
-    use crate::{Value, eval};
+    use crate::bytecode::vm_binding_debug::eval_with_slots_for_test as eval;
     use qjs_ast::UpdateOp;
 
     fn nested_function(source: &str) -> Bytecode {

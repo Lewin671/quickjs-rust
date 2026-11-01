@@ -1,0 +1,600 @@
+{
+  "base": "3cc12c6f",
+  "candidate": "1e91be92",
+  "frozen_landmarks_source": "tasks/diagnostics/T077-s3a-depth-parity.json",
+  "source_sha256": "87e4cf091f64ce4ae642daefc9c07ce85dfb952e5c92c89abe1a7957e1aea964",
+  "rows": [
+    {
+      "profile": "debug",
+      "case": "forEach",
+      "depth": 100,
+      "base": {
+        "depth": 100,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "101\n",
+        "stderr": ""
+      },
+      "candidate": {
+        "depth": 100,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "101\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "debug",
+      "case": "map",
+      "depth": 100,
+      "base": {
+        "depth": 100,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "101\n",
+        "stderr": ""
+      },
+      "candidate": {
+        "depth": 100,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "101\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "debug",
+      "case": "reduce",
+      "depth": 100,
+      "base": {
+        "depth": 100,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "101\n",
+        "stderr": ""
+      },
+      "candidate": {
+        "depth": 100,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "101\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "debug",
+      "case": "call",
+      "depth": 257,
+      "base": {
+        "depth": 257,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "257\n",
+        "stderr": ""
+      },
+      "candidate": {
+        "depth": 257,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "257\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "debug",
+      "case": "apply",
+      "depth": 257,
+      "base": {
+        "depth": 257,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "257\n",
+        "stderr": ""
+      },
+      "candidate": {
+        "depth": 257,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "257\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "debug",
+      "case": "reflect_apply",
+      "depth": 257,
+      "base": {
+        "depth": 257,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "257\n",
+        "stderr": ""
+      },
+      "candidate": {
+        "depth": 257,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "257\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "debug",
+      "case": "yield_star",
+      "depth": 600,
+      "base": {
+        "depth": 600,
+        "ok": false,
+        "kind": "stack-abort",
+        "exit": -6,
+        "stdout": "",
+        "stderr": "\nthread 'main' (404109555) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+      },
+      "candidate": {
+        "depth": 600,
+        "ok": false,
+        "kind": "stack-abort",
+        "exit": -6,
+        "stdout": "",
+        "stderr": "\nthread 'main' (409787247) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+      }
+    },
+    {
+      "profile": "debug",
+      "case": "plain_in_callback",
+      "depth": 400,
+      "base": {
+        "depth": 400,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "400\n",
+        "stderr": ""
+      },
+      "candidate": {
+        "depth": 400,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "400\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "debug",
+      "case": "forEach",
+      "depth": 1000,
+      "base": {
+        "depth": 1000,
+        "ok": false,
+        "kind": "stack-abort",
+        "exit": -6,
+        "stdout": "",
+        "stderr": "\nthread 'main' (404110160) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+      },
+      "candidate": {
+        "depth": 1000,
+        "ok": false,
+        "kind": "stack-abort",
+        "exit": -6,
+        "stdout": "",
+        "stderr": "\nthread 'main' (409787283) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+      }
+    },
+    {
+      "profile": "release",
+      "case": "forEach",
+      "depth": 100,
+      "base": {
+        "depth": 100,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "101\n",
+        "stderr": ""
+      },
+      "candidate": {
+        "depth": 100,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "101\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "release",
+      "case": "map",
+      "depth": 100,
+      "base": {
+        "depth": 100,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "101\n",
+        "stderr": ""
+      },
+      "candidate": {
+        "depth": 100,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "101\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "release",
+      "case": "reduce",
+      "depth": 100,
+      "base": {
+        "depth": 100,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "101\n",
+        "stderr": ""
+      },
+      "candidate": {
+        "depth": 100,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "101\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "release",
+      "case": "call",
+      "depth": 257,
+      "base": {
+        "depth": 257,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "257\n",
+        "stderr": ""
+      },
+      "candidate": {
+        "depth": 257,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "257\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "release",
+      "case": "apply",
+      "depth": 257,
+      "base": {
+        "depth": 257,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "257\n",
+        "stderr": ""
+      },
+      "candidate": {
+        "depth": 257,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "257\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "release",
+      "case": "reflect_apply",
+      "depth": 257,
+      "base": {
+        "depth": 257,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "257\n",
+        "stderr": ""
+      },
+      "candidate": {
+        "depth": 257,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "257\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "release",
+      "case": "yield_star",
+      "depth": 600,
+      "base": {
+        "depth": 600,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "42\n",
+        "stderr": ""
+      },
+      "candidate": {
+        "depth": 600,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "42\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "release",
+      "case": "plain_in_callback",
+      "depth": 400,
+      "base": {
+        "depth": 400,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "400\n",
+        "stderr": ""
+      },
+      "candidate": {
+        "depth": 400,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "400\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "release",
+      "case": "forEach",
+      "depth": 1000,
+      "base": {
+        "depth": 1000,
+        "ok": false,
+        "kind": "stack-abort",
+        "exit": -6,
+        "stdout": "",
+        "stderr": "\nthread 'main' (404111264) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+      },
+      "candidate": {
+        "depth": 1000,
+        "ok": false,
+        "kind": "stack-abort",
+        "exit": -6,
+        "stdout": "",
+        "stderr": "\nthread 'main' (409787371) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+      }
+    }
+  ],
+  "base_maxima": [
+    {
+      "profile": "debug",
+      "case": "forEach",
+      "depth": 177,
+      "candidate": {
+        "depth": 177,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "178\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "debug",
+      "case": "map",
+      "depth": 176,
+      "candidate": {
+        "depth": 176,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "177\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "debug",
+      "case": "reduce",
+      "depth": 225,
+      "candidate": {
+        "depth": 225,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "226\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "debug",
+      "case": "call",
+      "depth": 461,
+      "candidate": {
+        "depth": 461,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "461\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "debug",
+      "case": "apply",
+      "depth": 372,
+      "candidate": {
+        "depth": 372,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "372\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "debug",
+      "case": "reflect_apply",
+      "depth": 373,
+      "candidate": {
+        "depth": 373,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "373\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "debug",
+      "case": "yield_star",
+      "depth": 146,
+      "candidate": {
+        "depth": 146,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "42\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "debug",
+      "case": "plain_in_callback",
+      "depth": 4096,
+      "candidate": {
+        "depth": 4096,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "4096\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "release",
+      "case": "forEach",
+      "depth": 796,
+      "candidate": {
+        "depth": 796,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "797\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "release",
+      "case": "map",
+      "depth": 790,
+      "candidate": {
+        "depth": 790,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "791\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "release",
+      "case": "reduce",
+      "depth": 829,
+      "candidate": {
+        "depth": 829,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "830\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "release",
+      "case": "call",
+      "depth": 3234,
+      "candidate": {
+        "depth": 3234,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "3234\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "release",
+      "case": "apply",
+      "depth": 2066,
+      "candidate": {
+        "depth": 2066,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "2066\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "release",
+      "case": "reflect_apply",
+      "depth": 2188,
+      "candidate": {
+        "depth": 2188,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "2188\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "release",
+      "case": "yield_star",
+      "depth": 714,
+      "candidate": {
+        "depth": 714,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "42\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "release",
+      "case": "plain_in_callback",
+      "depth": 4096,
+      "candidate": {
+        "depth": 4096,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "4096\n",
+        "stderr": ""
+      }
+    }
+  ],
+  "candidate_binaries": {
+    "debug": "38e8bef10538d86ae81052eb003b2f313ea0da3c10b07228ab98eb6472be5c40",
+    "release": "b0734da97a69834833a81661ef691eeb7784b2cb570bb1533529547c8953ac65"
+  }
+}

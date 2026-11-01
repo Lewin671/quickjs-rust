@@ -1,4 +1,3 @@
-use crate::CallEnv;
 use crate::string::{string_code_units, string_from_code_units};
 use crate::{
     Function, JsString, NativeFunction, ObjectRef, Property, PropertyKey, Prototype, RuntimeError,
@@ -8,7 +7,10 @@ use crate::{
 
 const MAX_STRING_LENGTH: usize = (1 << 30) - 1;
 
-pub(crate) fn install_regexp_prototype_replace(env: &CallEnv, prototype: &ObjectRef) {
+pub(crate) fn install_regexp_prototype_replace(
+    env: &crate::context::Context<'_>,
+    prototype: &ObjectRef,
+) {
     if let Some(symbol) = symbol::replace_symbol(env) {
         prototype.define_symbol_property(
             symbol,
@@ -26,7 +28,7 @@ pub(crate) fn install_regexp_prototype_replace(env: &CallEnv, prototype: &Object
 pub(crate) fn native_regexp_prototype_replace(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if !is_object_value(&this_value) {
         return Err(RuntimeError {
@@ -78,7 +80,7 @@ fn collect_matches(
     input: &crate::JsString,
     global: bool,
     unicode: bool,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Vec<MatchRecord>, RuntimeError> {
     if let Some(matches) = prepared_native_global_matches(&regexp, input, global, unicode, env)? {
         return Ok(matches);
@@ -115,7 +117,7 @@ fn prepared_native_global_matches(
     input: &crate::JsString,
     global: bool,
     unicode: bool,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Option<Vec<MatchRecord>>, RuntimeError> {
     if !global {
         return Ok(None);
@@ -203,7 +205,10 @@ fn prepared_native_global_matches(
     Ok(Some(matches))
 }
 
-fn original_native_regexp(regexp: &Value, env: &CallEnv) -> Option<(ObjectRef, String, String)> {
+fn original_native_regexp(
+    regexp: &Value,
+    env: &crate::context::Context<'_>,
+) -> Option<(ObjectRef, String, String)> {
     let Value::Object(object) = regexp else {
         return None;
     };
@@ -234,7 +239,11 @@ fn original_native_regexp(regexp: &Value, env: &CallEnv) -> Option<(ObjectRef, S
     Some((object.clone(), source, flags))
 }
 
-fn regexp_exec(regexp: Value, input: &JsString, env: &mut CallEnv) -> Result<Value, RuntimeError> {
+fn regexp_exec(
+    regexp: Value,
+    input: &JsString,
+    env: &mut crate::context::Context<'_>,
+) -> Result<Value, RuntimeError> {
     let exec = property_value(regexp.clone(), "exec", env)?;
     if !matches!(exec, Value::Function(_)) {
         return Err(RuntimeError {
@@ -256,7 +265,7 @@ fn regexp_exec(regexp: Value, input: &JsString, env: &mut CallEnv) -> Result<Val
 fn match_record(
     exec_result: Value,
     input: &JsString,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<MatchRecord, RuntimeError> {
     let matched = to_js_string_with_env(property_value(exec_result.clone(), "0", env)?, env)?;
     // Clamp with the subject's memoized code-unit length; decoding the whole
@@ -286,7 +295,7 @@ fn replace_matches(
     input: crate::JsString,
     matches: Vec<MatchRecord>,
     replacement: Replacement,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let mut result = String::new();
     let mut result_len = 0usize;
@@ -398,7 +407,7 @@ fn functional_replacement(
     function: Value,
     match_record: &MatchRecord,
     input: crate::JsString,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<String, RuntimeError> {
     let mut arguments = Vec::with_capacity(4 + match_record.captures.len());
     arguments.push(Value::String(match_record.matched.clone().into()));
@@ -420,7 +429,7 @@ fn get_substitution(
     input_code_units: &[u16],
     captures: &[Value],
     named_captures: &Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<String, RuntimeError> {
     let mut result = String::new();
     let mut chars = replacement.chars().peekable();
@@ -538,7 +547,7 @@ fn substitute_named_capture(
     result: &mut String,
     chars: &mut std::iter::Peekable<std::str::Chars<'_>>,
     named_captures: &Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<(), RuntimeError> {
     let mut name = String::new();
     let mut closed = false;
@@ -597,7 +606,11 @@ fn push_capture(result: &mut String, captures: &[Value], index: usize) {
     }
 }
 
-fn set_last_index(receiver: Value, value: Value, env: &mut CallEnv) -> Result<(), RuntimeError> {
+fn set_last_index(
+    receiver: Value,
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<(), RuntimeError> {
     if reflect::ordinary_set(
         receiver.clone(),
         &PropertyKey::String("lastIndex".to_owned()),

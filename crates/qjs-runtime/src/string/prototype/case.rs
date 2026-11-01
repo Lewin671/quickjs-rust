@@ -1,4 +1,3 @@
-use crate::CallEnv;
 use std::borrow::Cow;
 
 use crate::{RuntimeError, Value, to_js_string_with_env};
@@ -40,7 +39,7 @@ fn ascii_case(this_value: &Value, upper: bool) -> Option<Value> {
 
 pub(crate) fn native_string_prototype_to_lower_case(
     this_value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if let Some(value) = ascii_case(&this_value, false) {
         return Ok(value);
@@ -52,7 +51,7 @@ pub(crate) fn native_string_prototype_to_lower_case(
 
 pub(crate) fn native_string_prototype_to_upper_case(
     this_value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if let Some(value) = ascii_case(&this_value, true) {
         return Ok(value);
@@ -65,7 +64,7 @@ pub(crate) fn native_string_prototype_to_upper_case(
 pub(crate) fn native_string_prototype_locale_compare(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let value = this_string_value(this_value, env)?;
     let that = to_js_string_with_env(
@@ -86,7 +85,7 @@ pub(crate) fn native_string_prototype_locale_compare(
 pub(crate) fn native_string_prototype_normalize(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let value = this_string_value(this_value, env)?;
     let form = match argument_values.first() {

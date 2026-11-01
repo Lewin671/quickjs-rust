@@ -1,44 +1,28 @@
-//! `[[Call]]` and `[[Construct]]`: `call_function`, `construct_function`, and
-//! the direct-leaf entry the VM and the accelerator tiers use.
-//!
-//! `call_function` first settles the callable kind (Proxy, bound, native,
-//! generator, async) and then builds the callee's `CallEnv`.
-//! `call_direct_leaf_function` skips that for a callee passing
-//! `is_direct_leaf_function` and tries, in order, the numeric leaf, the
-//! this-property leaf, a compact tier in the caller's environment, then a
-//! slot-seeded frame. Ordinary bindings do not travel through `CallEnv`
-//! (see `env.rs`): never add a per-call name-keyed copy of the caller's
-//! locals.
-//! General synchronous bodies without dynamic/arguments requirements also
-//! seed raw parameters by position, before shared cells are initialized. They
-//! retain an owned services environment and the special context they need.
+//! JS call/construct entry owns typed callee state and borrows RuntimeServices.
+//! Parameters/rest seed positional slots before capture/mapped cells. Native
+//! entries reborrow Context with a call site; they construct no activation.
+//! Constructor targets are explicit and never overwrite caller lexical state.
+//! Synchronous startup consumes borrowed inputs before a suspension is retained.
+//! A slot-backed entry of a closure over a retained chain requires that
+//! chain's per-holder-epoch proof (`lexical_scope_admits_entry`).
 
 use std::{collections::HashMap, rc::Rc};
 
 use qjs_ast::FunctionParams;
 
 use crate::{
-    ArrayRef, Bytecode, DIRECT_EVAL_ARGUMENTS_BINDING, DIRECT_EVAL_FUNCTION_CONTEXT_BINDING,
-    FIELD_INITIALIZER_EVAL_BINDING, Function, GLOBAL_THIS_BINDING, NativeFunction, ObjectRef,
-    RuntimeError, Value,
+    Bytecode, Function, NativeFunction, ObjectRef, RuntimeError, Value,
     bytecode::{
         DirectCallSlots, DirectCallUpvalues, eval_call_bytecode, eval_direct_call_bytecode,
         eval_function_bytecode, try_eval_numeric_leaf, try_eval_this_property_leaf,
     },
     function_prototype,
     native::call_native_function,
-    object_prototype,
-    private::PrivateEnvironment,
-    symbol,
+    object_prototype, symbol,
 };
 
-use super::call_frame::{
-    CallCompletionPolicy, PreparedBytecodeCall, apply_completion_to_caller, missing_bytecode_body,
-};
-use super::{
-    CROSS_REALM_TYPE_ERROR_PROTOTYPE, CallEnv, InstanceElementInitializer,
-    arguments::arguments_object, function_call_this,
-};
+use super::call_frame::{CallCompletionPolicy, PreparedBytecodeCall, missing_bytecode_body};
+use super::{CROSS_REALM_TYPE_ERROR_PROTOTYPE, InstanceElementInitializer, function_call_this};
 
 const CROSS_REALM_OBJECT_PROTOTYPE: &str = "__quickjsRustRealmObjectPrototype";
 const CROSS_REALM_BOOLEAN_PROTOTYPE: &str = "__quickjsRustRealmBooleanPrototype";
@@ -61,10 +45,17 @@ pub(crate) fn call_function(
     callee: Value,
     this_value: Value,
     argument_values: Vec<Value>,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     is_construct: bool,
 ) -> Result<Value, RuntimeError> {
-    call_with_arguments(&callee, this_value, &argument_values, env, is_construct)
+    call_with_arguments(
+        &callee,
+        this_value,
+        &argument_values,
+        env,
+        is_construct,
+        is_construct.then_some(&callee),
+    )
 }
 
 /// Common host/callback/native entry. Only semantic forwarding lists (bound
@@ -73,8 +64,9 @@ fn call_with_arguments(
     callee: &Value,
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     is_construct: bool,
+    new_target: Option<&Value>,
 ) -> Result<Value, RuntimeError> {
     if let Value::Proxy(proxy) = callee {
         if is_construct {
@@ -108,7 +100,14 @@ fn call_with_arguments(
                 .cloned()
                 .unwrap_or(Value::Undefined);
             let call_arguments = &combined_arguments[usize::from(!combined_arguments.is_empty())..];
-            return call_with_arguments(&bound.this_value, call_this, call_arguments, env, false);
+            return call_with_arguments(
+                &bound.this_value,
+                call_this,
+                call_arguments,
+                env,
+                false,
+                None,
+            );
         }
         let mut bound_arguments = bound.arguments.clone();
         bound_arguments.extend_from_slice(argument_values);
@@ -123,6 +122,7 @@ fn call_with_arguments(
             &bound_arguments,
             env,
             is_construct,
+            new_target,
         );
     }
     if function.is_class_constructor && !is_construct {
@@ -132,28 +132,38 @@ fn call_with_arguments(
         crate::diagnostics::count!(native_calls);
         return call_native_function(
             entry,
-            function,
-            &this_value,
+            crate::native::CallInfo {
+                callee: function,
+                this_value: &this_value,
+                is_construct,
+            },
             argument_values,
-            is_construct,
+            new_target,
+            None,
             env,
         );
     }
     if let Some(bytecode) = &function.bytecode {
-        crate::diagnostics::count!(ordinary_call_attempts);
+        // Direct forwarding is attributed at the leaf entry. Keep this proof
+        // entirely out of production builds, including its admission probe.
+        #[cfg(feature = "perf-counters")]
+        if is_construct || !is_direct_leaf_function(callee) {
+            crate::diagnostics::count!(ordinary_call_attempts);
+        }
         if function.is_generator && function.is_async {
-            let function_env = function_env(
+            let enter_function_activation = enter_function_activation(
                 function,
                 bytecode,
                 callee,
                 this_value,
                 argument_values,
                 env,
-                is_construct,
+                new_target,
             );
             return crate::async_generator::call_async_generator_function(
                 function,
-                function_env.env,
+                enter_function_activation.env,
+                enter_function_activation.call_inputs,
                 env,
             );
         }
@@ -163,28 +173,24 @@ fn call_with_arguments(
         // A parameter-binding error therefore throws at the call, before the
         // generator object exists.
         if function.is_generator {
-            let function_env = function_env(
+            let enter_function_activation = enter_function_activation(
                 function,
                 bytecode,
                 callee,
                 this_value,
                 argument_values,
                 env,
-                is_construct,
+                new_target,
             );
             return crate::generator::make_generator_object(
                 function,
                 crate::bytecode::GeneratorStart {
                     bytecode: bytecode.clone(),
-                    env: function_env.env,
+                    env: enter_function_activation.env,
                     upvalues: function.upvalues.clone(),
-                    with_stack: function.with_stack.clone(),
-                    immutable_function_name: function
-                        .immutable_name_binding
-                        .then(|| function.name.clone())
-                        .flatten()
-                        .or_else(|| function.immutable_env_binding().map(str::to_owned)),
+                    with_stack: Vec::new(),
                 },
+                enter_function_activation.call_inputs,
                 env,
             );
         }
@@ -194,18 +200,19 @@ fn call_with_arguments(
         // resolved/rejected with the body's eventual outcome (including
         // parameter-binding errors, which reject rather than throw).
         if function.is_async {
-            let function_env = function_env(
+            let enter_function_activation = enter_function_activation(
                 function,
                 bytecode,
                 callee,
                 this_value,
                 argument_values,
                 env,
-                is_construct,
+                new_target,
             );
             return Ok(crate::async_function::call_async_function(
                 function,
-                function_env.env,
+                enter_function_activation.env,
+                enter_function_activation.call_inputs,
                 env,
             ));
         }
@@ -215,22 +222,12 @@ fn call_with_arguments(
         if function.is_class_constructor && !function.is_derived_constructor && is_construct {
             initialize_instance_fields(function, &this_value, env)?;
         }
-        // A native's callback -- `forEach`, `map`, `replace` -- calling an
-        // ordinary function takes the path the interpreter's own calls take:
-        // the compact tiers run it in the caller's environment, and only a
-        // body they decline builds its slot-seeded frame. The general path
-        // below built a compatibility frame for every such call, which was
-        // most of a small callback's cost.
+        // Native callbacks use the same callee-owned direct entry as VM
+        // calls. Bodies needing dynamic scope, suspension or a general
+        // prologue retain the prepared-frame route below.
         if !is_construct && is_direct_leaf_function(callee) {
-            return call_direct_leaf_function(
-                callee.clone(),
-                this_value,
-                argument_values,
-                env,
-                env.module_host(),
-                #[cfg(feature = "agents")]
-                env.agent_context(),
-            );
+            crate::diagnostics::count!(ordinary_call_forwardings);
+            return call_direct_leaf_function(callee.clone(), this_value, argument_values, env);
         }
         crate::diagnostics::count!(generic_call_frames);
         let prepared = prepare_bytecode_call(
@@ -240,9 +237,9 @@ fn call_with_arguments(
             this_value,
             argument_values,
             env,
-            is_construct,
+            new_target,
         );
-        return run_prepared_bytecode_call(prepared, env);
+        return run_prepared_bytecode_call(prepared, env.runtime);
     }
 
     Err(missing_bytecode_body())
@@ -253,22 +250,14 @@ pub(crate) fn call_function_slice(
     callee: &Value,
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     // Preserve the base callback route: admitted JS bodies never enter the
     // general dispatcher's large generator/async/prepared-frame stack frame.
     if is_direct_leaf_function(callee) {
-        return call_direct_leaf_function(
-            callee.clone(),
-            this_value,
-            argument_values,
-            env,
-            env.module_host(),
-            #[cfg(feature = "agents")]
-            env.agent_context(),
-        );
+        return call_direct_leaf_function(callee.clone(), this_value, argument_values, env);
     }
-    call_with_arguments(callee, this_value, argument_values, env, false)
+    call_with_arguments(callee, this_value, argument_values, env, false, None)
 }
 
 /// Builds everything an ordinary synchronous call needs, without running it.
@@ -282,98 +271,83 @@ fn prepare_bytecode_call<'a>(
     callee: &Value,
     this_value: Value,
     argument_values: &'a [Value],
-    env: &mut CallEnv,
-    is_construct: bool,
+    env: &mut crate::context::Context<'_>,
+    new_target: Option<&Value>,
 ) -> PreparedBytecodeCall<'a> {
-    let FunctionCallEnv {
+    let is_construct = new_target.is_some();
+    let PreparedFunctionActivation {
         env: call_env,
         direct_call_slots,
-        positional_arguments,
-    } = function_env(
+        call_inputs,
+    } = enter_function_activation(
         function,
         bytecode,
         callee,
         this_value,
         argument_values,
         env,
-        is_construct,
+        new_target,
     );
-    // Captured before the callee runs, because a named function expression
-    // shadows this binding for the duration of the call.
-    let restored_caller_binding = immutable_name_caller_value(function, env);
     PreparedBytecodeCall {
         bytecode: Rc::clone(bytecode),
         env: call_env,
         slots: direct_call_slots,
-        positional_arguments,
+        call_inputs,
         upvalues: function.upvalues.clone(),
-        with_stack: function.with_stack.clone(),
-        completion: CallCompletionPolicy::new(
-            restored_caller_binding,
-            function.is_derived_constructor && is_construct,
-        ),
+        with_stack: Vec::new(),
+        completion: CallCompletionPolicy::new(function.is_derived_constructor && is_construct),
     }
 }
 
 /// Runs a prepared call and settles what its caller is owed.
 fn run_prepared_bytecode_call(
     prepared: PreparedBytecodeCall<'_>,
-    caller_env: &mut CallEnv,
+    runtime: &mut crate::context::RuntimeServices,
 ) -> Result<Value, RuntimeError> {
     let slot_seeded = prepared.is_slot_seeded();
     let PreparedBytecodeCall {
         bytecode,
         env,
         slots,
-        positional_arguments,
+        call_inputs,
         upvalues,
         with_stack,
-        mut completion,
+        completion,
     } = prepared;
     if slot_seeded {
         let slots = slots.expect("a slot-seeded call carries its slots");
-        let result = eval_direct_call_bytecode(&bytecode, env, slots);
-        apply_completion_to_caller(&mut completion, caller_env);
+        let result =
+            eval_direct_call_bytecode(&bytecode, &mut Some(env), runtime, &mut Some(slots));
         return result;
     }
     if !completion.finishes_derived_construct() {
-        let value = eval_call_bytecode(&bytecode, env, upvalues, with_stack, positional_arguments);
-        apply_completion_to_caller(&mut completion, caller_env);
+        let value = eval_call_bytecode(&bytecode, env, runtime, upvalues, with_stack, call_inputs);
         return value;
     }
     let result = eval_function_bytecode(
         &bytecode,
         env,
+        runtime,
         upvalues,
         with_stack,
         true,
-        positional_arguments,
+        call_inputs,
     );
-    apply_completion_to_caller(&mut completion, caller_env);
     if completion.finishes_derived_construct() {
         return finish_derived_construct(result);
     }
     result.value
 }
 
-/// Runs the already-guarded ordinary leaf shape directly from a VM frame.
-///
-/// The general VM call path builds a compatibility `CallEnv` for native,
-/// dynamic, and write-back-capable callees. A direct leaf creates its own
-/// slot-backed frame and cannot mutate caller compatibility bindings, so that
-/// outer shell would be allocated and snapshotted without carrying data.
-///
-/// Kept out of line: the typed-loop executor reaches this for helper calls,
-/// and inlining the whole activation into that executor makes its codegen
-/// track every change to the call path.
+/// Runs an admitted ordinary callee with its own typed activation and borrowed
+/// positional inputs. The tier ladder may consume that activation or return it
+/// unchanged to the general VM; the caller's context is never substituted.
 #[inline(never)]
 pub(crate) fn call_direct_leaf_function(
     callee: Value,
     this_value: Value,
     argument_values: &[Value],
-    env: &CallEnv,
-    module_host: Option<crate::module::ModuleHostRef>,
-    #[cfg(feature = "agents")] agent_context: Option<crate::agent::AgentContextRef>,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     crate::diagnostics::count!(ordinary_call_attempts);
     let Value::Function(function) = &callee else {
@@ -396,41 +370,29 @@ pub(crate) fn call_direct_leaf_function(
         crate::diagnostics::count!(closed_form_leaf_evaluations);
         return Ok(value);
     }
-    // A body a compact tier admits runs in the caller's environment when that
-    // environment is what its own frame would have been anyway; building and
-    // dropping the frame was a third of a small call's cost. The explicit host
-    // is only installed on a frame that lacks one, so a caller environment
-    // that already carries a host (or a call with none) loses nothing.
-    let host_is_redundant = module_host.is_none() || env.module_host_ref().is_some();
-    #[cfg(feature = "agents")]
-    let host_is_redundant = host_is_redundant && agent_context.is_none();
-    if host_is_redundant
-        && let Some(result) = crate::bytecode::try_run_direct_leaf_in_caller_env(
-            function,
-            bytecode,
-            argument_values,
-            env,
-        )
-    {
-        return result;
-    }
     crate::diagnostics::count!(direct_leaf_frames);
-    let FunctionCallEnv {
-        env: mut call_env,
+    let PreparedFunctionActivation {
+        env: call_env,
         direct_call_slots,
         ..
-    } = direct_leaf_function_env(function, bytecode, this_value, argument_values, env);
-    if call_env.module_host_ref().is_none()
-        && let Some(host) = module_host
-    {
-        call_env.set_module_host(host);
-    }
-    #[cfg(feature = "agents")]
-    if let Some(context) = agent_context {
-        call_env.set_agent_context(context);
-    }
+    } = enter_indexed_function_activation(
+        function,
+        bytecode,
+        this_value,
+        argument_values,
+        env,
+        None,
+    );
     let direct_call_slots = direct_call_slots.expect("guarded direct leaf calls always seed slots");
-    eval_direct_call_bytecode(bytecode, call_env, direct_call_slots)
+    let mut call_env = Some(call_env);
+    let result = eval_direct_call_bytecode(
+        bytecode,
+        &mut call_env,
+        env.runtime,
+        &mut Some(direct_call_slots),
+    );
+    recycle_callback_activation(env.runtime, call_env);
+    result
 }
 
 /// Constructs an ordinary bytecode function through the same slot-seeded
@@ -448,9 +410,7 @@ pub(crate) fn call_direct_leaf_function(
 pub(crate) fn try_construct_direct_leaf_function(
     callee: &Value,
     argument_values: &[Value],
-    env: &CallEnv,
-    module_host: Option<crate::module::ModuleHostRef>,
-    #[cfg(feature = "agents")] agent_context: Option<crate::agent::AgentContextRef>,
+    env: &mut crate::context::Context<'_>,
 ) -> Option<Result<Value, RuntimeError>> {
     let Value::Function(function) = callee else {
         return None;
@@ -459,7 +419,7 @@ pub(crate) fn try_construct_direct_leaf_function(
         return None;
     }
     let class_fields = if function.is_class_constructor {
-        if !is_direct_construct_class(function) {
+        if !is_direct_construct_class(function) || !lexical_scope_admits_entry(function) {
             return None;
         }
         Some(function.instance_elements())
@@ -478,41 +438,31 @@ pub(crate) fn try_construct_direct_leaf_function(
     crate::diagnostics::count!(direct_leaf_frames);
     // A base class initializes its instance fields before the body runs.
     if let Some(elements) = class_fields
-        && let Err(error) = initialize_direct_instance_fields(
-            &elements,
-            &receiver,
-            env,
-            module_host.as_ref(),
-            #[cfg(feature = "agents")]
-            agent_context.as_ref(),
-        )
+        && let Err(error) = initialize_direct_instance_fields(&elements, &receiver, env)
     {
         return Some(Err(error));
     }
-    let FunctionCallEnv {
-        env: mut call_env,
+    let PreparedFunctionActivation {
+        env: call_env,
         direct_call_slots,
         ..
-    } = direct_leaf_function_env(
+    } = enter_indexed_function_activation(
         function,
         bytecode,
         Value::Object(receiver.clone()),
         argument_values,
         env,
+        Some(callee.clone()),
     );
-    // `new.target` is the constructor itself for a direct `new` expression.
-    call_env.set_new_target(Some(callee.clone()));
-    if call_env.module_host_ref().is_none()
-        && let Some(host) = module_host
-    {
-        call_env.set_module_host(host);
-    }
-    #[cfg(feature = "agents")]
-    if let Some(context) = agent_context {
-        call_env.set_agent_context(context);
-    }
     let direct_call_slots = direct_call_slots.expect("guarded direct leaf calls always seed slots");
-    let result = eval_direct_call_bytecode(bytecode, call_env, direct_call_slots);
+    let mut call_env = Some(call_env);
+    let result = eval_direct_call_bytecode(
+        bytecode,
+        &mut call_env,
+        env.runtime,
+        &mut Some(direct_call_slots),
+    );
+    recycle_callback_activation(env.runtime, call_env);
     Some(match result {
         Ok(
             value @ (Value::Array(_)
@@ -572,9 +522,7 @@ pub(crate) fn is_direct_construct_class(function: &Function) -> bool {
 pub(crate) fn initialize_direct_instance_fields(
     elements: &[InstanceElementInitializer],
     receiver: &ObjectRef,
-    env: &CallEnv,
-    module_host: Option<&crate::module::ModuleHostRef>,
-    #[cfg(feature = "agents")] agent_context: Option<&crate::agent::AgentContextRef>,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<(), RuntimeError> {
     let mut next = 0;
     let mut segments = ConstantFieldSegments::default();
@@ -608,9 +556,6 @@ pub(crate) fn initialize_direct_instance_fields(
                         Value::Object(receiver.clone()),
                         &[],
                         env,
-                        module_host.cloned(),
-                        #[cfg(feature = "agents")]
-                        agent_context.cloned(),
                     )?,
                 }
             }
@@ -619,12 +564,12 @@ pub(crate) fn initialize_direct_instance_fields(
             .shared_string_key()
             .expect("direct construct admission requires string keys");
         if !receiver.install_shared_class_field(key, &value, &field.definition_plan) {
-            let mut define_env = env.empty_frame();
+            let define_env = &mut *env;
             crate::bytecode::install_field_value(
                 &Value::Object(receiver.clone()),
                 field.property_key(),
                 value,
-                &mut define_env,
+                define_env,
             )?;
         }
     }
@@ -640,7 +585,7 @@ pub(crate) fn call_direct_function_literal(
     params: &FunctionParams,
     bytecode: &Bytecode,
     argument_values: &[Value],
-    env: &CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     crate::diagnostics::count!(ordinary_call_attempts);
     if let Some(value) = try_eval_numeric_leaf(bytecode, params, argument_values, &[]) {
@@ -648,18 +593,37 @@ pub(crate) fn call_direct_function_literal(
         return Ok(value);
     }
     crate::diagnostics::count!(direct_leaf_frames);
-    let call_env = env.new_direct_leaf_function_frame(env.module_imports());
+    let mut call_env = crate::context::ActivationContext::new(
+        env.creation_context(),
+        crate::context::ExecutionMode::Function,
+    );
+    call_env.strict = bytecode.is_strict();
+    call_env.set_call_owner(crate::context::CallOwner::root(
+        Value::Undefined,
+        crate::context::OwnerKind::Function,
+    ));
     let direct_call_slots = DirectCallSlots {
-        this_value: None,
         parameter_slots: bytecode.parameter_slots(),
         arguments: argument_values,
         upvalues: DirectCallUpvalues::Slice(&[]),
         realm_upvalue_slots: 0,
     };
-    eval_direct_call_bytecode(bytecode, call_env, direct_call_slots)
+    eval_direct_call_bytecode(
+        bytecode,
+        &mut Some(call_env),
+        env.runtime,
+        &mut Some(direct_call_slots),
+    )
 }
 
 pub(crate) fn is_direct_leaf_function(callee: &Value) -> bool {
+    is_direct_leaf_shape(callee)
+        && matches!(callee, Value::Function(function) if lexical_scope_admits_entry(function))
+}
+
+/// The fixed part of `is_direct_leaf_function`: everything but the scope
+/// proof a closure over an extensible chain needs on each entry.
+pub(crate) fn is_direct_leaf_shape(callee: &Value) -> bool {
     let Value::Function(function) = callee else {
         return false;
     };
@@ -672,6 +636,68 @@ pub(crate) fn is_direct_leaf_function(callee: &Value) -> bool {
         .is_some_and(|bytecode| can_seed_direct_leaf_call(function, bytecode));
     function.direct_leaf_call_eligible.set(Some(eligible));
     eligible
+}
+
+/// Whether an indexed entry of `function` may run without its retained
+/// lexical scope: always for a function without one; otherwise only while
+/// every free name of its body resolves globally through that chain
+/// (`ScopeCursor::resolves_globally`), decided once per holder epoch.
+#[inline(always)]
+pub(crate) fn lexical_scope_admits_entry(function: &Function) -> bool {
+    let state = function.lexical_scope_proof.get();
+    state == 0 || lexical_scope_proof_holds(function, state)
+}
+
+/// The retained-scope half of `lexical_scope_admits_entry`, kept out of line
+/// so that the common no-scope check stays one load in every call path.
+#[inline(never)]
+fn lexical_scope_proof_holds(function: &Function, state: u64) -> bool {
+    let realm = function.creation_realm();
+    let epoch = realm.atoms().holder_epoch();
+    if state >> 1 == epoch + 1 {
+        return state & 1 != 0;
+    }
+    prove_lexical_scope(function, realm.atoms(), epoch)
+}
+
+#[cold]
+#[inline(never)]
+fn prove_lexical_scope(
+    function: &Function,
+    domain: &crate::property::atom::AtomDomain,
+    epoch: u64,
+) -> bool {
+    let proven = match (function.lexical_scope(), function.bytecode.as_ref()) {
+        (Some(cursor), Some(bytecode)) => {
+            // Live chain resolution precedes the received-cell fallback, so
+            // captured names must also resolve to exactly the received cells.
+            let slots = bytecode.received_upvalue_slots();
+            let mut captured = Vec::with_capacity(slots.len());
+            let mut named = true;
+            for (&slot, cell) in slots.iter().zip(&function.upvalues) {
+                match bytecode.binding_meta(slot) {
+                    Some(meta) => captured.push((meta.name.clone(), cell)),
+                    None => named = false,
+                }
+            }
+            captured.sort_by(|left, right| left.0.cmp(&right.0));
+            let captured: Vec<_> = captured
+                .iter()
+                .map(|(name, cell)| (name.as_str(), *cell))
+                .collect();
+            named
+                && slots.len() == function.upvalues.len()
+                && cursor.resolves_globally(bytecode.global_names(), &captured, domain)
+        }
+        _ => false,
+    };
+    if !proven {
+        crate::diagnostics::count!(lexical_scope_entry_rejections);
+    }
+    function
+        .lexical_scope_proof
+        .set(((epoch + 1) << 1) | u64::from(proven));
+    proven
 }
 
 fn class_constructor_call_error(function: &Function) -> RuntimeError {
@@ -694,14 +720,6 @@ fn class_constructor_call_error(function: &Function) -> RuntimeError {
     }
 }
 
-fn immutable_name_caller_value(function: &Function, env: &CallEnv) -> Option<(String, Value)> {
-    let name = function.name.as_ref()?;
-    if !function.immutable_name_binding {
-        return None;
-    }
-    env.get(name).map(|value| (name.clone(), value))
-}
-
 /// Runs a class constructor's instance-field initializers, in definition
 /// order, installing each field on the receiver via CreateDataPropertyOrThrow.
 /// Each initializer thunk evaluates with `this` = the receiver; a field with no
@@ -709,7 +727,7 @@ fn immutable_name_caller_value(function: &Function, env: &CallEnv) -> Option<(St
 pub(crate) fn initialize_instance_fields(
     function: &Function,
     this_value: &Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<(), RuntimeError> {
     let elements = function.instance_elements();
     let mut next = 0;
@@ -854,7 +872,7 @@ fn is_ordinary_public_field_receiver(object: &ObjectRef) -> bool {
 pub(crate) fn call_field_initializer(
     thunk: &Function,
     this_value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     // `x = 0` compiles to `return 0`; the constant is the whole effect.
     if let Some(value) = thunk
@@ -870,23 +888,15 @@ pub(crate) fn call_field_initializer(
     }
     let callee = Value::Function(thunk.clone());
     if is_direct_leaf_function(&callee) {
-        return call_direct_leaf_function(
-            callee,
-            this_value,
-            &[],
-            env,
-            env.module_host(),
-            #[cfg(feature = "agents")]
-            env.agent_context(),
-        );
+        return call_direct_leaf_function(callee, this_value, &[], env);
     }
     call_function(callee, this_value, Vec::new(), env, false)
 }
 
 fn finish_derived_construct(
-    result: crate::bytecode::FunctionBytecodeResult<'_>,
+    result: crate::bytecode::FunctionBytecodeResult,
 ) -> Result<Value, RuntimeError> {
-    let bound_this = result.frame_cell_binding("this");
+    let bound_this = result.bound_this;
     let value = result.value?;
     match value {
         // A Symbol (or BigInt) primitive is represented as an object reference
@@ -927,7 +937,7 @@ pub(crate) fn construct_function(
     target: Value,
     new_target: Value,
     argument_values: Vec<Value>,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     construct_function_slice(target, new_target, &argument_values, env)
 }
@@ -936,7 +946,7 @@ pub(crate) fn construct_function_slice(
     target: Value,
     new_target: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     // A constructor Proxy dispatches through its `construct` trap. The trap (or
     // a forwarded target construction) produces the instance directly, so the
@@ -987,7 +997,6 @@ pub(crate) fn construct_function_slice(
 
     // Make `new.target` visible to the constructor frame (and, via `super(...)`,
     // to ancestor constructors) so subclass instances get the right prototype.
-    let previous_new_target = env.set_new_target(Some(new_target.clone()));
 
     // A derived constructor must create its `this` through `super(...)`, so it
     // receives no pre-built receiver. Some native constructors also need to run
@@ -996,7 +1005,8 @@ pub(crate) fn construct_function_slice(
     let is_derived =
         matches!(&target, Value::Function(function) if function.is_derived_constructor);
     let constructs_receiver_lazily = native_constructs_receiver_lazily(&target);
-    let result = (|| {
+
+    (|| {
         let this_value = if is_derived || constructs_receiver_lazily {
             Value::Undefined
         } else {
@@ -1009,7 +1019,14 @@ pub(crate) fn construct_function_slice(
             })
         };
 
-        let result = call_with_arguments(&target, this_value.clone(), argument_values, env, true);
+        let result = call_with_arguments(
+            &target,
+            this_value.clone(),
+            argument_values,
+            env,
+            true,
+            Some(&new_target),
+        );
 
         let result = result?;
 
@@ -1025,9 +1042,7 @@ pub(crate) fn construct_function_slice(
             _ if is_derived || constructs_receiver_lazily => Ok(result),
             _ => Ok(this_value),
         }
-    })();
-    env.set_new_target(previous_new_target);
-    result
+    })()
 }
 
 fn native_constructs_receiver_lazily(target: &Value) -> bool {
@@ -1060,7 +1075,7 @@ fn native_constructs_receiver_lazily(target: &Value) -> bool {
 fn construct_prototype_slot(
     target: &Value,
     new_target: &Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Option<crate::Prototype>, RuntimeError> {
     let cached = match new_target {
         Value::Function(function) => function.constructor_prototype_data(),
@@ -1082,7 +1097,7 @@ fn construct_prototype_slot(
 fn cross_realm_construct_prototype_slot(
     target: &Value,
     new_target: &Value,
-    env: &CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Option<crate::Prototype>, RuntimeError> {
     let marker = match target {
         Value::Function(function) if function.native == Some(NativeFunction::Boolean) => {
@@ -1142,7 +1157,7 @@ fn cross_realm_construct_prototype_slot(
 fn marked_realm_prototype_slot(
     new_target: &Value,
     marker: &str,
-    env: &CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Option<crate::Prototype>, RuntimeError> {
     match new_target {
         Value::Function(function) => Ok(function
@@ -1153,7 +1168,10 @@ fn marked_realm_prototype_slot(
     }
 }
 
-fn prototype_value_to_slot(value: Value, env: &CallEnv) -> Option<crate::Prototype> {
+fn prototype_value_to_slot(
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Option<crate::Prototype> {
     match value {
         Value::Object(prototype) if !symbol::is_symbol_primitive(&prototype) => {
             Some(crate::Prototype::Object(prototype))
@@ -1165,7 +1183,10 @@ fn prototype_value_to_slot(value: Value, env: &CallEnv) -> Option<crate::Prototy
     }
 }
 
-fn default_construct_prototype_slot(target: &Value, env: &CallEnv) -> Option<crate::Prototype> {
+fn default_construct_prototype_slot(
+    target: &Value,
+    env: &mut crate::context::Context<'_>,
+) -> Option<crate::Prototype> {
     match target {
         Value::Function(function) if function.native.is_some() => {
             function_prototype(function).map(crate::Prototype::Object)
@@ -1194,48 +1215,42 @@ fn not_constructor_error() -> RuntimeError {
     }
 }
 
-struct FunctionCallEnv<'a> {
-    env: CallEnv,
+struct PreparedFunctionActivation<'a> {
+    env: crate::context::ActivationContext,
     direct_call_slots: Option<DirectCallSlots<'a>>,
-    positional_arguments: Option<&'a [Value]>,
+    call_inputs: Option<crate::function::CallInputs<'a>>,
 }
 
-fn direct_leaf_function_env<'a>(
+fn enter_indexed_function_activation<'a>(
     function: &'a Function,
     bytecode: &'a Bytecode,
     this_value: Value,
     argument_values: &'a [Value],
-    env: &CallEnv,
-) -> FunctionCallEnv<'a> {
+    env: &mut crate::context::Context<'_>,
+    new_target: Option<Value>,
+) -> PreparedFunctionActivation<'a> {
     // Ordinary leaf calls and direct base class constructions both reach
     // this frame; the class-constructor TypeError is the caller's concern.
     debug_assert!(can_seed_slot_backed_call(function, bytecode));
-    let mut frame_env = env.new_direct_leaf_function_frame(function.module_imports.clone());
-    let direct_this_value = if bytecode.uses_lexical_this() {
-        let this_env_storage = callee_this_realm_env(function, env);
-        let this_env = this_env_storage.as_ref().unwrap_or(env);
-        Some(function_call_this(
+    let mut frame_env = released_indexed_activation(env.runtime, function);
+    let receiver = if bytecode.uses_lexical_this() {
+        function_call_this(
             Some(this_value),
-            this_env,
+            &crate::context::Context {
+                runtime: env.runtime,
+                activation: &mut frame_env,
+                native: None,
+            },
             function.is_strict,
-        ))
+        )
     } else {
-        None
+        Value::Undefined
     };
-    insert_marked_call_realm(function, &mut frame_env);
-    if let Some(host) = function.module_host.clone() {
-        frame_env.set_module_host(host);
-    }
-    // A fresh leaf frame starts with no private environment; only a function
-    // that carries one (or a home object that does) has anything to install.
-    if function.has_cold_lexical_state() {
-        frame_env.set_private_environment(function_private_environment(function));
-    }
-    FunctionCallEnv {
+    bind_indexed_call_owner(function, &mut frame_env, receiver, new_target);
+    PreparedFunctionActivation {
         env: frame_env,
-        positional_arguments: None,
+        call_inputs: None,
         direct_call_slots: Some(DirectCallSlots {
-            this_value: direct_this_value,
             parameter_slots: bytecode.parameter_slots(),
             arguments: argument_values,
             upvalues: DirectCallUpvalues::Function(function),
@@ -1244,261 +1259,88 @@ fn direct_leaf_function_env<'a>(
     }
 }
 
-fn function_env<'a>(
+fn enter_function_activation<'a>(
     function: &'a Function,
     bytecode: &'a Bytecode,
     callee: &Value,
     this_value: Value,
     argument_values: &'a [Value],
-    env: &CallEnv,
-    is_construct: bool,
-) -> FunctionCallEnv<'a> {
-    let use_direct_call_slots = is_direct_leaf_function(callee)
-        || (is_construct && can_seed_base_class_constructor_slots(function, bytecode));
-    let use_positional_arguments =
-        !use_direct_call_slots && can_seed_positional_call(function, bytecode, env);
-    let lexical_this = received_upvalue_value(function, bytecode, "this");
-    let lexical_derived_this = if function.lexical_this {
-        function.lexical_derived_this()
+    env: &mut crate::context::Context<'_>,
+    new_target: Option<&Value>,
+) -> PreparedFunctionActivation<'a> {
+    let is_construct = new_target.is_some();
+    let use_direct_call_slots = (is_direct_leaf_function(callee)
+        || (is_construct && can_seed_base_class_constructor_slots(function, bytecode)))
+        && function.lexical_scope().is_none();
+    let mut frame_env = crate::context::ActivationContext::new(
+        selected_function_creation(function),
+        crate::context::ExecutionMode::Function,
+    );
+    frame_env.strict = function.is_strict;
+    frame_env.set_scope_cursor(function.lexical_scope());
+    if let Some(owner) = function.lexical_call() {
+        frame_env.inherit_call_owner(owner);
     } else {
-        None
-    };
-    let has_lexical_derived_this = lexical_derived_this.is_some();
-    let lexical_field_initializer =
-        received_upvalue_value(function, bytecode, FIELD_INITIALIZER_EVAL_BINDING);
-    // Ordinary calls materialize `this`, each positional parameter, and a
-    // small number of internal context bindings. Reserve that hot-path shape
-    // up front instead of growing the frame binding vector several times.
-    let mut frame_env = if use_direct_call_slots {
-        env.new_direct_leaf_function_frame(function.module_imports.clone())
-    } else {
-        env.new_function_frame_with_capacity(if use_positional_arguments {
-            0
-        } else {
-            function.params.positional.len().saturating_add(4)
-        })
-    };
-    // Install the synthetic realm snapshot before creating any real function
-    // bindings. Parameters, `this`, `arguments`, and internal bindings then
-    // shadow global names normally, while their intrinsic lookup already sees
-    // the function's creation realm.
-    insert_marked_call_realm(function, &mut frame_env);
-    let mut direct_this_value = None;
-    if function.has_name_binding
-        && let Some(name) = &function.name
-        && !function_name_is_shadowed_by_body_var(function, bytecode, name)
-    {
-        frame_env.insert(name.clone(), callee.clone());
-    }
-    // A derived class constructor needs its own constructor value at hand so
-    // that `super(...)` can initialize the instance fields once `this` exists.
-    if function.is_class_constructor && function.is_derived_constructor && is_construct {
-        frame_env.insert(crate::ACTIVE_CONSTRUCTOR_BINDING.to_owned(), callee.clone());
-    } else if function.lexical_this
-        && let Some((_, constructor)) = &lexical_derived_this
-    {
-        frame_env.insert(
-            crate::ACTIVE_CONSTRUCTOR_BINDING.to_owned(),
-            Value::Function(constructor.clone()),
-        );
-    }
-    if function.is_field_initializer {
-        frame_env.insert(
-            FIELD_INITIALIZER_EVAL_BINDING.to_owned(),
-            Value::Boolean(true),
-        );
-    } else if function.lexical_this
-        && let Some(field_initializer) = lexical_field_initializer
-    {
-        frame_env.insert(FIELD_INITIALIZER_EVAL_BINDING.to_owned(), field_initializer);
-    }
-    insert_super_bindings(&mut frame_env, function, env, is_construct);
-    // A derived-class constructor leaves `this` uninitialized (a TDZ): reading
-    // `this` before `super(...)` is a ReferenceError, and `super(...)` binds
-    // it. Every other function gets its `this` here.
-    if function.is_derived_constructor && is_construct {
-        frame_env.insert_frame_cell(
-            "this".to_owned(),
-            super::Upvalue::new(Value::Function(Function::uninitialized_lexical_marker())),
-        );
-    } else if function.lexical_this {
-        if let Some((cell, _)) = lexical_derived_this {
-            frame_env.insert_frame_cell("this".to_owned(), cell);
-        } else {
-            let inherited_this = lexical_this
-                .or_else(|| env.get_local("this"))
-                .or_else(|| env.get("this"));
-            if let Some(this_value) = inherited_this {
-                frame_env.insert("this".to_owned(), this_value);
-            }
-        }
-    } else {
-        let needs_receiver = if use_direct_call_slots {
-            bytecode.uses_lexical_this()
-        } else {
-            !use_positional_arguments || bytecode.needs_call_receiver()
-        };
-        let call_this = if needs_receiver {
-            let this_env_storage = callee_this_realm_env(function, env);
-            let this_env = this_env_storage.as_ref().unwrap_or(env);
-            Some(function_call_this(
+        let needs_receiver = bytecode.needs_call_receiver() || is_construct;
+        let receiver = if needs_receiver {
+            function_call_this(
                 Some(this_value),
-                this_env,
+                &crate::context::Context {
+                    runtime: env.runtime,
+                    activation: &mut frame_env,
+                    native: None,
+                },
                 function.is_strict,
+            )
+        } else {
+            Value::Undefined
+        };
+        let derived = function.is_derived_constructor && is_construct;
+        let this = if derived {
+            crate::context::ThisBinding::Derived(super::BindingCell::with_metadata(
+                crate::binding::BindingMetaRef::dynamic("this".into(), true, false),
+                None,
             ))
         } else {
-            None
+            crate::context::ThisBinding::Initialized(receiver)
         };
-        if use_direct_call_slots {
-            direct_this_value = call_this;
-        } else if let Some(call_this) = call_this {
-            frame_env.insert("this".to_owned(), call_this);
-        }
-    }
-    if !use_direct_call_slots && !use_positional_arguments {
-        for (index, name) in bytecode.positional_parameter_bindings().enumerate() {
-            let value = argument_values
-                .get(index)
-                .cloned()
-                .unwrap_or(Value::Undefined);
-            frame_env.insert(name.to_owned(), value);
-        }
-    }
-    let parameter_shadows_arguments =
-        !use_direct_call_slots && bytecode.parameters_shadow_arguments();
-    let has_own_arguments_object = !function.lexical_arguments
-        && !parameter_shadows_arguments
-        && bytecode.needs_arguments_object();
-    if has_own_arguments_object {
-        frame_env.insert(
-            "arguments".to_owned(),
-            arguments_object(function, argument_values, &frame_env),
+        let mut owner = crate::context::CallOwner {
+            this,
+            new_target: if is_construct {
+                new_target.cloned()
+            } else {
+                None
+            },
+            kind: function.owner_kind,
+            class: None,
+        };
+        owner.set_class_state(
+            function.home_object(),
+            function.super_constructor(),
+            derived.then(|| callee.clone()),
         );
-    }
-    if let Some(rest_name) = bytecode.rest_parameter_binding() {
-        let values = argument_values
-            .iter()
-            .skip(function.params.positional.len())
-            .cloned()
-            .collect();
-        let array = ArrayRef::new(env.realm(), values);
-        apply_marked_realm_array_prototype(&array, &frame_env);
-        frame_env.insert(rest_name.to_owned(), Value::Array(array));
-    }
-    if has_own_arguments_object || parameter_shadows_arguments {
-        frame_env.insert(
-            DIRECT_EVAL_ARGUMENTS_BINDING.to_owned(),
-            Value::Boolean(true),
-        );
-    }
-    // The marker is only observable to direct eval in this frame or to a
-    // lexically nested function (notably an arrow) that inherits its function
-    // context. Leaf functions without eval can avoid allocating the internal
-    // binding on every call.
-    if (!function.lexical_this || function.is_field_initializer || has_lexical_derived_this)
-        && (bytecode.contains_direct_eval()
-            || bytecode.creates_closures() && !use_positional_arguments)
-    {
-        frame_env.insert(
-            DIRECT_EVAL_FUNCTION_CONTEXT_BINDING.to_owned(),
-            Value::Boolean(true),
-        );
-    }
-    if let Some(name) = function.immutable_env_binding() {
-        let captured_value = received_upvalue_value(function, bytecode, name)
-            .or_else(|| function.immutable_env_value.as_ref().map(|cell| cell.get()));
-        if let Some(value) = captured_value {
-            frame_env.insert(name.to_owned(), value);
-        }
-    }
-    if function.immutable_name_binding
-        && let Some(name) = &function.name
-    {
-        frame_env.set_immutable_function_name(name.to_owned());
-    } else if let Some(name) = function.immutable_env_binding() {
-        frame_env.set_immutable_function_name(name.to_owned());
-    } else if function.lexical_this
-        && let Some(name) = env.immutable_function_name()
-    {
-        frame_env.set_immutable_function_name(name.to_owned());
-    }
-    if let Some(host) = function.module_host.clone() {
-        frame_env.set_module_host(host);
-    }
-    if !use_direct_call_slots {
-        frame_env.set_module_imports(function.module_imports.clone());
-    }
-    frame_env.set_private_environment(function_private_environment(function));
-    if let Some(bindings) = &function.deopt_bindings
-        && !function.scope_bypassed.get()
-    {
-        frame_env.set_deopt_bindings(bindings.clone());
+        frame_env.set_call_owner(owner);
     }
     let direct_call_slots = use_direct_call_slots.then(|| DirectCallSlots {
-        this_value: direct_this_value,
         parameter_slots: bytecode.parameter_slots(),
         arguments: argument_values,
         upvalues: DirectCallUpvalues::Function(function),
         realm_upvalue_slots: function.realm_upvalue_slots,
     });
-    FunctionCallEnv {
+    PreparedFunctionActivation {
         env: frame_env,
         direct_call_slots,
-        positional_arguments: use_positional_arguments.then_some(argument_values),
+        call_inputs: (!use_direct_call_slots).then_some(super::CallInputs {
+            function,
+            arguments: argument_values,
+        }),
     }
-}
-
-fn apply_marked_realm_array_prototype(array: &ArrayRef, env: &CallEnv) {
-    if !env.has_dynamic_function_realm_global() {
-        return;
-    }
-    let Some(prototype) = crate::array_prototype(env) else {
-        return;
-    };
-    let initialized = array
-        .set_prototype_slot(Some(crate::Prototype::Object(prototype)))
-        .is_ok();
-    debug_assert!(
-        initialized,
-        "new rest parameter array rejected its realm prototype"
-    );
-}
-
-/// General synchronous entry keeps its own services and special bindings.
-/// Only raw parameter names and unobservable receiver/eval metadata are omitted.
-fn can_seed_positional_call(function: &Function, bytecode: &Bytecode, env: &CallEnv) -> bool {
-    !function.is_generator
-        && !function.is_async
-        && bytecode.supports_positional_entry()
-        && function.dynamic_scope_bypassed()
-        && function.with_stack.is_empty()
-        && !function.has_dynamic_function_realm
-        && !function.has_dynamic_function_realm_override.get()
-        && function
-            .realm
-            .as_ref()
-            .is_none_or(|realm| Rc::ptr_eq(realm, env.realm()))
-        && function.module_imports.is_empty()
-        && [
-            function
-                .name
-                .as_deref()
-                .filter(|_| function.has_name_binding),
-            function.immutable_env_binding(),
-        ]
-        .into_iter()
-        .flatten()
-        .all(|name| {
-            bytecode
-                .local_slot(name)
-                .is_none_or(|slot| !bytecode.local_is_parameter(slot))
-        })
 }
 
 fn can_seed_direct_leaf_call(function: &Function, bytecode: &Bytecode) -> bool {
     // This predicate feeds the ordinary direct-call dispatcher, which must
     // retain the TypeError for `ClassConstructor()`. Base class constructors
-    // can separately reuse these slots only after `function_env` has proved
+    // can separately reuse these slots only after `enter_function_activation` has proved
     // this is a construction call.
     !function.is_class_constructor && can_seed_slot_backed_call(function, bytecode)
 }
@@ -1512,7 +1354,7 @@ fn can_seed_base_class_constructor_slots(function: &Function, bytecode: &Bytecod
 fn can_seed_slot_backed_call(function: &Function, bytecode: &Bytecode) -> bool {
     // Ordinary constructors use the same slot-backed parameter and receiver
     // model as ordinary calls. Constructor-only state such as `new.target`
-    // remains in the small compatibility frame installed by function_env.
+    // remains in the small compatibility frame installed by enter_function_activation.
     // An arrow inherits `this`, `arguments`, and `new.target` from the function
     // that created it, none of which a fresh frame provides. One that reads none
     // of them is indistinguishable from an ordinary function here, and arrow
@@ -1522,164 +1364,45 @@ fn can_seed_slot_backed_call(function: &Function, bytecode: &Bytecode) -> bool {
         && !function.is_generator
         && !function.is_async
         && !function.has_name_binding
-        && !function.immutable_name_binding
-        // A class's inner name reaches a method as a read-only cell; the
-        // immutable frame binding that normally accompanies it only serves
-        // the assignment diagnostic, so a body that never assigns the name
-        // can run without the binding.
-        && (function.immutable_env_binding().is_none_or(|name| {
-            function.is_field_initializer || bytecode.reads_immutable_env_binding_through_cell(name)
-        }))
-        && function.dynamic_scope_bypassed()
-        && function.with_stack.is_empty()
         && bytecode.has_direct_seedable_parameters()
         && !bytecode.needs_arguments_object()
+        && !bytecode.has_dynamic_scope_tree()
         && !bytecode.contains_direct_eval()
         && !bytecode.contains_with()
         && !bytecode.contains_super_operation()
         && !bytecode.creates_capturing_closures()
+        // A retained lexical scope is dropped for a slot-backed entry only
+        // when no part of the body can observe the chain itself: no eval or
+        // with in its tree (above) and no closure that would inherit the
+        // chain. Its free names are proven per entry
+        // (`lexical_scope_admits_entry`).
+        && (!bytecode.creates_closures() || function.lexical_scope().is_none())
 }
 
-fn received_upvalue_value(function: &Function, bytecode: &Bytecode, name: &str) -> Option<Value> {
-    bytecode
-        .received_upvalue_names()
-        .zip(&function.upvalues)
-        .find_map(|(candidate, upvalue)| (candidate == name).then(|| upvalue.get()))
-}
-
-fn insert_marked_call_realm(function: &Function, frame_env: &mut CallEnv) {
-    let has_override = function.has_dynamic_function_realm_override.get();
-    if !function.has_dynamic_function_realm && !has_override {
-        return;
-    }
-    let own_global = has_override.then(|| {
-        function
+/// A function owns its immutable creation metadata. An explicit host override
+/// selects a live object, never a copied namespace. The default entry only
+/// retains the existing creation handle.
+fn selected_function_creation(function: &Function) -> Rc<crate::context::CreationContext> {
+    let mut creation = function.creation_context().clone();
+    if function.has_dynamic_function_realm_override.get() {
+        let value = function
             .own_property(DYNAMIC_FUNCTION_REALM_GLOBAL)
-            .and_then(|property| match property.value {
-                Value::Object(global) => Some(global),
-                _ => None,
-            })
-    });
-    let realm_global = function.has_dynamic_function_realm.then(|| {
-        function
-            .realm
-            .as_ref()
-            .and_then(|realm| realm.dynamic_function_realm_global())
-    });
-    let Some(global) = own_global.flatten().or_else(|| realm_global.flatten()) else {
-        return;
-    };
-    if function.has_dynamic_function_realm
-        && let Some(realm) = &function.realm
+            .map_or(Value::Undefined, |property| property.value);
+        let selected = Rc::make_mut(&mut creation);
+        selected.intrinsics = match &value {
+            Value::Object(global) => crate::context::IntrinsicOverrides::for_marked_global(global),
+            _ => Default::default(),
+        };
+        selected.global = crate::context::GlobalSelection::from_control(value);
+    } else if function.has_dynamic_function_realm
+        && matches!(creation.global, crate::context::GlobalSelection::Default)
+        && let Some(global) = creation.realm.dynamic_function_realm_global()
     {
-        if let Some(prototype) = realm.object_prototype() {
-            frame_env.insert(
-                super::env::REALM_OBJECT_PROTOTYPE_INTRINSIC.to_owned(),
-                Value::Object(prototype),
-            );
-        }
-        if let Some(prototype) = realm.array_prototype() {
-            frame_env.insert(
-                super::env::REALM_ARRAY_PROTOTYPE_INTRINSIC.to_owned(),
-                Value::Object(prototype),
-            );
-        }
+        let selected = Rc::make_mut(&mut creation);
+        selected.intrinsics = crate::context::IntrinsicOverrides::for_marked_global(&global);
+        selected.global = crate::context::GlobalSelection::Override(global);
     }
-    frame_env.insert(
-        DYNAMIC_FUNCTION_REALM_GLOBAL.to_owned(),
-        Value::Object(global.clone()),
-    );
-    frame_env.insert(
-        GLOBAL_THIS_BINDING.to_owned(),
-        Value::Object(global.clone()),
-    );
-    for name in global.own_property_names() {
-        if let Some(property) = global.own_property(&name) {
-            frame_env.insert(name, property.value);
-        }
-    }
-}
-
-fn function_name_is_shadowed_by_body_var(
-    function: &Function,
-    bytecode: &Bytecode,
-    name: &str,
-) -> bool {
-    function.immutable_name_binding
-        && bytecode
-            .local_slot(name)
-            .is_some_and(|slot| bytecode.local_is_body_hoist_only(slot))
-}
-
-fn callee_this_realm_env(function: &Function, caller_env: &CallEnv) -> Option<CallEnv> {
-    if function.is_strict {
-        return None;
-    }
-    let realm = function.realm.as_ref()?;
-    if Rc::ptr_eq(realm, caller_env.realm()) {
-        return None;
-    }
-    let captured_global = realm.global_this()?;
-    if caller_env
-        .global_this()
-        .is_some_and(|caller_global| caller_global.same_value(&captured_global))
-    {
-        return None;
-    }
-    Some(CallEnv::new(Rc::clone(realm)))
-}
-
-/// Installs the per-frame `super` and `new.target` bindings. A method or
-/// constructor uses its own `[[HomeObject]]`, parent constructor, and (when
-/// constructing) `new.target`; an arrow inherits all three from the enclosing
-/// frame's environment so `super` and `new.target` work lexically inside it.
-fn insert_super_bindings(
-    frame_env: &mut CallEnv,
-    function: &Function,
-    caller_env: &CallEnv,
-    is_construct: bool,
-) {
-    use crate::{HOME_OBJECT_BINDING, NEW_TARGET_BINDING, SUPER_CONSTRUCTOR_BINDING};
-
-    // Methods/constructors use their own home object and parent constructor;
-    // arrows inherit both from the enclosing frame so `super` works lexically.
-    if let Some(home) = function.home_object() {
-        frame_env.insert(HOME_OBJECT_BINDING.to_owned(), home);
-    } else if function.lexical_this
-        && let Some(home) = caller_env.get_local(HOME_OBJECT_BINDING)
-    {
-        frame_env.insert(HOME_OBJECT_BINDING.to_owned(), home);
-    }
-
-    if let Some(super_constructor) = function.super_constructor() {
-        frame_env.insert(SUPER_CONSTRUCTOR_BINDING.to_owned(), super_constructor);
-    } else if function.lexical_this
-        && let Some(super_constructor) = caller_env.get(SUPER_CONSTRUCTOR_BINDING)
-    {
-        frame_env.insert(SUPER_CONSTRUCTOR_BINDING.to_owned(), super_constructor);
-    }
-
-    // `new.target` reaches a constructor frame from `construct_function` (which
-    // writes it into the call env). Arrows inherit it lexically; ordinary
-    // calls see `new.target` undefined.
-    if function.lexical_this {
-        if let Some(new_target) = &function.lexical_new_target {
-            frame_env.set_new_target(Some(new_target.get()));
-        }
-    } else if is_construct && let Some(new_target) = caller_env.get(NEW_TARGET_BINDING) {
-        frame_env.set_new_target(Some(new_target));
-    }
-}
-
-fn function_private_environment(function: &Function) -> Option<PrivateEnvironment> {
-    if let Some(environment) = function.private_environment() {
-        return Some(environment);
-    }
-    match function.home_object() {
-        Some(Value::Object(object)) => object.private_environment(),
-        Some(Value::Function(function)) => function.private_environment(),
-        _ => None,
-    }
+    creation
 }
 
 #[cfg(test)]
@@ -1759,3 +1482,121 @@ mod activation_tests;
 #[cfg(test)]
 #[path = "call_context_tests.rs"]
 mod context_tests;
+
+pub(crate) fn enter_indexed_activation(function: &Function) -> crate::context::ActivationContext {
+    let call = match function.call_owner_inputs() {
+        super::value::CallOwnerInputs::Lexical(owner) => {
+            crate::context::LexicalCallContext::Shared(owner)
+        }
+        super::value::CallOwnerInputs::Root {
+            home,
+            super_constructor,
+        } => {
+            let mut owner = crate::context::CallOwner::root(Value::Undefined, function.owner_kind);
+            owner.set_class_state(home, super_constructor, None);
+            crate::context::LexicalCallContext::Inline(owner)
+        }
+    };
+    crate::context::ActivationContext::for_call(
+        selected_function_creation(function),
+        call,
+        function.is_strict,
+    )
+}
+
+/// Rebinds a released activation (`ActivationContext::release_for_reuse`) to
+/// an indexed entry of `function` when that entry would build the identical
+/// fresh activation: plain creation selection and no retained lexical owner;
+/// the class state is set to the function's. False leaves the activation
+/// untouched for the caller to replace with `enter_indexed_activation`.
+#[inline]
+pub(crate) fn reenter_indexed_activation(
+    activation: &mut crate::context::ActivationContext,
+    function: &Function,
+) -> bool {
+    !function.has_dynamic_function_realm_override.get()
+        && !function.has_dynamic_function_realm
+        && activation.reuse_for_call(
+            function.creation_context(),
+            function.owner_kind,
+            function.is_strict,
+            |class| function.rebind_class_state(class),
+        )
+}
+
+/// Released activations the services keep for later entries, bounded in
+/// count and bytes (`context/activation.rs` reuse invariant).
+const MAX_RELEASED_ACTIVATIONS: usize = 16;
+const _: () = assert!(
+    MAX_RELEASED_ACTIVATIONS
+        * (std::mem::size_of::<crate::context::ActivationContext>()
+            + std::mem::size_of::<crate::context::ClassOwner>())
+        <= 4 * 1024,
+    "released activations stay within 4 KiB"
+);
+
+/// An indexed activation for `function`: the services' last released one
+/// rebound when it is exactly what a fresh entry would build, else a fresh one.
+#[inline]
+pub(crate) fn released_indexed_activation(
+    runtime: &mut crate::context::RuntimeServices,
+    function: &Function,
+) -> crate::context::ActivationContext {
+    if let Some(mut activation) = runtime.released_activations.pop()
+        && reenter_indexed_activation(&mut activation, function)
+    {
+        return activation;
+    }
+    enter_indexed_activation(function)
+}
+
+/// Returns a callback's activation to the services' pool when the tier only
+/// borrowed it and it holds only ordinary call state; anything it retained or
+/// exposed is dropped with it.
+#[inline]
+fn recycle_callback_activation(
+    runtime: &mut crate::context::RuntimeServices,
+    activation: Option<crate::context::ActivationContext>,
+) {
+    if let Some(mut activation) = activation
+        && activation.release_for_reuse(runtime.binding_debug.poisoning_activations())
+    {
+        keep_released_activation(runtime, activation);
+    }
+}
+
+/// Keeps an activation `release_for_reuse` accepted for a later entry,
+/// within the services' bound.
+#[inline]
+pub(crate) fn keep_released_activation(
+    runtime: &mut crate::context::RuntimeServices,
+    activation: crate::context::ActivationContext,
+) {
+    if runtime.released_activations.len() < MAX_RELEASED_ACTIVATIONS {
+        runtime.released_activations.push(activation);
+    }
+}
+
+/// Finalize an admitted indexed entry before executing its body. VM exits and
+/// effectful operations read this owner; positional inputs carry no receiver.
+#[inline]
+pub(crate) fn bind_indexed_call_owner(
+    function: &Function,
+    activation: &mut crate::context::ActivationContext,
+    receiver: Value,
+    new_target: Option<Value>,
+) {
+    debug_assert!(!function.is_derived_constructor);
+    match &mut activation.call {
+        crate::context::LexicalCallContext::Inline(owner) => {
+            owner.this = crate::context::ThisBinding::Initialized(receiver);
+            owner.new_target = new_target;
+        }
+        crate::context::LexicalCallContext::Shared(_) => {
+            debug_assert!(function.lexical_this && new_target.is_none());
+        }
+        crate::context::LexicalCallContext::None => {
+            unreachable!("indexed entry requires its canonical call owner")
+        }
+    }
+}

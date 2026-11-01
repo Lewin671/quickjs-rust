@@ -233,3 +233,17 @@ fn global_calls_preserve_four_packed_scalar_arguments() {
         Ok(Value::String("2300,2300,20".into()))
     );
 }
+
+#[test]
+fn a_sink_created_by_an_earlier_iteration_keeps_its_value() {
+    // The loop runs on the interpreter until the store creates the global,
+    // then enters with a fallback slot that holds no copy: the sink starts
+    // from the binding's value, not `undefined`.
+    assert_eq!(
+        eval(
+            "for (var i = 0; i < 10; i++) { if (i == 4) created = 7; } \
+             typeof created + ':' + created + ':' + globalThis.created;"
+        ),
+        Ok(Value::String("number:7:7".into()))
+    );
+}

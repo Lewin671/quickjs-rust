@@ -41,7 +41,8 @@ fn nested_function_bytecode(bytecode: &Bytecode) -> Rc<Bytecode> {
 /// how many atoms its domain created.
 fn run_counting_atoms(source: &str) -> (Value, u64) {
     let bytecode = compile(source);
-    let mut vm = Vm::new(&bytecode).expect("root frame");
+    let (mut vm_services, vm_activation) = crate::context::HostRoot::script().into_parts();
+    let mut vm = Vm::new(&bytecode, &mut vm_services, vm_activation).expect("root frame");
     let value = vm.run().expect("runs");
     let created = vm.realm.atoms().created_count();
     (value, created)
@@ -228,10 +229,13 @@ fn repeated_eval_and_function_bodies_reuse_their_links() {
 fn one_body_runs_under_two_independent_roots() {
     let bytecode = compile("var o = {}; o.k = 20; o.k + 1;");
     let first_result = {
-        let mut vm = Vm::new(&bytecode).expect("first root");
+        let (mut vm_services, vm_activation) = crate::context::HostRoot::script().into_parts();
+        let mut vm = Vm::new(&bytecode, &mut vm_services, vm_activation).expect("first root");
         vm.run().expect("runs")
     };
-    let mut second = Vm::new(&bytecode).expect("second root");
+    let (mut second_services, second_activation) = crate::context::HostRoot::script().into_parts();
+    let mut second =
+        Vm::new(&bytecode, &mut second_services, second_activation).expect("second root");
     assert_eq!(second.run().expect("runs"), first_result);
     assert_eq!(first_result, Value::Number(21.0));
     let (_, name) = named_operands(&bytecode)[0].clone();
@@ -244,16 +248,17 @@ fn one_body_runs_under_two_independent_roots() {
 }
 
 #[test]
-fn a_dynamic_function_shares_its_creators_domain() {
+fn a_dynamic_function_reuses_its_creators_realm_and_domain() {
     let bytecode = compile("new Function('o', 'return o.shared;');");
-    let mut vm = Vm::new(&bytecode).expect("root frame");
+    let (mut vm_services, vm_activation) = crate::context::HostRoot::script().into_parts();
+    let mut vm = Vm::new(&bytecode, &mut vm_services, vm_activation).expect("root frame");
     let Value::Function(created) = vm.run().expect("runs") else {
         panic!("expected a function");
     };
-    let creation_realm = created.realm.as_ref().expect("a user function has a realm");
+    let creation_realm = created.realm().expect("a user function has a realm");
     assert!(
-        !Rc::ptr_eq(creation_realm, &vm.realm),
-        "dynamic functions get a scope realm"
+        Rc::ptr_eq(creation_realm, &vm.realm),
+        "dynamic functions retain the callee creation realm"
     );
     assert!(creation_realm.atoms().ptr_eq(vm.realm.atoms()));
 }

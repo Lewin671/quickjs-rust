@@ -1,0 +1,29 @@
+[
+  {
+    "path": "test/built-ins/Function/prototype/bind/get-fn-realm-recursive.js",
+    "rust": "fail",
+    "rust_result": "fail",
+    "rust_skip": "",
+    "quickjs_ng": "pass",
+    "quickjs_ng_result": "pass",
+    "quickjs_ng_skip": ""
+  },
+  {
+    "path": "test/built-ins/Function/prototype/bind/get-fn-realm.js",
+    "rust": "fail",
+    "rust_result": "fail",
+    "rust_skip": "",
+    "quickjs_ng": "pass",
+    "quickjs_ng_result": "pass",
+    "quickjs_ng_skip": ""
+  },
+  {
+    "path": "test/language/global-code/script-decl-lex.js",
+    "rust": "fail",
+    "rust_result": "fail",
+    "rust_skip": "",
+    "quickjs_ng": "pass",
+    "quickjs_ng_result": "pass",
+    "quickjs_ng_skip": ""
+  }
+]

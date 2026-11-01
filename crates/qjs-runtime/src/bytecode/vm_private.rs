@@ -1,16 +1,9 @@
 //! VM support for private class names: installing private elements when a class
 //! is built, and the `GetPrivate`/`SetPrivate`/`PrivateIn` operations.
 
-use std::{collections::HashMap, rc::Rc};
-
-use crate::CallEnv;
-
 use crate::{
     Function, ObjectRef, RuntimeError, Value, call_field_initializer, call_function,
-    function::{
-        CROSS_REALM_TYPE_ERROR_PROTOTYPE, CompiledUserFunction, InstancePrivateElement,
-        PrivateFieldInit,
-    },
+    function::{CompiledUserFunction, InstancePrivateElement, PrivateFieldInit},
     private::{PrivateBinding, PrivateEnvironment, PrivateKind, PrivateStorage},
 };
 
@@ -18,9 +11,7 @@ use super::ir::{ClassMethodDef, ClassMethodKind, ClassPrivateElementDef};
 use super::vm::Vm;
 use super::vm_class::class_method_function_name_with_base;
 
-const DYNAMIC_FUNCTION_REALM_GLOBAL: &str = "__quickjsRustDynamicFunctionRealm";
-
-impl Vm<'_> {
+impl Vm<'_, '_> {
     /// Installs the private elements of a class. Methods and accessors become
     /// shared function values registered in the private environment; instances
     /// are branded with them at construction. Private fields register an
@@ -41,32 +32,7 @@ impl Vm<'_> {
 
         for element in private_elements {
             match element {
-                ClassPrivateElementDef::Field {
-                    name: field_name,
-                    is_static,
-                    initializer,
-                } => {
-                    let id = environment.declare_field(field_name);
-                    if *is_static {
-                        let thunk = initializer.as_ref().map(|definition| {
-                            self.build_private_field_thunk(
-                                definition,
-                                true,
-                                prototype,
-                                constructor_function,
-                                name,
-                            )
-                        });
-                        let value = match &thunk {
-                            Some(thunk) => self.run_private_field_initializer(
-                                thunk,
-                                Value::Function(constructor_function.clone()),
-                            )?,
-                            None => Value::Undefined,
-                        };
-                        constructor_function.private_storage().add_field(id, value);
-                    }
-                }
+                ClassPrivateElementDef::Field { .. } => {}
                 ClassPrivateElementDef::Method {
                     name: method_name,
                     is_static,
@@ -115,34 +81,70 @@ impl Vm<'_> {
         Ok(())
     }
 
-    /// Creates and attaches a class private environment before computed keys are
-    /// evaluated, then predeclares every private name in the class body.
-    pub(super) fn create_private_environment(
+    pub(super) fn initialize_static_private_field(
         &mut self,
-        private_elements: &[ClassPrivateElementDef],
+        element: &ClassPrivateElementDef,
         prototype: &ObjectRef,
         constructor_function: &Function,
-    ) {
-        let enclosing = self.current_private_environment();
-        if private_elements.is_empty() && enclosing.is_none() {
-            return;
+        name: Option<&str>,
+    ) -> Result<(), RuntimeError> {
+        let Some(environment) = prototype.private_environment() else {
+            return Ok(());
+        };
+        match element {
+            ClassPrivateElementDef::Field {
+                name: field_name,
+                is_static,
+                initializer,
+            } => {
+                let id = environment.declare_field(field_name);
+                if *is_static {
+                    let thunk = initializer.as_ref().map(|definition| {
+                        self.build_private_field_thunk(
+                            definition,
+                            true,
+                            prototype,
+                            constructor_function,
+                            name,
+                        )
+                    });
+                    let value = match &thunk {
+                        Some(thunk) => self.run_private_field_initializer(
+                            thunk,
+                            Value::Function(constructor_function.clone()),
+                        )?,
+                        None => Value::Undefined,
+                    };
+                    constructor_function.private_storage().add_field(id, value);
+                }
+            }
+            _ => unreachable!("only static private fields are pending"),
         }
-        let environment = PrivateEnvironment::with_outer(
-            enclosing,
-            realm_type_error_prototype(constructor_function, &self.current_env()),
-        );
-        prototype.set_private_environment(environment.clone());
-        constructor_function.set_private_environment(environment.clone());
-        for element in private_elements {
-            match element {
+        Ok(())
+    }
+
+    /// Allocates a class's lexical private environment before function objects
+    /// retain its immutable creation metadata. Heritage has already resolved.
+    pub(super) fn prepare_class_private_environment(
+        &self,
+        elements: &[ClassPrivateElementDef],
+    ) -> Option<PrivateEnvironment> {
+        let enclosing = self.current_private_environment();
+        if elements.is_empty() && enclosing.is_none() {
+            return None;
+        }
+        let environment =
+            PrivateEnvironment::with_outer(enclosing, private_error_prototype(&self.env));
+        for element in elements {
+            let name = match element {
                 ClassPrivateElementDef::Field { name, .. }
                 | ClassPrivateElementDef::Method { name, .. }
                 | ClassPrivateElementDef::Getter { name, .. }
-                | ClassPrivateElementDef::Setter { name, .. } => {
-                    environment.declare_placeholder(name);
-                }
-            }
+                | ClassPrivateElementDef::Setter { name, .. } => name,
+            };
+            environment.declare_placeholder(name);
         }
+        Some(environment)
     }
 
     /// Builds the shared function object for a private method or accessor. Its
@@ -161,17 +163,12 @@ impl Vm<'_> {
         } else {
             Value::Object(prototype.clone())
         };
-        let class_upvalue = super::vm_class::class_inner_upvalue(constructor_function, name);
+        let class_upvalue = self.class_inner_upvalue(constructor_function, name);
         let function = Function::new_user_compiled(CompiledUserFunction {
             name: class_method_function_name_with_base(def.method_kind, def.name.clone()),
             has_name_binding: false,
-            immutable_name_binding: false,
-            immutable_env_binding: name.map(str::to_owned),
-            immutable_env_value: None,
             params: std::rc::Rc::new(def.params.clone()),
-            realm: Rc::clone(&self.realm),
-            module_host: self.module_host.clone(),
-            module_imports: self.env.module_imports(),
+            creation: self.current_creation_context(),
             bytecode: def.bytecode.clone(),
             source_text: def.source_text.clone(),
             local_names: def.local_names.clone().into(),
@@ -179,16 +176,15 @@ impl Vm<'_> {
             is_strict: true,
             lexical_this: false,
             lexical_arguments: false,
-            lexical_new_target: None,
+            lexical_call: None,
             is_generator: def.is_generator,
             is_async: def.is_async,
             is_class_constructor: false,
             is_derived_constructor: false,
-            is_field_initializer: false,
+            owner_kind: crate::context::OwnerKind::Function,
             home_object: Some(home_object),
             super_constructor: None,
-            deopt_bindings: self.frame_deopt_bindings(),
-            with_stack: self.with_stack().to_vec(),
+            lexical_scope: self.closure_scope_cursor(&def.bytecode),
             upvalues: self.captured_upvalues_for_function_with_override(
                 &def.bytecode,
                 &def.lexical_captures,
@@ -196,7 +192,10 @@ impl Vm<'_> {
             ),
         });
         if def.is_generator && def.is_async {
-            crate::async_generator::wire_async_generator_function_intrinsics(&function, &self.env);
+            crate::async_generator::wire_async_generator_function_intrinsics(
+                &function,
+                &self.context(),
+            );
         } else if def.is_generator {
             self.wire_generator_function_intrinsics(&function);
         } else if def.is_async {
@@ -220,17 +219,12 @@ impl Vm<'_> {
         } else {
             Value::Object(prototype.clone())
         };
-        let class_upvalue = super::vm_class::class_inner_upvalue(constructor_function, name);
+        let class_upvalue = self.class_inner_upvalue(constructor_function, name);
         Function::new_user_compiled(CompiledUserFunction {
             name: None,
             has_name_binding: false,
-            immutable_name_binding: false,
-            immutable_env_binding: name.map(str::to_owned),
-            immutable_env_value: None,
             params: std::rc::Rc::new(qjs_ast::FunctionParams::positional(Vec::new())),
-            realm: Rc::clone(&self.realm),
-            module_host: self.module_host.clone(),
-            module_imports: self.env.module_imports(),
+            creation: self.current_creation_context(),
             bytecode: definition.bytecode.clone(),
             source_text: None,
             local_names: definition.local_names.clone().into(),
@@ -238,16 +232,15 @@ impl Vm<'_> {
             is_strict: true,
             lexical_this: false,
             lexical_arguments: false,
-            lexical_new_target: None,
+            lexical_call: None,
             is_generator: false,
             is_async: false,
             is_class_constructor: false,
             is_derived_constructor: false,
-            is_field_initializer: true,
+            owner_kind: crate::context::OwnerKind::Field,
             home_object: Some(home_object),
             super_constructor: None,
-            deopt_bindings: self.frame_deopt_bindings(),
-            with_stack: self.with_stack().to_vec(),
+            lexical_scope: self.closure_scope_cursor(&definition.bytecode),
             upvalues: self.captured_upvalues_for_function_with_override(
                 &definition.bytecode,
                 &definition.lexical_captures,
@@ -335,10 +328,9 @@ impl Vm<'_> {
         thunk: &Function,
         this_value: Value,
     ) -> Result<Value, RuntimeError> {
-        let mut env = self.current_env();
-        let result = call_field_initializer(thunk, this_value, &mut env);
-        self.apply_env(env);
-        result
+        let mut env = self.context();
+
+        call_field_initializer(thunk, this_value, &mut env)
     }
 
     /// Reads `obj.#name`: resolves the binding through the current home object's
@@ -437,10 +429,9 @@ impl Vm<'_> {
         argument: Option<Value>,
     ) -> Result<Value, RuntimeError> {
         let arguments = argument.into_iter().collect();
-        let mut env = self.current_env();
-        let result = call_function(accessor, this_value, arguments, &mut env, false);
-        self.apply_env(env);
-        result
+        let mut env = self.context();
+
+        call_function(accessor, this_value, arguments, &mut env, false)
     }
 
     /// Resolves a private name against the private environment of the current
@@ -461,19 +452,16 @@ impl Vm<'_> {
 
     /// Returns the private environment carried by the current home object.
     pub(super) fn current_private_environment(&self) -> Option<PrivateEnvironment> {
+        if let Some(environment) = self.class_key_private_environment() {
+            return Some(environment);
+        }
         if let Some(environment) = self.env.private_environment() {
             return Some(environment);
         }
-        match self.env.get_local(crate::HOME_OBJECT_BINDING) {
+        match self.env.home_object() {
             Some(Value::Object(object)) => object.private_environment(),
             Some(Value::Function(function)) => function.private_environment(),
             _ => None,
-        }
-    }
-
-    pub(super) fn capture_private_environment(&self, function: &Function) {
-        if let Some(environment) = self.current_private_environment() {
-            function.set_private_environment(environment);
         }
     }
 }
@@ -484,7 +472,7 @@ pub(crate) fn apply_instance_private_element(
     constructor: &Function,
     this_value: &Value,
     element: &InstancePrivateElement,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<(), RuntimeError> {
     let storage = match instance_private_storage(this_value) {
         Some(storage) => storage,
@@ -551,36 +539,21 @@ fn private_storage_of(value: &Value) -> Option<PrivateStorage> {
     instance_private_storage(value)
 }
 
-fn realm_type_error_prototype(function: &Function, env: &CallEnv) -> Option<ObjectRef> {
-    marked_type_error_prototype(function).or_else(|| dynamic_realm_type_error_prototype(env))
-}
-
-fn marked_type_error_prototype(function: &Function) -> Option<ObjectRef> {
-    let crate::Property {
-        value: Value::Object(prototype),
-        ..
-    } = function.own_property(CROSS_REALM_TYPE_ERROR_PROTOTYPE)?
-    else {
-        return None;
-    };
-    Some(prototype)
-}
-
-fn dynamic_realm_type_error_prototype(env: &CallEnv) -> Option<ObjectRef> {
-    let Value::Object(global) = env.get(DYNAMIC_FUNCTION_REALM_GLOBAL)? else {
-        return None;
-    };
-    let Value::Function(type_error) = global.get("TypeError")? else {
-        return None;
-    };
-    let crate::Property {
-        value: Value::Object(prototype),
-        ..
-    } = type_error.own_property("prototype")?
-    else {
-        return None;
-    };
-    Some(prototype)
+fn private_error_prototype(env: &crate::context::ActivationContext) -> Option<ObjectRef> {
+    let kind = crate::context::ErrorKind::TypeError;
+    env.creation_context_ref().intrinsics.errors[kind.index()]
+        .clone()
+        .or_else(|| {
+            env.dynamic_function_realm_global().and_then(|global| {
+                if env.realm().is_global_object(&global) {
+                    return None;
+                }
+                global
+                    .get(kind.name())
+                    .and_then(crate::context::constructor_object_prototype)
+            })
+        })
+        .or_else(|| env.realm().error_prototype(kind))
 }
 
 fn foreign_private_error(name: &str, type_error_prototype: Option<&ObjectRef>) -> RuntimeError {
@@ -589,10 +562,12 @@ fn foreign_private_error(name: &str, type_error_prototype: Option<&ObjectRef>) -
          declare it"
     );
     if let Some(prototype) = type_error_prototype {
-        let error =
-            ObjectRef::with_prototype(HashMap::new(), Some(prototype.clone()), &prototype.domain());
+        let error = crate::error::error_value_with_prototype(
+            prototype.clone(),
+            message.trim_start_matches("TypeError: "),
+        );
         return RuntimeError {
-            thrown: Some(Box::new(Value::Object(error))),
+            thrown: Some(Box::new(error)),
             message,
         };
     }

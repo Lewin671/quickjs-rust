@@ -10,11 +10,10 @@ use super::{
     PROMISE_THENABLE, PROMISE_THENABLE_CAPABILITY, is_promise_object, reaction_is_fulfill,
     resolve_promise, resolving_function_pair, settle_promise,
 };
-use crate::CallEnv;
 use crate::module::ImportErrorKind;
 
 pub(super) fn enqueue_promise_reaction_job(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     reaction: &ObjectRef,
     argument: Value,
 ) {
@@ -53,7 +52,7 @@ pub(super) fn enqueue_promise_reaction_job(
 }
 
 pub(super) fn enqueue_promise_thenable_job(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     promise: ObjectRef,
     thenable: Value,
     then: Value,
@@ -75,7 +74,7 @@ pub(super) fn enqueue_promise_thenable_job(
 /// attached to the import promise runs only after the current job, matching the
 /// host-job ordering of `import()`.
 pub(super) fn enqueue_dynamic_import_job(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     resolve: Value,
     reject: Value,
     specifier: String,
@@ -99,7 +98,7 @@ pub(super) fn enqueue_dynamic_import_job(
 }
 
 pub(crate) fn enqueue_async_dispose_settle_job(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     result_promise: ObjectRef,
     rejection: Option<Value>,
 ) {
@@ -120,17 +119,22 @@ enum DrainMode {
     StopBeforeDynamicImport,
 }
 
-pub(crate) fn drain_promise_jobs(env: &mut CallEnv) -> Result<(), RuntimeError> {
+pub(crate) fn drain_promise_jobs(
+    env: &mut crate::context::Context<'_>,
+) -> Result<(), RuntimeError> {
     drain_promise_jobs_with_mode(env, DrainMode::All)
 }
 
 pub(crate) fn drain_promise_jobs_until_dynamic_import(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<(), RuntimeError> {
     drain_promise_jobs_with_mode(env, DrainMode::StopBeforeDynamicImport)
 }
 
-fn drain_promise_jobs_with_mode(env: &mut CallEnv, mode: DrainMode) -> Result<(), RuntimeError> {
+fn drain_promise_jobs_with_mode(
+    env: &mut crate::context::Context<'_>,
+    mode: DrainMode,
+) -> Result<(), RuntimeError> {
     loop {
         let jobs = promise_jobs(env);
         let pending = jobs.to_vec();
@@ -165,7 +169,10 @@ fn drain_promise_jobs_with_mode(env: &mut CallEnv, mode: DrainMode) -> Result<()
 /// realm module host and settles the capability with the module namespace or a
 /// load error. A missing host (script evaluated without module support) rejects
 /// with a TypeError.
-fn run_dynamic_import_job(job: &ObjectRef, env: &mut CallEnv) -> Result<(), RuntimeError> {
+fn run_dynamic_import_job(
+    job: &ObjectRef,
+    env: &mut crate::context::Context<'_>,
+) -> Result<(), RuntimeError> {
     let resolve = job
         .own_property(PROMISE_IMPORT_RESOLVE)
         .map_or(Value::Undefined, |property| property.value);
@@ -216,7 +223,10 @@ fn run_dynamic_import_job(job: &ObjectRef, env: &mut CallEnv) -> Result<(), Runt
     Ok(())
 }
 
-fn run_async_dispose_settle_job(job: &ObjectRef, env: &mut CallEnv) -> Result<(), RuntimeError> {
+fn run_async_dispose_settle_job(
+    job: &ObjectRef,
+    env: &mut crate::context::Context<'_>,
+) -> Result<(), RuntimeError> {
     let result_promise = match job
         .own_property(PROMISE_ASYNC_DISPOSE_RESULT)
         .map(|property| property.value)
@@ -237,7 +247,7 @@ fn run_async_dispose_settle_job(job: &ObjectRef, env: &mut CallEnv) -> Result<()
 
 /// Builds a thrown value for a `"TypeError: ..."`-style import-failure message,
 /// constructing the matching native error object.
-fn error_reason(message: &str, env: &CallEnv) -> Value {
+fn error_reason(message: &str, env: &crate::context::Context<'_>) -> Value {
     crate::error::runtime_error_to_value(
         RuntimeError {
             thrown: None,
@@ -247,7 +257,10 @@ fn error_reason(message: &str, env: &CallEnv) -> Value {
     )
 }
 
-fn run_promise_reaction_job(job: &ObjectRef, env: &mut CallEnv) -> Result<(), RuntimeError> {
+fn run_promise_reaction_job(
+    job: &ObjectRef,
+    env: &mut crate::context::Context<'_>,
+) -> Result<(), RuntimeError> {
     let argument = job
         .own_property(PROMISE_REACTION_ARGUMENT)
         .map_or(Value::Undefined, |property| property.value);
@@ -281,7 +294,7 @@ fn run_promise_reaction_job(job: &ObjectRef, env: &mut CallEnv) -> Result<(), Ru
 fn settle_reaction_capability(
     job: &ObjectRef,
     completion: Result<Value, RuntimeError>,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<(), RuntimeError> {
     let resolve = job
         .own_property(PROMISE_REACTION_RESOLVE)
@@ -321,7 +334,10 @@ fn settle_reaction_capability(
     Ok(())
 }
 
-fn run_promise_thenable_job(job: &ObjectRef, env: &mut CallEnv) -> Result<(), RuntimeError> {
+fn run_promise_thenable_job(
+    job: &ObjectRef,
+    env: &mut crate::context::Context<'_>,
+) -> Result<(), RuntimeError> {
     let capability = match job
         .own_property(PROMISE_THENABLE_CAPABILITY)
         .map(|property| property.value)
@@ -351,7 +367,7 @@ fn run_promise_thenable_job(job: &ObjectRef, env: &mut CallEnv) -> Result<(), Ru
     Ok(())
 }
 
-fn promise_jobs(env: &mut CallEnv) -> ArrayRef {
+fn promise_jobs(env: &mut crate::context::Context<'_>) -> ArrayRef {
     let global_this = match env.get(GLOBAL_THIS_BINDING) {
         Some(Value::Object(global_this)) => global_this,
         _ => {

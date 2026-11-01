@@ -5,7 +5,7 @@
 //! non-configurable and the arguments below cannot run user code, so none of
 //! those steps is observable.
 
-use crate::{CallEnv, Function, NativeFunction, RuntimeError, Value};
+use crate::{Function, NativeFunction, RuntimeError, Value};
 
 /// The constructed object, or `None` for any other constructor or argument
 /// shape, which takes the general path. The caller guarantees `new.target`
@@ -13,7 +13,7 @@ use crate::{CallEnv, Function, NativeFunction, RuntimeError, Value};
 pub(crate) fn construct_intrinsic_directly(
     function: &Function,
     argument_values: &[Value],
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
 ) -> Option<Result<Value, RuntimeError>> {
     if function.bound.is_some() {
         return None;

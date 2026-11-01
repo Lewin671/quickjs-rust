@@ -6,13 +6,12 @@ use crate::{
 };
 
 use super::descriptor::own_property_descriptor_key;
-use crate::CallEnv;
 use crate::Property;
 use crate::object::PropertyDescriptor;
 
 pub(crate) fn native_object_get_prototype_of(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if let Some(Value::Proxy(proxy)) = argument_values.first() {
         return crate::proxy::proxy_get_prototype_of(proxy.clone(), env);
@@ -61,7 +60,7 @@ pub(crate) fn native_object_get_prototype_of(
 fn prototype_slot_from_value(
     prototype: Value,
     operation: &str,
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
 ) -> Result<Option<crate::Prototype>, RuntimeError> {
     match prototype {
         Value::Object(prototype) if symbol::is_symbol_primitive(&prototype) => Err(RuntimeError {
@@ -87,7 +86,7 @@ fn prototype_slot_from_value(
 pub(crate) fn ordinary_set_prototype_of(
     target: &Value,
     prototype: Value,
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
 ) -> Result<bool, RuntimeError> {
     let prototype = prototype_slot_from_value(prototype, "Object.setPrototypeOf", env)?;
     Ok(match target {
@@ -113,7 +112,7 @@ fn prototype_to_value(prototype: Option<crate::Prototype>) -> Value {
 
 pub(crate) fn native_object_set_prototype_of(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let prototype_value = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
@@ -150,7 +149,7 @@ pub(crate) fn native_object_set_prototype_of(
 /// `let O = ToObject(RequireObjectCoercible(this)); return O.[[GetPrototypeOf]]()`.
 pub(crate) fn native_object_prototype_get_proto(
     this_value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     match this_value {
         Value::Null | Value::Undefined => Err(RuntimeError {
@@ -171,7 +170,7 @@ pub(crate) fn native_object_prototype_get_proto(
 pub(crate) fn native_object_prototype_set_proto(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if matches!(this_value, Value::Null | Value::Undefined) {
         return Err(RuntimeError {
@@ -210,7 +209,7 @@ pub(crate) fn native_object_prototype_set_proto(
     Ok(Value::Undefined)
 }
 
-fn constructor_prototype_value(name: &str, env: &CallEnv) -> Value {
+fn constructor_prototype_value(name: &str, env: &crate::context::Context<'_>) -> Value {
     let Some(Value::Function(function)) = env.get(name) else {
         return Value::Null;
     };
@@ -225,7 +224,7 @@ fn constructor_prototype_value(name: &str, env: &CallEnv) -> Value {
 fn value_own_property_descriptor(
     value: Value,
     key: &PropertyKey,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Option<Property>, RuntimeError> {
     if let Value::Proxy(proxy) = &value {
         crate::proxy::proxy_get_own_property_descriptor(proxy.clone(), key, env, |target, env| {
@@ -239,7 +238,7 @@ fn value_own_property_descriptor(
 pub(crate) fn native_object_prototype_has_own_property(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let key = to_property_key_value(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
@@ -306,7 +305,7 @@ pub(crate) fn native_object_prototype_has_own_property(
 pub(crate) fn native_object_prototype_property_is_enumerable(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let key = to_property_key_value(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
@@ -327,7 +326,7 @@ pub(crate) fn native_object_prototype_property_is_enumerable(
 pub(crate) fn native_object_prototype_lookup_getter(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     object_prototype_lookup_accessor(this_value, argument_values, env, AccessorHalf::Getter)
 }
@@ -335,7 +334,7 @@ pub(crate) fn native_object_prototype_lookup_getter(
 pub(crate) fn native_object_prototype_lookup_setter(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     object_prototype_lookup_accessor(this_value, argument_values, env, AccessorHalf::Setter)
 }
@@ -343,7 +342,7 @@ pub(crate) fn native_object_prototype_lookup_setter(
 pub(crate) fn native_object_prototype_define_getter(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     object_prototype_define_accessor(this_value, argument_values, env, AccessorHalf::Getter)
 }
@@ -351,7 +350,7 @@ pub(crate) fn native_object_prototype_define_getter(
 pub(crate) fn native_object_prototype_define_setter(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     object_prototype_define_accessor(this_value, argument_values, env, AccessorHalf::Setter)
 }
@@ -365,7 +364,7 @@ enum AccessorHalf {
 fn object_prototype_define_accessor(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     half: AccessorHalf,
 ) -> Result<Value, RuntimeError> {
     if matches!(this_value, Value::Null | Value::Undefined) {
@@ -410,7 +409,7 @@ fn is_callable_accessor(value: &Value) -> bool {
 fn object_prototype_lookup_accessor(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     half: AccessorHalf,
 ) -> Result<Value, RuntimeError> {
     if matches!(this_value, Value::Null | Value::Undefined) {
@@ -438,7 +437,7 @@ fn object_prototype_lookup_accessor(
 fn lookup_own_property_descriptor(
     value: Value,
     key: &PropertyKey,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Option<Property>, RuntimeError> {
     if let Value::Proxy(proxy) = &value {
         crate::proxy::proxy_get_own_property_descriptor(proxy.clone(), key, env, |target, env| {
@@ -449,7 +448,10 @@ fn lookup_own_property_descriptor(
     }
 }
 
-fn lookup_prototype_value(value: Value, env: &mut CallEnv) -> Result<Value, RuntimeError> {
+fn lookup_prototype_value(
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<Value, RuntimeError> {
     if let Value::Proxy(proxy) = value {
         return crate::proxy::proxy_get_prototype_of(proxy, env);
     }
@@ -469,7 +471,7 @@ fn lookup_accessor_half(property: Property, half: AccessorHalf) -> Option<Value>
 pub(crate) fn native_object_prototype_is_prototype_of(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let mut target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     if !is_prototype_object(&target) {
@@ -502,7 +504,10 @@ fn is_prototype_object(value: &Value) -> bool {
     }
 }
 
-fn immediate_prototype_value(value: Value, env: &mut CallEnv) -> Result<Value, RuntimeError> {
+fn immediate_prototype_value(
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<Value, RuntimeError> {
     if let Value::Proxy(proxy) = value {
         return crate::proxy::proxy_get_prototype_of(proxy, env);
     }
@@ -513,7 +518,7 @@ fn immediate_prototype_value(value: Value, env: &mut CallEnv) -> Result<Value, R
 
 pub(crate) fn native_object_prototype_to_string(
     this_value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let tag = builtin_to_string_tag(this_value.clone())?;
     let tag = match symbol::to_string_tag_symbol(env) {
@@ -574,7 +579,7 @@ fn builtin_to_string_tag(value: Value) -> Result<String, RuntimeError> {
 
 pub(crate) fn native_object_prototype_to_locale_string(
     this_value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     match this_value {
         Value::Null | Value::Undefined => Err(RuntimeError {
@@ -590,7 +595,7 @@ pub(crate) fn native_object_prototype_to_locale_string(
 
 pub(crate) fn native_object_prototype_value_of(
     this_value: Value,
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     match this_value {
         Value::Null | Value::Undefined => Err(RuntimeError {

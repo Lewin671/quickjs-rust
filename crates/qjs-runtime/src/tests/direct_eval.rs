@@ -1,4 +1,11 @@
+mod declarations;
+mod outer_bindings;
+mod scope_boundaries;
+mod self_binding;
 use crate::{Value, eval};
+
+#[path = "direct_eval/s3b_bindings.rs"]
+mod s3b_bindings;
 
 #[path = "direct_eval/derived_this.rs"]
 mod derived_this;
@@ -98,3 +105,7 @@ fn closures_see_names_a_later_eval_adds_to_their_function() {
         ))
     );
 }
+
+mod s3b_references;
+
+mod cache;

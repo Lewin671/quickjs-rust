@@ -693,7 +693,7 @@ fn for_of_loop_variable_shadowing_outer_does_not_leak_into_the_outer_binding() {
     // the per-iteration value back onto the outer binding — neither its frame
     // slot (read directly after the loop) nor an outer cell a closure created
     // before the loop captured. The bindings now share a source name but retain
-    // distinct slot and Upvalue identities throughout the loop.
+    // distinct slot and BindingCell identities throughout the loop.
     assert_eq!(
         eval(
             "function f() { \
@@ -911,5 +911,71 @@ fn closures_made_beside_a_direct_eval_see_every_rebinding() {
              run() + '|' + run();"
         ),
         Ok(Value::String("1,2,0,11,22,5,5,7|1,2,0,11,22,5,5,7".into()))
+    );
+}
+
+#[test]
+fn mutable_parameter_capture_does_not_inherit_an_unrelated_global_const_policy() {
+    assert_eq!(
+        eval(
+            "const x = 1; function outer(x) { return () => ++x; } const write = outer(8); write() + ':' + write() + ':' + x;"
+        ),
+        Ok(Value::String("9:10:1".into()))
+    );
+}
+
+#[test]
+fn string_compound_assignment_checks_const_after_coercion() {
+    assert_eq!(
+        eval(
+            "(function() { let calls = 0; const value = { valueOf() { calls++; return 1; } }; try { value += 's'; } catch (error) { return error.name + ':' + calls; } })();"
+        ),
+        Ok(Value::String("TypeError:1".into()))
+    );
+    assert_eq!(
+        eval(
+            "const text = 'a'; let result = 'none'; try { Function(\"text += 'b'\")(); } catch (error) { result = error.name; } result + ':' + text;"
+        ),
+        Ok(Value::String("TypeError:a".into()))
+    );
+}
+
+#[test]
+fn sloppy_self_string_compound_assignment_preserves_expression_value() {
+    assert_eq!(
+        eval(
+            "(function named() { let calls = 0; named[Symbol.toPrimitive] = function() { calls++; return 'n'; }; const result = (named += 's'); return result + ':' + calls + ':' + typeof named; })();"
+        ),
+        Ok(Value::String("ns:1:function".into()))
+    );
+}
+
+#[test]
+fn escaped_uninitialized_block_cells_survive_later_iteration_initialization() {
+    assert_eq!(
+        eval(
+            "(function() { const reads = []; for (let i = 0; i < 2; i++) { reads.push(() => value); if (i === 0) continue; let value = 7; } return reads.map(read => { try { return read(); } catch(error) { return error.name; } }).join(':'); })();"
+        ),
+        Ok(Value::String("ReferenceError:7".into()))
+    );
+}
+
+#[test]
+fn global_string_compound_assignment_respects_property_descriptors() {
+    assert_eq!(
+        eval(
+            "(function() { Object.defineProperty(globalThis, 's3bText', { value: 'a', configurable: true }); const result = []; for (const source of [\"s3bText += 'b'\", \"'use strict'; s3bText += 'b'\"]) { try { Function(source)(); result.push('ignored'); } catch(error) { result.push(error.name); } result.push(globalThis.s3bText); } delete globalThis.s3bText; return result.join(':'); })();"
+        ),
+        Ok(Value::String("ignored:a:TypeError:a".into()))
+    );
+}
+
+#[test]
+fn global_lexical_tdz_precedes_a_same_named_object_property_in_function_reads() {
+    assert_eq!(
+        eval(
+            "globalThis.hidden = 10; let result; function read() { return typeof hidden; } try { result = read(); } catch(error) { result = error.name; } let hidden = 3; result + ':' + hidden;"
+        ),
+        Ok(Value::String("ReferenceError:3".into()))
     );
 }

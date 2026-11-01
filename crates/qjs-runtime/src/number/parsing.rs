@@ -1,8 +1,8 @@
-use crate::{CallEnv, RuntimeError, Value, to_int32_with_env, to_js_string_with_env};
+use crate::{RuntimeError, Value, to_int32_with_env, to_js_string_with_env};
 
 pub(crate) fn native_parse_float(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let input = to_js_string_with_env(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
@@ -70,7 +70,7 @@ pub(crate) fn parse_float_string(input: &str) -> f64 {
 
 pub(crate) fn native_parse_int(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let input = to_js_string_with_env(
         argument_values.first().cloned().unwrap_or(Value::Undefined),

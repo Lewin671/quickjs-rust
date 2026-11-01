@@ -2,7 +2,7 @@
 //!
 //! - Compiler (`compiler*.rs`): AST to `Bytecode`. `upvalue_resolver.rs`
 //!   decides which locals a frame boxes into shared cells.
-//!   `frame_init_plan.rs` caches the immutable parameter, cell and context
+//!   `binding_plan.rs` caches the immutable parameter, cell and context
 //!   requirements consumed by frame construction.
 //! - IR (`ir*.rs`): the `Op` set and `Bytecode`, which also caches every
 //!   tier's compiled program in a `OnceCell`. `linked_code.rs` owns a body's
@@ -23,14 +23,12 @@
 //!    straight-line numeric body evaluated with no frame.
 //! 2. `vm_this_property_leaf.rs`: a body that only reads data properties of
 //!    its receiver or arguments, also with no frame.
-//! 3. `compact_fn::try_run_in_caller_env`: the compact tiers of step 4, run
-//!    in the caller's environment when that equals the callee's own frame.
-//! 4. `vm::eval_direct_call_bytecode`: `compact_fn::try_run_standalone` (a
+//! 3. `vm::eval_direct_call_bytecode`: `compact_fn::try_run_standalone` (a
 //!    numeric compact body, as an `f64` `numeric_plan` when it has one and
 //!    the arguments are numbers; otherwise `compact_fn::wide`, which
 //!    `vm/wide_resume.rs` continues after an exit), then a slot-seeded `Vm`.
 //!
-//! Every other callee takes `function::call_function`, which ends at step 4
+//! Every other callee takes `function::call_function`, which ends at step 3
 //! for a slot-seeded call and at `eval_function_bytecode` otherwise.
 //!
 //! Backward edges (`vm_loop_dispatch.rs`) try `vm_numeric_mutation_loop`
@@ -42,11 +40,13 @@
 //! `named_property_cache.rs` and `enumerate_keys_cache.rs`;
 //! `vm_string_append.rs` appends in place to a uniquely held string.
 
-use std::collections::HashMap;
-
+mod binding_captures;
+mod binding_metadata;
+mod binding_plan;
 mod call_context;
 mod compact_fn;
 mod compiler;
+mod compiler_arguments;
 mod compiler_assign;
 mod compiler_binding;
 mod compiler_class;
@@ -56,10 +56,10 @@ mod compiler_function;
 mod compiler_lexical;
 mod compiler_params;
 mod compiler_pattern;
+mod compiler_references;
 mod compiler_try;
 mod compiler_values;
 mod enumerate_keys_cache;
-mod frame_init_plan;
 mod frame_program;
 mod frame_stack;
 mod ir;
@@ -69,16 +69,20 @@ mod ir_pools;
 mod linked_code;
 mod named_property_cache;
 mod operand_stack;
+mod reference_admission;
+mod reference_plan;
 mod typed_loop;
 mod upvalue_resolver;
 mod util;
 mod virtual_object;
 mod vm;
+mod vm_binding_debug;
 mod vm_bindings;
 mod vm_call;
-mod vm_call_env;
 mod vm_capture;
 mod vm_class;
+mod vm_class_region;
+mod vm_context;
 mod vm_direct_upvalues;
 mod vm_dispose;
 mod vm_errors;
@@ -96,7 +100,9 @@ mod vm_numeric_mutation_loop;
 mod vm_ops;
 mod vm_private;
 mod vm_props;
+mod vm_references;
 mod vm_result;
+mod vm_scopes;
 mod vm_set;
 mod vm_string_append;
 mod vm_this_property_leaf;
@@ -109,12 +115,10 @@ use qjs_parser::parse_script;
 
 use crate::{RuntimeError, Value};
 
-pub(crate) use compact_fn::try_run_in_caller_env as try_run_direct_leaf_in_caller_env;
-
 /// See `compact_fn::property::field_initializer_member_read`.
 pub(crate) fn field_initializer_member_read(
     thunk: &crate::Function,
-    env: &crate::CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Option<Result<crate::Value, RuntimeError>> {
     compact_fn::field_initializer_member_read(thunk, env)
 }
@@ -135,7 +139,7 @@ pub(crate) use vm_this_property_leaf::try_eval_this_property_leaf;
 pub(crate) fn delete_object_property(
     object: Value,
     key: &crate::PropertyKey,
-    env: &mut crate::CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<bool, RuntimeError> {
     match vm_props::delete_property_key(object, key, env)? {
         Value::Boolean(deleted) => Ok(deleted),
@@ -197,56 +201,51 @@ pub fn compile_script_classified(script: &Script) -> Result<Bytecode, CompileErr
     compiler::compile_script(script)
 }
 
-pub(crate) fn compile_function_body(
+pub(crate) fn compile_function_body_with_source(
     params: &FunctionParams,
     body: &[qjs_ast::Stmt],
-) -> Result<Bytecode, RuntimeError> {
-    compiler::compile_function_body(params, body)
-}
-
-pub(crate) fn compile_function_body_with_kind(
-    params: &FunctionParams,
-    body: &[qjs_ast::Stmt],
-    parent_strict: bool,
+    strict: bool,
     is_generator: bool,
     is_async: bool,
+    source: &std::rc::Rc<str>,
+    source_is_wtf16: bool,
 ) -> Result<Bytecode, RuntimeError> {
-    compiler::compile_function_body_with_strict_generator(
-        params,
-        body,
-        parent_strict,
-        is_generator,
-        is_async,
-    )
+    let mut compiler = compiler::Compiler::function_compiler(strict, is_generator && is_async);
+    compiler.source = source.clone();
+    compiler.source_is_wtf16 = source_is_wtf16;
+    compiler.compile_function(params, body)
 }
 
-pub(crate) fn eval_function_bytecode<'a>(
-    bytecode: &'a Bytecode,
-    env: crate::CallEnv,
-    upvalues: Vec<crate::function::Upvalue>,
+pub(crate) fn eval_function_bytecode(
+    bytecode: &Bytecode,
+    env: crate::context::ActivationContext,
+    runtime: &mut crate::context::RuntimeServices,
+    upvalues: Vec<crate::function::BindingCell>,
     with_stack: Vec<Value>,
     persist_global_lexicals: bool,
-    positional_arguments: Option<&[Value]>,
-) -> FunctionBytecodeResult<'a> {
+    call_inputs: Option<crate::function::CallInputs<'_>>,
+) -> FunctionBytecodeResult {
     vm::eval_function_bytecode(
         bytecode,
         env,
+        runtime,
         upvalues,
         with_stack,
         persist_global_lexicals,
         None,
-        positional_arguments,
+        call_inputs,
     )
 }
 
 pub(crate) fn eval_call_bytecode(
     bytecode: &Bytecode,
-    env: crate::CallEnv,
-    upvalues: Vec<crate::function::Upvalue>,
+    env: crate::context::ActivationContext,
+    runtime: &mut crate::context::RuntimeServices,
+    upvalues: Vec<crate::function::BindingCell>,
     with_stack: Vec<Value>,
-    positional_arguments: Option<&[Value]>,
+    call_inputs: Option<crate::function::CallInputs<'_>>,
 ) -> Result<Value, RuntimeError> {
-    vm::eval_call_bytecode(bytecode, env, upvalues, with_stack, positional_arguments)
+    vm::eval_call_bytecode(bytecode, env, runtime, upvalues, with_stack, call_inputs)
 }
 
 /// The immutable source of received-upvalue cells for a slot-seeded call.
@@ -259,11 +258,11 @@ pub(crate) fn eval_call_bytecode(
 #[derive(Clone, Copy)]
 pub(crate) enum DirectCallUpvalues<'a> {
     Function(&'a crate::Function),
-    Slice(&'a [crate::function::Upvalue]),
+    Slice(&'a [crate::function::BindingCell]),
 }
 
 impl<'a> DirectCallUpvalues<'a> {
-    pub(crate) fn as_slice(self) -> &'a [crate::function::Upvalue] {
+    pub(crate) fn as_slice(self) -> &'a [crate::function::BindingCell] {
         match self {
             Self::Function(function) => &function.upvalues,
             Self::Slice(upvalues) => upvalues,
@@ -279,23 +278,23 @@ impl<'a> DirectCallUpvalues<'a> {
 }
 
 pub(crate) struct DirectCallSlots<'a> {
-    pub(crate) this_value: Option<Value>,
     pub(crate) parameter_slots: &'a [usize],
     pub(crate) arguments: &'a [Value],
     pub(crate) upvalues: DirectCallUpvalues<'a>,
     pub(crate) realm_upvalue_slots: u128,
 }
 
-/// Runs a slot-seeded ordinary call whose caller needs only its completion
-/// value. Direct-call eligibility excludes the compatibility bindings that a
-/// general call must copy back to its caller, so materializing a completed
-/// `FunctionBytecodeResult` would only move and then drop the finished frame.
+/// Runs the prepared callee through retained tiers or the general frame.
+/// Tier dispatch borrows that callee directly; a declined route alone owns
+/// interpreter storage. Completion returns no environment projection.
+#[inline(always)]
 pub(crate) fn eval_direct_call_bytecode(
     bytecode: &Bytecode,
-    env: crate::CallEnv,
-    direct_call_slots: DirectCallSlots<'_>,
+    env: &mut Option<crate::context::ActivationContext>,
+    runtime: &mut crate::context::RuntimeServices,
+    direct_call_slots: &mut Option<DirectCallSlots<'_>>,
 ) -> Result<Value, RuntimeError> {
-    vm::eval_direct_call_bytecode(bytecode, env, direct_call_slots)
+    vm::eval_direct_call_bytecode(bytecode, env, runtime, direct_call_slots)
 }
 
 /// Compiles and evaluates source text through the bytecode VM.
@@ -380,7 +379,7 @@ pub fn eval_bytecode_in_agent_context(
 pub struct EvalOutcome {
     /// The script's completion value, before any promise reactions ran.
     pub value: Value,
-    env: crate::CallEnv,
+    env: vm_jobs::JobRoot,
 }
 
 impl EvalOutcome {
@@ -414,15 +413,11 @@ pub fn eval_bytecode_keep_jobs(bytecode: &Bytecode) -> Result<EvalOutcome, Runti
 pub(crate) type ModuleRealm = crate::function::Realm;
 
 pub(crate) struct ModuleEvaluation {
-    pub(crate) env: crate::CallEnv,
-    pub(crate) live_bindings: crate::function::DynamicBindings,
     pub(crate) async_result_promise: Option<crate::ObjectRef>,
 }
 
-pub(crate) struct ModuleLiveExports {
-    pub(crate) names: Vec<String>,
+pub(crate) struct ModuleBindings {
     pub(crate) bindings: crate::function::DynamicBindings,
-    pub(crate) seed_tdz_markers: bool,
     pub(crate) imports: Vec<ModuleLiveImport>,
 }
 
@@ -471,49 +466,80 @@ pub(crate) fn eval_prelude_script(
 }
 
 /// Evaluates a module body against the shared graph realm seeded with the
-/// module's resolved imports. Returns the module's frame environment so the
-/// caller can read its exported bindings. See [`vm_module::eval_module_body`].
+/// module's canonical cells. See [`vm_module::eval_module_body`].
 pub(crate) fn eval_module_body(
     bytecode: &Bytecode,
     realm: &ModuleRealm,
-    imports: HashMap<String, Value>,
     host: Option<crate::module::ModuleHostRef>,
-    live_exports: ModuleLiveExports,
+    module_bindings: ModuleBindings,
     drain: bool,
 ) -> Result<ModuleEvaluation, RuntimeError> {
-    vm_module::eval_module_body(bytecode, realm, imports, host, live_exports, drain)
+    vm_module::eval_module_body(bytecode, realm, host, module_bindings, drain)
 }
 
 pub(crate) fn eval_module_function_hoists(
     bytecode: &Bytecode,
     realm: &ModuleRealm,
     host: Option<crate::module::ModuleHostRef>,
-    live_exports: ModuleLiveExports,
+    module_bindings: ModuleBindings,
 ) -> Result<(), RuntimeError> {
-    vm_module::eval_module_function_hoists(bytecode, realm, host, live_exports)
+    vm_module::eval_module_function_hoists(bytecode, realm, host, module_bindings)
 }
 
-pub(crate) fn seed_module_live_bindings(bytecode: &Bytecode, live_exports: &ModuleLiveExports) {
-    vm_module::seed_live_bindings(
-        &live_exports.bindings,
-        bytecode,
-        live_exports.names.clone(),
-        live_exports.seed_tdz_markers,
-    );
+/// Establish canonical declaration cells before linking namespaces or imports.
+pub(crate) fn initialize_module_cells(
+    bytecode: &Bytecode,
+    bindings: &crate::function::DynamicBindings,
+    imported_names: &[String],
+) {
+    for meta in bytecode.scope_declarations(crate::binding::ScopeId(0)) {
+        if imported_names.contains(&meta.name) {
+            continue;
+        }
+        let value = (meta.initialization == crate::binding::InitPolicy::Undefined)
+            .then_some(Value::Undefined);
+        let name = meta.name.clone();
+        bindings.insert_cell(
+            name,
+            crate::binding::BindingCell::with_metadata(meta, value),
+        );
+    }
 }
 
 pub(crate) fn eval_bytecode_with_env(
     bytecode: &Bytecode,
-    env: crate::CallEnv,
-) -> FunctionBytecodeResult<'_> {
-    let with_stack = env.direct_eval_with_stack();
-    vm::eval_function_bytecode(bytecode, env, Vec::new(), with_stack, true, None, None)
+    env: crate::context::ActivationContext,
+    runtime: &mut crate::context::RuntimeServices,
+) -> FunctionBytecodeResult {
+    let with_stack = Vec::new();
+    vm::eval_function_bytecode(
+        bytecode,
+        env,
+        runtime,
+        Vec::new(),
+        with_stack,
+        true,
+        None,
+        None,
+    )
 }
 
 pub(crate) fn eval_bytecode_with_env_ephemeral_global_lexicals(
     bytecode: &Bytecode,
-    env: crate::CallEnv,
-) -> FunctionBytecodeResult<'_> {
-    let with_stack = env.direct_eval_with_stack();
-    vm::eval_function_bytecode(bytecode, env, Vec::new(), with_stack, false, None, None)
+    env: crate::context::ActivationContext,
+    runtime: &mut crate::context::RuntimeServices,
+) -> FunctionBytecodeResult {
+    let with_stack = Vec::new();
+    vm::eval_function_bytecode(
+        bytecode,
+        env,
+        runtime,
+        Vec::new(),
+        with_stack,
+        false,
+        None,
+        None,
+    )
 }
+
+pub(crate) use vm_generator::start_with_call_inputs;

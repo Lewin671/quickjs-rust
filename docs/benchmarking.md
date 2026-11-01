@@ -23,7 +23,7 @@ are right.
 | Resources | `benchmarks/resources.json`, `benchmarks/resource-analysis.json`, workload `benchmarks/workloads/resource-probe.js` | fresh-process latency, peak RSS, binary size |
 | Lifecycle | Criterion bench behind `scripts/lifecycle-bench.sh` | parse and compile time at the public Rust API |
 
-Records from different lanes or series are never pooled, and no lane yields a headline engine score.
+Records from different lanes or series are never pooled, and no lane yields a headline engine score. The [public correctness sweep](public-workload-correctness.md) checks outputs without timing.
 
 **Broad** has 25 cases in eight families (call, binding, property, array,
 control, builtin, string, allocation); each is a small loop over one kind of

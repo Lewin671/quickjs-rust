@@ -1,0 +1,71 @@
+{
+  "candidate": "8413f925963f42e65c0d972756fe3762659dbfff",
+  "base": "3cc12c6f8d93ffd6eae91d1bd44efe74134ae195",
+  "tooling": "8413f925963f42e65c0d972756fe3762659dbfff",
+  "host_node": "iMac.lan",
+  "request_sha256": "3b58dbbef2b9a2e36b99794b15ab548c6ac8fef72bb3a0e9ac9b487de41cd6f5",
+  "result_sha256": "9f3cf994d2fa77058667ecc3063cc648203ef68c80c85f658d24bcef5479bd03",
+  "policy_sha256": "f3e8ef40b8b45601b5b86edaf4b47c2d9d904d0045eb024e837f1c447a52bec4",
+  "pairs": 5,
+  "layout": "natural",
+  "measurement_schedule": {
+    "kind": "case-shards-v1",
+    "workers": 4
+  },
+  "lanes": {
+    "development": {
+      "cases": 10,
+      "wall_ns": 1.086526513739112,
+      "instructions": 1.1078310831308549
+    },
+    "external": {
+      "cases": 45,
+      "wall_ns": 1.2526586966241704,
+      "instructions": 1.2758589165097243
+    },
+    "broad": {
+      "cases": 25,
+      "wall_ns": 1.079323284664366,
+      "instructions": 1.095919752221652
+    },
+    "sentinel": {
+      "cases": 6,
+      "wall_ns": 1.0052111750162427,
+      "instructions": 1.051770765414168
+    },
+    "portfolio": {
+      "cases": 86,
+      "wall_ns": 1.1619216909437822,
+      "instructions": 1.1847484961423207
+    }
+  },
+  "all_public_wall_lanes_improve": false,
+  "all_public_instruction_lanes_improve": false,
+  "original_triage_verdict": "likely loss",
+  "budget_met": true,
+  "scope": "public86 natural-layout five-pair diagnostic only; lead formal/held-out/RSS acceptance remains separate",
+  "health_counts": {
+    "attempts": 430,
+    "heavy_samples": 0,
+    "invalid": 0,
+    "valid": 430
+  },
+  "builds": {
+    "base": {
+      "cache_hit": true,
+      "cache_key": "9d00a536bc70bf9052a6b775d6d289ca8e2b3484880ca592bfb714a42bacaf5f",
+      "cache_spec_sha256": "1aa2f8eaeaf82a8661a96db61af95dfcbc13dc457acfe3cb9338daa48b70e60c",
+      "path": "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261101T043615Z-t077-s3b-final-public86/out/triage/base000/qjs",
+      "revision": "3cc12c6f8d93ffd6eae91d1bd44efe74134ae195",
+      "sha256": "3ad34749a288e585b2d20aae59b3255279c662484ae04cc3c01015cdb701dc80"
+    },
+    "candidate": {
+      "cache_hit": false,
+      "cache_key": "748f519bef207b722b0dd404641bcfbd164368c060fe99c8e9a94532f19b1167",
+      "cache_spec_sha256": "31a3d83f535cef4af94cf11d06620677d42230919be1bbba22828077335c5748",
+      "path": "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261101T043615Z-t077-s3b-final-public86/out/triage/cand000/qjs",
+      "revision": "8413f925963f42e65c0d972756fe3762659dbfff",
+      "sha256": "78e861a7dd3d2959a49a0b3bc09cb919ee3fa6a02bb09a0a24ed39e001366379"
+    }
+  }
+}

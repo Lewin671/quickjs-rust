@@ -19,13 +19,12 @@ use crate::bytecode::vm_iter::DelegateStep;
 use crate::bytecode::vm_props::array_index_from_number;
 use crate::bytecode::vm_result::Completion;
 use crate::{
-    Function, HOME_OBJECT_BINDING, PropertyKey, RuntimeError, SUPER_CONSTRUCTOR_BINDING, Value,
-    function::{CompiledUserFunction, Upvalue},
+    Function, PropertyKey, RuntimeError, Value, function::CompiledUserFunction,
     to_js_string_with_env,
 };
 use std::rc::Rc;
 
-impl Vm<'_> {
+impl Vm<'_, '_> {
     /// Runs one opcode the dispatch loop routed here.
     ///
     /// `Ok(None)` continues the activation; `Ok(Some(exit))` is the exit the
@@ -52,17 +51,30 @@ impl Vm<'_> {
             }
             Op::TypeofGlobal(name) => {
                 let result: Result<Value, RuntimeError> = (|| {
+                    if let Some(reference) = self.resolve_scope_binding(name, false)? {
+                        return Ok(Value::String(typeof_value(
+                            self.read_scope_binding(&reference)?,
+                        )));
+                    }
+                    if self.uses_selected_object_binding(name) {
+                        return Ok(Value::String(typeof_value(
+                            self.read_global_binding(name)?.unwrap_or(Value::Undefined),
+                        )));
+                    }
+                    if self.env.has_global_binding_root() {
+                        return Ok(Value::String(typeof_value(
+                            self.read_global_binding(name)?.unwrap_or(Value::Undefined),
+                        )));
+                    }
                     if self.direct_eval_with_stack {
                         return self.typeof_ident_with(name, None);
                     }
-                    let value = if let Some(value) = self.env.module_import_value(name) {
-                        if value.is_uninitialized_lexical_marker() {
-                            return Err(RuntimeError {
-                                thrown: None,
-                                message: format!("ReferenceError: undefined identifier `{name}`"),
-                            });
-                        }
-                        value
+                    let value = if let Some(cell) = self.env.realm_binding_cell(name)
+                        && cell.metadata().kind == crate::binding::BindingKind::Lexical
+                    {
+                        cell.read()?
+                    } else if let Some(value) = self.env.module_import_value(name) {
+                        value?
                     } else if let Some(value) = self.env.get(name) {
                         value
                     } else {
@@ -71,16 +83,8 @@ impl Vm<'_> {
                         // reading it invokes any getter. typeof yields
                         // "undefined" only when the reference is genuinely
                         // unresolvable.
-                        self.global_this_own_value(name)?
+                        self.global_this_property_value(name)?
                             .unwrap_or(Value::Undefined)
-                    };
-                    let value = if matches!(
-                        &value,
-                        Value::Function(function) if function.is_uninitialized_lexical_marker()
-                    ) {
-                        Value::Undefined
-                    } else {
-                        value
                     };
                     Ok(Value::String(typeof_value(value)))
                 })();
@@ -141,7 +145,9 @@ impl Vm<'_> {
             }
             Op::DeleteIdent(name) => {
                 let result = self.delete_ident(name);
-                self.stack.push(Value::Boolean(result));
+                if let Some(deleted) = self.handle_runtime_result(result)? {
+                    self.stack.push(Value::Boolean(deleted));
+                }
             }
             Op::RequireCallable => {
                 let result = self.require_callable();
@@ -155,7 +161,6 @@ impl Vm<'_> {
             Op::NewFunction {
                 name,
                 has_name_binding,
-                immutable_name_binding,
                 params,
                 local_names,
                 lexical_captures,
@@ -168,52 +173,17 @@ impl Vm<'_> {
                 is_async,
                 source_text,
             } => {
-                let (home_object, super_constructor) = if *lexical_this {
-                    let home_object = self.env.get_local(HOME_OBJECT_BINDING);
-                    let mut super_constructor = self.env.get(SUPER_CONSTRUCTOR_BINDING);
-                    if self.load_global("this").is_err() && super_constructor.is_none() {
-                        super_constructor = Some(Value::Undefined);
-                    }
-                    (home_object, super_constructor)
-                } else {
-                    (None, None)
-                };
-                let upvalues = self.captured_upvalues_for_function(bytecode, lexical_captures);
-                let immutable_env_binding =
-                    self.captured_immutable_function_name(bytecode, local_names);
-                let immutable_env_value = immutable_env_binding
-                    .as_deref()
-                    .and_then(|name| self.env.get(name))
-                    .map(Upvalue::new);
-                let lexical_new_target = if *lexical_this {
-                    self.env.get(crate::NEW_TARGET_BINDING).map(Upvalue::new)
+                let lexical_call = if *lexical_this && bytecode.needs_lexical_owner() {
+                    self.env.capture_call_owner()
                 } else {
                     None
                 };
-                let deopt_bindings = self.frame_deopt_bindings_memoized();
-                let scope_use = deopt_bindings.as_ref().map(|bindings| {
-                    self.closure_scope_use(bytecode, *lexical_this || *lexical_arguments, bindings)
-                });
-                let deopt_bindings = match scope_use {
-                    Some(crate::bytecode::vm_frame_init::ClosureScopeUse::Drop) => None,
-                    _ => deopt_bindings,
-                };
-                let bypass_scope = deopt_bindings.clone().filter(|_| {
-                    matches!(
-                        scope_use,
-                        Some(crate::bytecode::vm_frame_init::ClosureScopeUse::Bypass)
-                    )
-                });
+                let upvalues = self.captured_upvalues_for_function(bytecode, lexical_captures);
                 let function = Function::new_user_compiled(CompiledUserFunction {
                     name: name.clone(),
                     has_name_binding: *has_name_binding,
-                    immutable_name_binding: *immutable_name_binding,
-                    immutable_env_binding,
-                    immutable_env_value,
                     params: Rc::clone(params),
-                    realm: Rc::clone(&self.realm),
-                    module_host: self.module_host.clone(),
-                    module_imports: self.env.module_imports(),
+                    creation: self.current_creation_context(),
                     bytecode: Rc::clone(bytecode),
                     source_text: source_text.clone(),
                     local_names: Rc::clone(local_names),
@@ -221,39 +191,21 @@ impl Vm<'_> {
                     is_strict: *is_strict,
                     lexical_this: *lexical_this,
                     lexical_arguments: *lexical_arguments,
-                    lexical_new_target,
+                    lexical_call,
                     is_generator: *is_generator,
                     is_async: *is_async,
                     is_class_constructor: false,
                     is_derived_constructor: false,
-                    is_field_initializer: *lexical_this
-                        && matches!(
-                            self.env.get(crate::FIELD_INITIALIZER_EVAL_BINDING),
-                            Some(Value::Boolean(true))
-                        ),
-                    home_object,
-                    super_constructor,
-                    deopt_bindings,
-                    with_stack: self.with_stack().to_vec(),
+                    owner_kind: crate::context::OwnerKind::Function,
+                    home_object: None,
+                    super_constructor: None,
+                    lexical_scope: self.closure_scope_cursor(bytecode),
                     upvalues,
                 });
-                // Eval-only and nested arrows need this context even when
-                // the compiler emitted no received `this` upvalue slot.
-                if *lexical_this
-                    && let Some(cell) = self.env.derived_this_cell()
-                    && let Some(Value::Function(constructor)) =
-                        self.env.get_local(crate::ACTIVE_CONSTRUCTOR_BINDING)
-                {
-                    function.set_lexical_derived_this(cell, constructor);
-                }
-                if let Some(bindings) = bypass_scope {
-                    bindings.bypass(&function);
-                }
-                self.capture_private_environment(&function);
                 if *is_generator && *is_async {
                     crate::async_generator::wire_async_generator_function_intrinsics(
                         &function,
-                        &self.realm_env(),
+                        &self.context(),
                     );
                 } else if *is_generator {
                     self.wire_generator_function_intrinsics(&function);
@@ -263,14 +215,18 @@ impl Vm<'_> {
                 self.stack.push(Value::Function(function));
             }
             Op::NewClass { definition } => {
-                let result = self.new_class(
-                    definition.name.as_deref(),
-                    &definition.constructor,
-                    &definition.elements,
-                    &definition.private_elements,
-                    &definition.computed_keys,
-                    definition.has_heritage,
-                );
+                self.enter_class(definition.clone());
+            }
+            Op::BeginClass => {
+                let result = self.begin_class();
+                self.handle_runtime_result(result)?;
+            }
+            Op::DefineClassElement { index } => {
+                let result = self.define_class_element(*index);
+                self.handle_runtime_result(result)?;
+            }
+            Op::FinishClass => {
+                let result = self.finish_class();
                 if let Some(value) = self.handle_runtime_result(result)? {
                     self.stack.push(value);
                 }
@@ -345,9 +301,8 @@ impl Vm<'_> {
             }
             Op::ToString => {
                 let value = self.pop()?;
-                let mut env = self.callee_env();
+                let mut env = self.context();
                 let result = to_js_string_with_env(value, &mut env);
-                self.apply_env(env);
                 // Route a throwing toString/Symbol.toPrimitive through the
                 // try-handler stack so `` `${bad}` `` is catchable, instead of
                 // escaping the VM loop.
@@ -400,7 +355,7 @@ impl Vm<'_> {
                 });
             }
             Op::FunctionPrologueEnd => {
-                self.enter_body_deopt_scope();
+                self.enter_function_body();
                 if self.stop_at_prologue {
                     self.stop_at_prologue = false;
                     return Ok(Some(FrameExit::Completed(Completion::PrologueEnd)));

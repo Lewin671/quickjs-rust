@@ -1,10 +1,10 @@
 //! Operation entries for agent; bound once when a native is created.
 
 use super::CallInfo;
-use crate::{CallEnv, RuntimeError, Value, agent};
+use crate::{RuntimeError, Value, agent};
 
 pub(super) fn agent_start(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -12,7 +12,7 @@ pub(super) fn agent_start(
 }
 
 pub(super) fn agent_broadcast(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -20,7 +20,7 @@ pub(super) fn agent_broadcast(
 }
 
 pub(super) fn agent_get_report(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -28,7 +28,7 @@ pub(super) fn agent_get_report(
 }
 
 pub(super) fn agent_report(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -36,7 +36,7 @@ pub(super) fn agent_report(
 }
 
 pub(super) fn agent_sleep(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -44,7 +44,7 @@ pub(super) fn agent_sleep(
 }
 
 pub(super) fn agent_monotonic_now(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -52,7 +52,7 @@ pub(super) fn agent_monotonic_now(
 }
 
 pub(super) fn agent_receive_broadcast(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -60,7 +60,7 @@ pub(super) fn agent_receive_broadcast(
 }
 
 pub(super) fn agent_leaving(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {

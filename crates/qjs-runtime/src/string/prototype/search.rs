@@ -18,7 +18,6 @@ mod units;
 pub(super) use units::split_code_units;
 mod substitution;
 mod symbol_method;
-use crate::CallEnv;
 use errors::{replace_all_regexp_flags_error, string_method_null_error};
 use substitution::{get_substitution, substitution_length};
 use symbol_method::{
@@ -29,7 +28,10 @@ use super::MAX_STRING_LENGTH;
 
 /// The receiver as a shared string value, without copying a primitive or a
 /// String wrapper's data.
-fn search_receiver(value: Value, env: &mut CallEnv) -> Result<JsString, RuntimeError> {
+fn search_receiver(
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<JsString, RuntimeError> {
     this_js_string_value(value, env)
 }
 
@@ -46,7 +48,7 @@ fn search_length(value: &JsString) -> usize {
 pub(crate) fn native_string_prototype_ends_with(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let value = search_receiver(this_value, env)?;
     let search_value = argument_values.first().cloned().unwrap_or(Value::Undefined);
@@ -67,7 +69,7 @@ pub(crate) fn native_string_prototype_ends_with(
 pub(crate) fn native_string_prototype_includes(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let value = search_receiver(this_value, env)?;
     let search_value = argument_values.first().cloned().unwrap_or(Value::Undefined);
@@ -90,7 +92,7 @@ pub(crate) fn native_string_prototype_includes(
 pub(crate) fn native_string_prototype_index_of(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let value = search_receiver(this_value, env)?;
     let search = to_js_string_value_with_env(
@@ -117,7 +119,7 @@ pub(crate) fn native_string_prototype_index_of(
 pub(crate) fn native_string_prototype_last_index_of(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let value = this_string_value(this_value, env)?;
     let search = to_js_string_with_env(
@@ -161,7 +163,7 @@ pub(crate) fn native_string_prototype_last_index_of(
 pub(crate) fn native_string_prototype_match(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if matches!(this_value, Value::Null | Value::Undefined) {
         return Err(string_method_null_error());
@@ -187,7 +189,7 @@ pub(crate) fn native_string_prototype_match(
 pub(crate) fn native_string_prototype_match_all(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if matches!(this_value, Value::Null | Value::Undefined) {
         return Err(string_method_null_error());
@@ -233,7 +235,7 @@ pub(crate) fn native_string_prototype_match_all(
 pub(crate) fn native_string_prototype_replace_all(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if matches!(this_value, Value::Null | Value::Undefined) {
         return Err(string_method_null_error());
@@ -291,7 +293,7 @@ pub(crate) fn native_string_prototype_replace_all(
 pub(crate) fn native_string_prototype_replace(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if matches!(this_value, Value::Null | Value::Undefined) {
         return Err(string_method_null_error());
@@ -335,7 +337,7 @@ pub(crate) fn native_string_prototype_replace(
 pub(crate) fn native_string_prototype_search(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if matches!(this_value, Value::Null | Value::Undefined) {
         return Err(string_method_null_error());
@@ -362,7 +364,7 @@ pub(crate) fn native_string_prototype_search(
 pub(crate) fn native_string_prototype_starts_with(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let value = search_receiver(this_value, env)?;
     let search_value = argument_values.first().cloned().unwrap_or(Value::Undefined);
@@ -398,7 +400,7 @@ fn string_replace_all(
     input: JsString,
     search: String,
     replacement: Replacement,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let matches = string_match_positions(&input, &search);
     replace_matches(input, matches, replacement, env)
@@ -408,7 +410,7 @@ fn regexp_replace_all(
     input: JsString,
     regexp: Value,
     replacement_value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let replacement = if matches!(replacement_value, Value::Function(_)) {
         Replacement::Function(Box::new(replacement_value))
@@ -488,7 +490,7 @@ fn string_first_match_position(input: &JsString, search: &str) -> Option<StringM
 fn regexp_match_positions(
     input: &JsString,
     regexp: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Vec<StringMatch>, RuntimeError> {
     regexp::regexp_set_last_index(&regexp, 0);
     let mut matches = Vec::new();
@@ -529,7 +531,7 @@ fn regexp_match_positions(
 fn regexp_first_match_position(
     input: &JsString,
     regexp: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Option<StringMatch>, RuntimeError> {
     regexp::regexp_set_last_index(&regexp, 0);
     let exec = property_value(regexp.clone(), "exec", env)?;
@@ -562,7 +564,7 @@ fn replace_matches(
     input: JsString,
     matches: Vec<StringMatch>,
     replacement: Replacement,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if !input.is_ascii() {
         return units::replace_matches(input, matches, replacement, env);
@@ -689,7 +691,7 @@ fn functional_replacement(
     function: Value,
     string_match: &StringMatch,
     input: JsString,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<String, RuntimeError> {
     let mut arguments = Vec::with_capacity(3 + string_match.captures.len());
     arguments.push(Value::String(string_match.matched.clone().into()));
@@ -700,7 +702,10 @@ fn functional_replacement(
     to_js_string_with_env(value, env)
 }
 
-fn regexp_match_index(match_value: &Value, env: &mut CallEnv) -> Result<usize, RuntimeError> {
+fn regexp_match_index(
+    match_value: &Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<usize, RuntimeError> {
     let index = property_value(match_value.clone(), "index", env)?;
     match index {
         Value::Number(number) if number.is_finite() && number > 0.0 => Ok(number.trunc() as usize),
@@ -708,7 +713,10 @@ fn regexp_match_index(match_value: &Value, env: &mut CallEnv) -> Result<usize, R
     }
 }
 
-fn regexp_value(pattern: Value, env: &mut CallEnv) -> Result<Value, RuntimeError> {
+fn regexp_value(
+    pattern: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<Value, RuntimeError> {
     if regexp::regexp_is_regexp(&pattern) {
         return Ok(pattern);
     }
@@ -722,7 +730,7 @@ fn regexp_value(pattern: Value, env: &mut CallEnv) -> Result<Value, RuntimeError
 fn regexp_value_with_flags(
     pattern: Value,
     flags: &str,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let constructor = env.get("RegExp").ok_or_else(|| RuntimeError {
         thrown: None,
@@ -739,7 +747,7 @@ fn regexp_value_with_flags(
 fn invoke_symbol_match_all(
     regexp: Value,
     input: JsString,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let Some(match_all_symbol) = symbol::match_all_symbol(env) else {
         return Err(RuntimeError {
@@ -760,7 +768,7 @@ fn invoke_symbol_match_all(
 fn reject_regexp_search_value(
     value: Value,
     method: &str,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<(), RuntimeError> {
     if regexp::regexp_is_regexp_with_env(value, env)? {
         return Err(RuntimeError {

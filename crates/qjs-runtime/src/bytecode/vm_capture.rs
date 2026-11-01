@@ -1,25 +1,25 @@
 //! Indexed shared-upvalue construction for nested functions.
 
-use crate::{Function, Value, function::Upvalue};
+use crate::function::BindingCell;
 
 use super::ir::Bytecode;
 use super::vm::Vm;
 
-impl Vm<'_> {
+impl Vm<'_, '_> {
     pub(super) fn captured_upvalues_for_function(
         &mut self,
         function_bytecode: &Bytecode,
         lexical_captures: &[(String, usize)],
-    ) -> Vec<Upvalue> {
+    ) -> Vec<BindingCell> {
         self.captured_upvalues_for_function_with_override(function_bytecode, lexical_captures, None)
     }
 
     pub(super) fn captured_upvalues_for_function_with_override(
         &mut self,
         function_bytecode: &Bytecode,
-        lexical_captures: &[(String, usize)],
-        binding_override: Option<(&str, &Upvalue)>,
-    ) -> Vec<Upvalue> {
+        _lexical_captures: &[(String, usize)],
+        binding_override: Option<(&str, &BindingCell)>,
+    ) -> Vec<BindingCell> {
         function_bytecode
             .locals
             .iter()
@@ -29,7 +29,8 @@ impl Vm<'_> {
             // including one opportunistically when a same-named outer/global
             // binding exists shifts every later lexical upvalue.
             .filter(|local| local.is_received_upvalue())
-            .filter_map(|local| {
+            .enumerate()
+            .filter_map(|(received, local)| {
                 if local.name == "this"
                     && let Some(cell) = self.env.derived_this_cell()
                 {
@@ -40,38 +41,20 @@ impl Vm<'_> {
                 {
                     return Some(upvalue.clone());
                 }
-                if self.in_parameter_prologue() {
-                    let marker_name = format!(
-                        "{}{}",
-                        crate::DIRECT_EVAL_PARAMETER_VAR_BINDING_PREFIX,
-                        local.name
-                    );
-                    if let Some(bindings) = self.env.deopt_bindings()
-                        && bindings.contains_key(&marker_name)
-                        && let Some(upvalue) = bindings.cell(&local.name)
-                    {
-                        return Some(upvalue);
+                match function_bytecode.binding_plan.received[received] {
+                    super::binding_captures::CaptureRoute::ParentLocal(slot) => {
+                        if self.bytecode.is_global_scope()
+                            && self.bytecode.local_is_body_hoist_only(slot.0)
+                        {
+                            return self.env.realm_binding_cell(&local.name);
+                        }
+                        return Some(self.ensure_upvalue_for_parent_slot(slot.0));
                     }
-                }
-                let parent_slot = lexical_captures
-                    .iter()
-                    .find(|(name, _)| name == &local.name)
-                    .map(|(_, slot)| *slot)
-                    .or_else(|| {
-                        self.bytecode.local_slot(&local.name).filter(|slot| {
-                            !(self.bytecode.local_is_compiler_temporary(*slot)
-                                || self.bytecode.is_global_scope()
-                                    && self.bytecode.local_is_body_hoist_only(*slot))
-                        })
-                    });
-                if let Some(slot) = parent_slot {
-                    debug_assert!(!self.bytecode.local_is_compiler_temporary(slot));
-                    if self.bytecode.is_global_scope()
-                        && self.bytecode.local_is_body_hoist_only(slot)
-                    {
-                        return self.env.realm_binding_cell(&local.name);
+                    super::binding_captures::CaptureRoute::ParentUpvalue(index) => {
+                        let slot = self.bytecode.received_upvalue_slots()[index];
+                        return Some(self.ensure_upvalue_for_parent_slot(slot));
                     }
-                    return Some(self.ensure_upvalue_for_parent_slot(slot));
+                    super::binding_captures::CaptureRoute::Named => {}
                 }
                 if let Some(upvalue) = self.env.module_import_cell(&local.name) {
                     return Some(upvalue);
@@ -79,14 +62,16 @@ impl Vm<'_> {
                 if self.bytecode.is_global_scope() {
                     return self.env.realm_binding_cell(&local.name);
                 }
-                self.env
-                    .module_live_binding_cell(&local.name)
-                    .or_else(|| self.env.frame_binding_cell(&local.name))
+                self.env.module_live_binding_cell(&local.name).or_else(|| {
+                    (local.name == "this")
+                        .then(|| self.env.derived_this_cell())
+                        .flatten()
+                })
             })
             .collect()
     }
 
-    pub(super) fn ensure_upvalue_for_parent_slot(&mut self, slot: usize) -> Upvalue {
+    pub(super) fn ensure_upvalue_for_parent_slot(&mut self, slot: usize) -> BindingCell {
         if let Some(upvalue) = self.local_upvalue_cell(slot) {
             return upvalue.clone();
         }
@@ -96,39 +81,84 @@ impl Vm<'_> {
             .get(slot)
             .is_some_and(|local| local.is_received_upvalue())
         {
-            let index = self.bytecode.locals[..slot]
-                .iter()
-                .filter(|local| local.is_received_upvalue())
-                .count();
+            let index = self.bytecode.binding_plan.received_indices[slot]
+                .expect("received slot has a positional route");
             if let Some(upvalue) = self.upvalues.get(index) {
                 return upvalue.clone();
             }
         }
-        let value = self
-            .locals
-            .get(slot)
-            .and_then(Option::as_ref)
-            .cloned()
-            .unwrap_or_else(|| Value::Function(Function::uninitialized_lexical_marker()));
-        let upvalue = Upvalue::new(value);
-        if let Some(local_upvalue) = self.local_upvalues.get_mut(slot) {
-            *local_upvalue = Some(upvalue.clone());
+        let value = self.locals.get_mut(slot).and_then(Option::take);
+        let upvalue = crate::binding::BindingCell::with_metadata(
+            self.bytecode
+                .binding_meta(slot)
+                .expect("exposed declaration metadata"),
+            value,
+        );
+        if self.local_upvalues.len() <= slot {
+            self.local_upvalues.resize_with(slot + 1, || None);
         }
+        self.local_upvalues[slot] = Some(upvalue.clone());
         if slot < u128::BITS as usize {
             self.authoritative_slots &= !(1_u128 << slot);
         }
+        if self.binding_scope.is_none() {
+            self.binding_scope = self
+                .bytecode
+                .binding_plan
+                .pc_scopes
+                .get(self.ip.saturating_sub(1))
+                .copied();
+        }
+        self.slow_flags |= super::vm::SLOW_AUTHORITY
+            | if self.binding_scope.is_some() {
+                super::vm::SLOW_SCOPES
+            } else {
+                0
+            };
+        self.verify_binding_authority();
+        crate::diagnostics::count!(binding_promotions);
         upvalue
     }
 
     pub(super) fn in_parameter_prologue(&self) -> bool {
-        if self.bytecode.global_scope {
-            return false;
+        self.bytecode
+            .binding_plan
+            .prologue_end
+            .is_some_and(|end| self.ip <= end)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Value;
+
+    #[test]
+    fn capture_moves_the_value_and_tdz_without_retaining_a_slot_copy() {
+        for source in [
+            "function f() { let value = 4; return () => value; } f;",
+            "function f() { return () => value; let value = 4; } f;",
+        ] {
+            let Value::Function(function) = crate::eval(source).unwrap() else {
+                panic!("function");
+            };
+            let bytecode = function.bytecode.as_ref().unwrap();
+            let slot = bytecode.local_slot("value").unwrap();
+            let activation = crate::function::enter_indexed_activation(&function);
+            let mut runtime = crate::context::RuntimeServices::for_realm(activation.realm());
+            runtime.binding_debug.force = false;
+            let mut vm = Vm::new_with_globals(bytecode, &mut runtime, activation);
+            assert!(vm.local_upvalue_cell(slot).is_none());
+            let Value::Function(closure) = vm.run().unwrap() else {
+                panic!("closure");
+            };
+            let cell = vm.local_upvalue_cell(slot).unwrap();
+            assert!(cell.ptr_eq(&closure.upvalues[0]));
+            assert!(vm.locals[slot].is_none());
+            assert_eq!(
+                cell.is_initialized(),
+                source.contains("let value = 4; return")
+            );
         }
-        if !self.bytecode.locals.iter().any(|local| local.parameter) {
-            return false;
-        }
-        !self.bytecode.code[..self.ip]
-            .iter()
-            .any(|op| matches!(op, super::ir::Op::FunctionPrologueEnd))
     }
 }

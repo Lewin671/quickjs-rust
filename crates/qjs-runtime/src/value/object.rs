@@ -70,11 +70,11 @@ impl ModuleNamespaceBindings {
         }
     }
 
-    fn value_for_export(&self, export_name: &str) -> Option<Value> {
+    fn value_for_export(&self, export_name: &str) -> Option<Result<Value, RuntimeError>> {
         if let Some((lexical, binding_name)) = self.aliases.get(export_name) {
-            return lexical.get(binding_name);
+            return lexical.cell(binding_name).map(|cell| cell.read());
         }
-        self.lexical.get(export_name)
+        self.lexical.cell(export_name).map(|cell| cell.read())
     }
 }
 
@@ -956,13 +956,7 @@ impl ObjectRef {
             && let Some(bindings) = cold.module_namespace_bindings.borrow().as_ref()
             && let Some(value) = bindings.value_for_export(key)
         {
-            if value.is_uninitialized_lexical_marker() {
-                return Err(RuntimeError {
-                    thrown: None,
-                    message: format!("ReferenceError: undefined identifier `{key}`"),
-                });
-            }
-            property.value = value;
+            property.value = value?;
         }
         Ok(Some(property))
     }

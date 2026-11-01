@@ -1,0 +1,86 @@
+[
+  {
+    "name": "finally-catch-initialization",
+    "source": "var n=0;try{try{throw undefined}catch([x]){}finally{n++}}catch(e){}print(n);",
+    "modes": {
+      "candidate": {
+        "exit": 0,
+        "stdout": "1\nUndefined\n",
+        "stderr": ""
+      },
+      "ng": {
+        "exit": 0,
+        "stdout": "0\n",
+        "stderr": ""
+      },
+      "node": {
+        "exit": 0,
+        "stdout": "1\n",
+        "stderr": ""
+      }
+    }
+  },
+  {
+    "name": "rhs-before-constant-write",
+    "source": "var f;{f=()=>{y=b;};const y=1;}try{f()}catch(e){print(e.name)}",
+    "modes": {
+      "candidate": {
+        "exit": 0,
+        "stdout": "ReferenceError\nUndefined\n",
+        "stderr": ""
+      },
+      "ng": {
+        "exit": 0,
+        "stdout": "ReferenceError\n",
+        "stderr": ""
+      },
+      "node": {
+        "exit": 0,
+        "stdout": "ReferenceError\n",
+        "stderr": ""
+      }
+    }
+  },
+  {
+    "name": "eval-function-catch-identity",
+    "source": "var f;try{throw 0}catch(a){eval('function a(){};var f=()=>a;')}print(typeof f());",
+    "modes": {
+      "candidate": {
+        "exit": 0,
+        "stdout": "number\nUndefined\n",
+        "stderr": ""
+      },
+      "ng": {
+        "exit": 0,
+        "stdout": "function\n",
+        "stderr": ""
+      },
+      "node": {
+        "exit": 0,
+        "stdout": "number\n",
+        "stderr": ""
+      }
+    }
+  },
+  {
+    "name": "with-get-protocol",
+    "source": "var log=[];var p=new Proxy({x:1},{has(o,k){if(k==='x')log.push('has');return k in o},get(o,k){if(k==='x')log.push('get');return o[k]}});with(p){x;}print(log.join(','));",
+    "modes": {
+      "candidate": {
+        "exit": 0,
+        "stdout": "has,has,get\nUndefined\n",
+        "stderr": ""
+      },
+      "ng": {
+        "exit": 0,
+        "stdout": "has,get\n",
+        "stderr": ""
+      },
+      "node": {
+        "exit": 0,
+        "stdout": "has,get\n",
+        "stderr": ""
+      }
+    }
+  }
+]

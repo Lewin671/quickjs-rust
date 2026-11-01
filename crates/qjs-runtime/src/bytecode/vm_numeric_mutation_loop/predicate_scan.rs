@@ -412,7 +412,7 @@ impl DenseNumericPredicateScanPlan {
             || (self.false_path_start..=self.backedge).contains(&ip)
     }
 
-    pub(super) fn try_run(&self, vm: &mut Vm<'_>) -> PredicateScanRun {
+    pub(super) fn try_run(&self, vm: &mut Vm<'_, '_>) -> PredicateScanRun {
         #[cfg(test)]
         PLAN_ATTEMPTS.set(PLAN_ATTEMPTS.get() + 1);
         if vm.direct_eval_with_stack
@@ -681,22 +681,23 @@ fn apply_binary(operation: BinaryOp, left: f64, right: f64) -> Option<ScanValue>
     })
 }
 
-fn local_number(vm: &Vm<'_>, slot: usize) -> Option<f64> {
+fn local_number(vm: &Vm<'_, '_>, slot: usize) -> Option<f64> {
     match vm.local_slot_value(slot)? {
         Value::Number(value) => Some(value),
         _ => None,
     }
 }
 
-fn set_local_number(vm: &mut Vm<'_>, slot: usize, value: f64) {
+fn set_local_number(vm: &mut Vm<'_, '_>, slot: usize, value: f64) {
     vm.locals[slot] = Some(Value::Number(value));
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Value;
     use crate::bytecode::compiler;
-    use crate::{Value, eval};
+    use crate::bytecode::vm_binding_debug::eval_with_slots_for_test as eval;
 
     fn nested_function(source: &str) -> Bytecode {
         let script = qjs_parser::parse_script(source).expect("source should parse");

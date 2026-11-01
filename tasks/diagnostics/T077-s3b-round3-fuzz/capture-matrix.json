@@ -1,0 +1,72 @@
+[
+  {
+    "fixture": "tests/fixtures/compare-qjs/invalidated-global-self-capture.js",
+    "modes": {
+      "ng": {
+        "exit": 0,
+        "stdout": "ReferenceError:7:9\n",
+        "stderr": "",
+        "binary_sha256": "4997edb9a3ce76f7458c2f32a6230456f49e4d5d49f725ec1d1f9f274032d49f"
+      },
+      "base": {
+        "exit": 0,
+        "stdout": "ReferenceError:7:9\n",
+        "stderr": "",
+        "binary_sha256": "1193f7e66fff70aafaec4c682cc268c18ee28bf1bdfa01fb3ff60fc095c59ad4"
+      },
+      "default": {
+        "exit": 0,
+        "stdout": "ReferenceError:7:9\n",
+        "stderr": "",
+        "binary_sha256": "81b0360f4c30e6689f838d0dd19419a1a103b792bd17f6457ff0a24738accbd6"
+      },
+      "off": {
+        "exit": 0,
+        "stdout": "ReferenceError:7:9\n",
+        "stderr": "",
+        "binary_sha256": "81b0360f4c30e6689f838d0dd19419a1a103b792bd17f6457ff0a24738accbd6"
+      },
+      "verify": {
+        "exit": 0,
+        "stdout": "ReferenceError:7:9\n",
+        "stderr": "",
+        "binary_sha256": "924ebf9476235b95298ff4309b0eb6d5ea89bd2cad149cc538da598eaeb8f633"
+      }
+    }
+  },
+  {
+    "fixture": "tests/fixtures/compare-modules/invalidated-global-capture-jobs.mjs",
+    "modes": {
+      "ng": {
+        "exit": 0,
+        "stdout": "ReferenceError\n",
+        "stderr": "",
+        "binary_sha256": "4997edb9a3ce76f7458c2f32a6230456f49e4d5d49f725ec1d1f9f274032d49f"
+      },
+      "base": {
+        "exit": 0,
+        "stdout": "ReferenceError\n",
+        "stderr": "",
+        "binary_sha256": "1193f7e66fff70aafaec4c682cc268c18ee28bf1bdfa01fb3ff60fc095c59ad4"
+      },
+      "default": {
+        "exit": 0,
+        "stdout": "ReferenceError\n",
+        "stderr": "",
+        "binary_sha256": "81b0360f4c30e6689f838d0dd19419a1a103b792bd17f6457ff0a24738accbd6"
+      },
+      "off": {
+        "exit": 0,
+        "stdout": "ReferenceError\n",
+        "stderr": "",
+        "binary_sha256": "81b0360f4c30e6689f838d0dd19419a1a103b792bd17f6457ff0a24738accbd6"
+      },
+      "verify": {
+        "exit": 0,
+        "stdout": "ReferenceError\n",
+        "stderr": "",
+        "binary_sha256": "924ebf9476235b95298ff4309b0eb6d5ea89bd2cad149cc538da598eaeb8f633"
+      }
+    }
+  }
+]

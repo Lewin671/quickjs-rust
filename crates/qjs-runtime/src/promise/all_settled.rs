@@ -1,3 +1,5 @@
+use crate::function::NativeCaptures;
+use crate::function::PromiseElementCaptures;
 use std::collections::HashMap;
 
 use crate::{
@@ -5,20 +7,18 @@ use crate::{
 };
 
 use super::{
-    PROMISE_ALL_ALREADY_CALLED, PROMISE_ALL_CAPABILITY_RESOLVE, PROMISE_ALL_INDEX,
-    PROMISE_ALL_REMAINING, PROMISE_ALL_VALUES, PROMISE_FULFILLED, PROMISE_REJECTED,
+    PROMISE_FULFILLED, PROMISE_REJECTED,
     all::already_called,
     capability::PromiseCapability,
     perform::{self, ElementHandler},
 };
-use crate::CallEnv;
 
 /// `Promise.allSettled` (ES2023 27.2.4.2): always fulfils, with an array of
 /// `{ status, value }` / `{ status, reason }` records once every input settles.
 pub(crate) fn native_promise_all_settled(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let iterable = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let handler = AllSettledHandler {
@@ -38,7 +38,7 @@ impl ElementHandler for AllSettledHandler {
         &mut self,
         index: usize,
         capability: &PromiseCapability,
-        _env: &mut CallEnv,
+        _env: &mut crate::context::Context<'_>,
     ) -> Result<(Value, Value), RuntimeError> {
         self.values.set(index, Value::Undefined);
         perform::increment_remaining(&self.remaining);
@@ -72,7 +72,7 @@ impl ElementHandler for AllSettledHandler {
         &mut self,
         _count: usize,
         capability: &PromiseCapability,
-        env: &mut CallEnv,
+        env: &mut crate::context::Context<'_>,
     ) -> Result<(), RuntimeError> {
         if perform::decrement_remaining(&self.remaining) == 0.0 {
             super::capability::capability_resolve(
@@ -88,7 +88,7 @@ impl ElementHandler for AllSettledHandler {
 pub(crate) fn native_promise_all_settled_resolve_element(
     function: &Function,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     settle_element(function, argument_values, env, PROMISE_FULFILLED)
 }
@@ -96,7 +96,7 @@ pub(crate) fn native_promise_all_settled_resolve_element(
 pub(crate) fn native_promise_all_settled_reject_element(
     function: &Function,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     settle_element(function, argument_values, env, PROMISE_REJECTED)
 }
@@ -111,68 +111,41 @@ fn element_function(
     capability: &PromiseCapability,
 ) -> Function {
     let mut function = Function::new_native(None, 1, native, false, realm);
-    function.insert_native_context(PROMISE_ALL_INDEX.to_owned(), Value::Number(index as f64));
-    function.insert_native_context(PROMISE_ALL_VALUES.to_owned(), Value::Array(values.clone()));
-    function.insert_native_context(
-        PROMISE_ALL_REMAINING.to_owned(),
-        Value::Object(remaining.clone()),
-    );
-    function.insert_native_context(
-        PROMISE_ALL_ALREADY_CALLED.to_owned(),
-        Value::Object(already_called.clone()),
-    );
-    function.insert_native_context(
-        PROMISE_ALL_CAPABILITY_RESOLVE.to_owned(),
-        capability.resolve.clone(),
-    );
+    function.set_native_captures(NativeCaptures::PromiseElement(PromiseElementCaptures {
+        index,
+        values: values.clone(),
+        remaining: remaining.clone(),
+        already_called: already_called.clone(),
+        settle: capability.resolve.clone(),
+        aggregate_error: None,
+    }));
     function
 }
 
 fn settle_element(
     function: &Function,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     state: &str,
 ) -> Result<Value, RuntimeError> {
     if already_called(function) {
         return Ok(Value::Undefined);
     }
-    let index = match function.native_context.get(PROMISE_ALL_INDEX) {
-        Some(Value::Number(index)) if *index >= 0.0 => *index as usize,
-        _ => {
-            return Err(RuntimeError {
-                thrown: None,
-                message: "Promise.allSettled element is missing its index".to_owned(),
-            });
-        }
-    };
-    let values = match function.native_context.get(PROMISE_ALL_VALUES).cloned() {
-        Some(Value::Array(values)) => values,
-        _ => {
-            return Err(RuntimeError {
-                thrown: None,
-                message: "Promise.allSettled element is missing values".to_owned(),
-            });
-        }
-    };
-    let remaining = match function.native_context.get(PROMISE_ALL_REMAINING).cloned() {
-        Some(Value::Object(remaining)) => remaining,
-        _ => {
-            return Err(RuntimeError {
-                thrown: None,
-                message: "Promise.allSettled element is missing remaining count".to_owned(),
-            });
-        }
-    };
+    let captures = function
+        .native_captures()
+        .promise_element()
+        .ok_or_else(|| RuntimeError {
+            thrown: None,
+            message: "Promise.allSettled element is missing its capture payload".into(),
+        })?;
+    let index = captures.index;
+    let values = captures.values.clone();
+    let remaining = captures.remaining.clone();
 
     let settled_value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     values.set(index, settled_result_object(state, settled_value, env));
     if perform::decrement_remaining(&remaining) == 0.0 {
-        let resolve = function
-            .native_context
-            .get(PROMISE_ALL_CAPABILITY_RESOLVE)
-            .cloned()
-            .unwrap_or(Value::Undefined);
+        let resolve = captures.settle.clone();
         call_function(
             resolve,
             Value::Undefined,
@@ -187,7 +160,7 @@ fn settle_element(
 /// Builds an ordinary object `{ status, value }` or `{ status, reason }` with
 /// the spec property order, `%Object.prototype%`, and default data attributes
 /// (writable, enumerable, configurable).
-fn settled_result_object(state: &str, value: Value, env: &CallEnv) -> Value {
+fn settled_result_object(state: &str, value: Value, env: &crate::context::Context<'_>) -> Value {
     let object = ObjectRef::with_prototype(
         HashMap::new(),
         crate::object_prototype(env),

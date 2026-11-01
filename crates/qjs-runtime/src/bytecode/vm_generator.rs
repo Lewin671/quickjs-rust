@@ -18,7 +18,6 @@ use super::vm::{ColdFrame, Slot, Vm};
 use super::vm_dispose::DisposeResource;
 use super::vm_result::Completion;
 use super::vm_try::TryFrame;
-use crate::CallEnv;
 
 /// The lifecycle state of a generator object (ES2023 27.5.3 [[GeneratorState]]).
 pub(crate) enum GeneratorState {
@@ -36,23 +35,25 @@ pub(crate) enum GeneratorState {
 /// The captured call frame for a not-yet-started generator.
 pub(crate) struct GeneratorStart {
     pub(crate) bytecode: Rc<Bytecode>,
-    pub(crate) env: CallEnv,
-    pub(crate) upvalues: Vec<crate::function::Upvalue>,
+    pub(crate) env: crate::context::ActivationContext,
+    pub(crate) upvalues: Vec<crate::function::BindingCell>,
     pub(crate) with_stack: Vec<Value>,
-    pub(crate) immutable_function_name: Option<String>,
 }
 
 /// A snapshot of a generator body's VM state, taken at a `yield`.
 pub(crate) struct GeneratorSnapshot {
+    class_regions: Vec<super::vm_class_region::ClassKeyContinuation>,
+    scope_instances: Option<Box<super::vm_scopes::ScopeInstances>>,
+    active_reference_lifetimes: Vec<usize>,
+    resolved_bindings: Vec<Option<crate::binding::ResolvedReference>>,
     bytecode: Rc<Bytecode>,
     ip: usize,
     stack: Vec<Value>,
     locals: Vec<Slot>,
-    local_upvalues: Vec<Option<crate::function::Upvalue>>,
-    upvalues: Vec<crate::function::Upvalue>,
-    env: CallEnv,
+    local_upvalues: Vec<Option<crate::function::BindingCell>>,
+    upvalues: Vec<crate::function::BindingCell>,
+    env: crate::context::ActivationContext,
     with_stack: Vec<Value>,
-    immutable_function_name: Option<String>,
     sloppy_global_names: Vec<String>,
     try_stack: Vec<TryFrame>,
     disposable_scopes: Vec<Vec<DisposeResource>>,
@@ -117,7 +118,7 @@ pub(crate) fn is_suspended_at_plain_yield(generator: &ObjectRef) -> bool {
     )
 }
 
-impl Vm<'_> {
+impl Vm<'_, '_> {
     /// Captures the running generator body's state at a `yield`.
     fn into_snapshot(
         self,
@@ -125,12 +126,15 @@ impl Vm<'_> {
         suspension: SuspensionKind,
     ) -> GeneratorSnapshot {
         let mut frame = self.into_frame();
-        let immutable_function_name = frame.env.immutable_function_name().map(str::to_owned);
         let cold = frame
             .cold
             .take()
             .map_or_else(ColdFrame::default, |cold| *cold);
         GeneratorSnapshot {
+            class_regions: cold.class_regions,
+            scope_instances: frame.scope_instances.into_inner(),
+            active_reference_lifetimes: cold.active_reference_lifetimes,
+            resolved_bindings: cold.resolved_bindings,
             bytecode,
             ip: frame.ip,
             stack: frame.stack.take(),
@@ -139,7 +143,6 @@ impl Vm<'_> {
             upvalues: frame.upvalues,
             env: frame.env,
             with_stack: cold.with_stack,
-            immutable_function_name,
             sloppy_global_names: cold.sloppy_global_names,
             try_stack: cold.try_stack,
             disposable_scopes: cold.disposable_scopes,
@@ -158,20 +161,24 @@ impl Vm<'_> {
 /// observable, instead of on the first `next`.
 pub(crate) fn start_suspended_at_body(
     start: GeneratorStart,
-    _caller_env: &mut CallEnv,
+    inputs: Option<crate::function::CallInputs<'_>>,
+    _caller_env: &mut crate::context::Context<'_>,
 ) -> Result<GeneratorState, RuntimeError> {
     let GeneratorStart {
         bytecode,
         env,
         upvalues,
         with_stack,
-        immutable_function_name,
     } = start;
-    let mut vm = Vm::new_with_globals_upvalues_and_with_stack(&bytecode, env, upvalues, with_stack);
-    if let Some(name) = immutable_function_name {
-        vm.env.set_immutable_function_name(name);
-        vm.refresh_authoritative_slots();
-    }
+    let mut vm = Vm::with_frame_bytecode(
+        super::frame_program::FrameBytecode::Borrowed(&bytecode),
+        _caller_env.runtime,
+        env,
+        upvalues,
+        with_stack,
+        None,
+        inputs,
+    );
     vm.stop_at_prologue = true;
     let result = vm.run_completion();
     match result {
@@ -195,20 +202,24 @@ pub(crate) fn start_suspended_at_body(
 /// Drives a generator from `SuspendedStart`: builds the body VM and runs it.
 fn run_from_start(
     start: GeneratorStart,
-    _caller_env: &mut CallEnv,
+    inputs: Option<crate::function::CallInputs<'_>>,
+    _caller_env: &mut crate::context::Context<'_>,
 ) -> Result<(GeneratorState, GeneratorOutcome), RuntimeError> {
     let GeneratorStart {
         bytecode,
         env,
         upvalues,
         with_stack,
-        immutable_function_name,
     } = start;
-    let mut vm = Vm::new_with_globals_upvalues_and_with_stack(&bytecode, env, upvalues, with_stack);
-    if let Some(name) = immutable_function_name {
-        vm.env.set_immutable_function_name(name);
-        vm.refresh_authoritative_slots();
-    }
+    let mut vm = Vm::with_frame_bytecode(
+        super::frame_program::FrameBytecode::Borrowed(&bytecode),
+        _caller_env.runtime,
+        env,
+        upvalues,
+        with_stack,
+        None,
+        inputs,
+    );
     let result = vm.run_completion();
     drive(result, vm, &bytecode)
 }
@@ -217,25 +228,34 @@ fn run_from_start(
 fn run_from_yield(
     snapshot: GeneratorSnapshot,
     resume: Resume,
-    _caller_env: &mut CallEnv,
+    _caller_env: &mut crate::context::Context<'_>,
 ) -> Result<(GeneratorState, GeneratorOutcome), RuntimeError> {
     let bytecode = snapshot.bytecode.clone();
     let mut vm = Vm::new_with_globals_upvalues_and_with_stack(
         &bytecode,
+        _caller_env.runtime,
         snapshot.env,
         snapshot.upvalues,
         snapshot.with_stack,
     );
-    if let Some(name) = snapshot.immutable_function_name {
-        vm.env.set_immutable_function_name(name);
-    }
+    *vm.scope_instances.borrow_mut() = snapshot.scope_instances;
     vm.ip = snapshot.ip;
     vm.stack.replace(snapshot.stack);
     vm.locals = snapshot.locals;
     vm.local_upvalues = snapshot.local_upvalues;
+    vm.binding_scope = vm
+        .bytecode
+        .binding_plan
+        .pc_scopes
+        .get(vm.ip.saturating_sub(1))
+        .copied();
     vm.refresh_authoritative_slots();
+    vm.verify_binding_authority();
     {
         let cold = vm.cold_mut();
+        cold.class_regions = snapshot.class_regions;
+        cold.active_reference_lifetimes = snapshot.active_reference_lifetimes;
+        cold.resolved_bindings = snapshot.resolved_bindings;
         cold.sloppy_global_names = snapshot.sloppy_global_names;
         cold.pending_throw = snapshot.pending_throw;
         cold.pending_return = snapshot.pending_return;
@@ -243,6 +263,11 @@ fn run_from_yield(
         cold.try_stack = snapshot.try_stack;
         cold.disposable_scopes = snapshot.disposable_scopes;
     }
+
+    vm.active_reference_count = vm
+        .cold()
+        .map_or(0, |cold| cold.active_reference_lifetimes.len());
+    vm.reference_hooks |= vm.active_reference_count != 0;
 
     // A suspension inside a `yield*` forwards the resume to the inner iterator:
     // the re-entered `Op::YieldDelegate` reads `resume_mode` and decides how to
@@ -363,7 +388,7 @@ fn run_from_yield(
 /// name-based capture write-back.
 fn drive(
     result: Result<Completion, RuntimeError>,
-    vm: Vm<'_>,
+    vm: Vm<'_, '_>,
     bytecode: &Rc<Bytecode>,
 ) -> Result<(GeneratorState, GeneratorOutcome), RuntimeError> {
     match result {
@@ -439,7 +464,7 @@ fn drive(
 
 fn drive_with_return_already_awaited(
     result: Result<Completion, RuntimeError>,
-    vm: Vm<'_>,
+    vm: Vm<'_, '_>,
     bytecode: &Rc<Bytecode>,
 ) -> Result<(GeneratorState, GeneratorOutcome), RuntimeError> {
     match result {
@@ -457,7 +482,28 @@ fn drive_with_return_already_awaited(
 pub(crate) fn resume_generator(
     generator: &ObjectRef,
     resume: Resume,
-    caller_env: &mut CallEnv,
+    caller_env: &mut crate::context::Context<'_>,
+) -> Result<GeneratorOutcome, RuntimeError> {
+    resume_with_inputs(generator, resume, None, caller_env)
+}
+
+pub(crate) fn start_with_call_inputs(
+    generator: &ObjectRef,
+    inputs: Option<crate::function::CallInputs<'_>>,
+    caller_env: &mut crate::context::Context<'_>,
+) -> Result<GeneratorOutcome, RuntimeError> {
+    resume_with_inputs(
+        generator,
+        Resume::Next(Value::Undefined),
+        inputs,
+        caller_env,
+    )
+}
+fn resume_with_inputs(
+    generator: &ObjectRef,
+    resume: Resume,
+    inputs: Option<crate::function::CallInputs<'_>>,
+    caller_env: &mut crate::context::Context<'_>,
 ) -> Result<GeneratorOutcome, RuntimeError> {
     // Take the state out behind the re-entrancy guard: a nested `next` while the
     // body runs observes `Executing` and is rejected, and we never hold a borrow
@@ -494,7 +540,7 @@ pub(crate) fn resume_generator(
             // completes the generator without running the body; a `throw(v)`
             // before start completes it and rethrows.
             match resume {
-                Resume::Next(_) => finish(generator, run_from_start(*start, caller_env)),
+                Resume::Next(_) => finish(generator, run_from_start(*start, inputs, caller_env)),
                 Resume::Return(value) => {
                     *generator.generator_state().borrow_mut() = Some(GeneratorState::Completed);
                     Ok(GeneratorOutcome::Return(value))

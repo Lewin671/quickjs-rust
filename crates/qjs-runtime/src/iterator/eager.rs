@@ -9,7 +9,6 @@ use crate::{
 };
 
 use super::protocol::{iterator_close_on_throw, iterator_step, iterator_value};
-use crate::CallEnv;
 
 fn iterator_receiver(this_value: &Value, method: &str) -> Result<Value, RuntimeError> {
     if !matches!(this_value, Value::Object(_)) {
@@ -25,7 +24,7 @@ fn iterator_receiver(this_value: &Value, method: &str) -> Result<Value, RuntimeE
 fn iterator_direct(
     this_value: &Value,
     method: &str,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<(Value, Value), RuntimeError> {
     let iterator = iterator_receiver(this_value, method)?;
     let next = property_value(iterator.clone(), "next", env)?;
@@ -36,7 +35,7 @@ fn require_callback(
     argument_values: &[Value],
     iterator: &Value,
     method: &str,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let callback = argument_values.first().cloned().unwrap_or(Value::Undefined);
     if !matches!(callback, Value::Function(_)) {
@@ -54,7 +53,7 @@ pub(super) fn native_eager_helper(
     native: NativeFunction,
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     match native {
         NativeFunction::IteratorPrototypeReduce => reduce(this_value, argument_values, env),
@@ -88,7 +87,7 @@ pub(super) fn native_eager_helper(
 fn reduce(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let iterator = iterator_receiver(&this_value, "reduce")?;
     let reducer = require_callback(argument_values, &iterator, "reduce", env)?;
@@ -134,7 +133,10 @@ fn reduce(
     Ok(accumulator)
 }
 
-fn to_array(this_value: Value, env: &mut CallEnv) -> Result<Value, RuntimeError> {
+fn to_array(
+    this_value: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<Value, RuntimeError> {
     let (iterator, next) = iterator_direct(&this_value, "toArray", env)?;
     let mut items = Vec::new();
     while let Some(result) = iterator_step(&iterator, &next, env)? {
@@ -146,7 +148,7 @@ fn to_array(this_value: Value, env: &mut CallEnv) -> Result<Value, RuntimeError>
 fn for_each(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let iterator = iterator_receiver(&this_value, "forEach")?;
     let callback = require_callback(argument_values, &iterator, "forEach", env)?;
@@ -178,7 +180,7 @@ enum PredicateKind {
 fn predicate(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     method: &str,
     kind: PredicateKind,
 ) -> Result<Value, RuntimeError> {

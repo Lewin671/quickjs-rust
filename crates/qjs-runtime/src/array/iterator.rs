@@ -6,7 +6,6 @@ use crate::{
 };
 
 use super::array_like::array_like_receiver;
-use crate::CallEnv;
 
 const ITERATED_OBJECT: &str = "\0array_iterator_object";
 const ITERATOR_NEXT_INDEX: &str = "\0array_iterator_next_index";
@@ -16,7 +15,7 @@ const ITERATOR_KIND_KEY: &str = "key";
 const ITERATOR_KIND_VALUE: &str = "value";
 const ITERATOR_KIND_KEY_VALUE: &str = "key+value";
 
-pub(crate) fn array_iterator_next_is_native(env: &CallEnv) -> bool {
+pub(crate) fn array_iterator_next_is_native(env: &crate::context::Context<'_>) -> bool {
     let Some(prototype) = crate::iterator::builtin_iterator_prototype(
         env,
         crate::iterator::BuiltinIteratorKind::Array,
@@ -38,7 +37,7 @@ pub(crate) fn array_iterator_next_is_native(env: &CallEnv) -> bool {
 
 pub(crate) fn native_array_prototype_entries(
     this_value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     array_iterator(
         this_value,
@@ -50,14 +49,14 @@ pub(crate) fn native_array_prototype_entries(
 
 pub(crate) fn native_array_prototype_keys(
     this_value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     array_iterator(this_value, env, "Array.prototype.keys", ITERATOR_KIND_KEY)
 }
 
 pub(crate) fn native_array_prototype_values(
     this_value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     array_iterator(
         this_value,
@@ -67,21 +66,27 @@ pub(crate) fn native_array_prototype_values(
     )
 }
 
-pub(crate) fn array_key_iterator(receiver: Value, env: &mut CallEnv) -> Value {
+pub(crate) fn array_key_iterator(receiver: Value, env: &mut crate::context::Context<'_>) -> Value {
     array_iterator_from_receiver(receiver, env, ITERATOR_KIND_KEY)
 }
 
-pub(crate) fn array_value_iterator(receiver: Value, env: &mut CallEnv) -> Value {
+pub(crate) fn array_value_iterator(
+    receiver: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Value {
     array_iterator_from_receiver(receiver, env, ITERATOR_KIND_VALUE)
 }
 
-pub(crate) fn array_key_value_iterator(receiver: Value, env: &mut CallEnv) -> Value {
+pub(crate) fn array_key_value_iterator(
+    receiver: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Value {
     array_iterator_from_receiver(receiver, env, ITERATOR_KIND_KEY_VALUE)
 }
 
 fn array_iterator(
     this_value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     context: &str,
     kind: &str,
 ) -> Result<Value, RuntimeError> {
@@ -97,7 +102,11 @@ fn array_iterator(
     Ok(array_iterator_from_receiver(receiver, env, kind))
 }
 
-fn array_iterator_from_receiver(receiver: Value, env: &mut CallEnv, kind: &str) -> Value {
+fn array_iterator_from_receiver(
+    receiver: Value,
+    env: &mut crate::context::Context<'_>,
+    kind: &str,
+) -> Value {
     // `%ArrayIteratorPrototype%` inherits `%Iterator.prototype%`, so the
     // instance gets `next`, `Symbol.iterator`, and the iterator helpers through
     // the chain rather than per-instance own properties.
@@ -118,7 +127,7 @@ fn array_iterator_from_receiver(receiver: Value, env: &mut CallEnv, kind: &str) 
 
 pub(crate) fn native_array_iterator_next(
     this_value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let Value::Object(iterator) = this_value else {
         return Err(RuntimeError {

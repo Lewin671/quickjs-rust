@@ -12,20 +12,18 @@
 use crate::bytecode::ir::Bytecode;
 use crate::bytecode::typed_loop::LoopFrame;
 use crate::bytecode::vm_bindings::TypedLoopSloppyGlobalWrite;
-use crate::function::{CallEnv, Upvalue};
+use crate::function::BindingCell;
 use crate::{ArrayRef, ObjectRef, Property, RuntimeError, Value};
 
-pub(super) struct WideLoopFrame<'a> {
+pub(super) struct WideLoopFrame<'a, 's> {
     pub(super) bytecode: &'a Bytecode,
-    pub(super) env: &'a CallEnv,
+    pub(super) env: &'a mut crate::context::Context<'s>,
     /// Registers `0..locals.len()` of the activation.
     pub(super) locals: &'a mut [Value],
     pub(super) own_locals: u128,
     /// The cells the activation received, indexed through the bytecode.
-    pub(super) upvalues: &'a [Upvalue],
+    pub(super) upvalues: &'a [BindingCell],
     pub(super) upvalue_slots: u128,
-    /// The activation's receiver, which a program reads as the `this` name.
-    pub(super) this_value: Option<&'a Value>,
     /// Where the program left the loop and the operand stack it left.
     pub(super) resume_ip: Option<usize>,
     pub(super) deoptimized: bool,
@@ -44,16 +42,15 @@ pub(super) struct WideLoopFrame<'a> {
     array_prototype: Option<Option<(ObjectRef, bool)>>,
 }
 
-impl<'a> WideLoopFrame<'a> {
+impl<'a, 's> WideLoopFrame<'a, 's> {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn new(
         bytecode: &'a Bytecode,
-        env: &'a CallEnv,
+        env: &'a mut crate::context::Context<'s>,
         locals: &'a mut [Value],
         own_locals: u128,
-        upvalues: &'a [Upvalue],
+        upvalues: &'a [BindingCell],
         upvalue_slots: u128,
-        this_value: Option<&'a Value>,
         stack: &'a mut [Value],
     ) -> Self {
         Self {
@@ -63,7 +60,6 @@ impl<'a> WideLoopFrame<'a> {
             own_locals,
             upvalues,
             upvalue_slots,
-            this_value,
             resume_ip: None,
             deoptimized: false,
             stack,
@@ -81,7 +77,7 @@ impl<'a> WideLoopFrame<'a> {
             && self.own_locals & (1_u128 << slot) != 0
     }
 
-    fn cell(&self, slot: usize) -> Option<&Upvalue> {
+    fn cell(&self, slot: usize) -> Option<&BindingCell> {
         let bit = (slot < u128::BITS as usize).then(|| 1_u128 << slot)?;
         (self.upvalue_slots & bit != 0).then_some(())?;
         let index = self.bytecode.cell_received_upvalue_index(slot)?;
@@ -89,9 +85,12 @@ impl<'a> WideLoopFrame<'a> {
     }
 }
 
-impl LoopFrame for WideLoopFrame<'_> {
-    fn loop_env(&self) -> &CallEnv {
-        self.env
+impl LoopFrame for WideLoopFrame<'_, '_> {
+    fn loop_context(&mut self) -> crate::context::Context<'_> {
+        self.env.reborrow()
+    }
+    fn loop_activation(&self) -> &crate::context::ActivationContext {
+        self.env.activation
     }
 
     fn direct_eval_with_stack(&self) -> bool {
@@ -115,7 +114,7 @@ impl LoopFrame for WideLoopFrame<'_> {
             let value = &self.locals[slot];
             return (!value.is_uninitialized_lexical_marker()).then(|| value.clone());
         }
-        self.cell(slot).map(Upvalue::get)
+        self.cell(slot).and_then(BindingCell::value_if_initialized)
     }
 
     fn slot_accepts_typed_loop_write(&self, slot: usize) -> bool {
@@ -137,10 +136,7 @@ impl LoopFrame for WideLoopFrame<'_> {
         // The receiver is compiled as a read of the name `this`, which the
         // tier answers from the activation (`WideOp::LoadThis`).
         if name == "this" {
-            return self.this_value.cloned().ok_or_else(|| RuntimeError {
-                thrown: None,
-                message: "compact activation has no receiver".to_owned(),
-            });
+            return self.env.caller().this_value();
         }
         crate::bytecode::compact_fn::property::load_global(name, self.env)
     }
@@ -153,7 +149,7 @@ impl LoopFrame for WideLoopFrame<'_> {
     }
 
     fn array_access_is_plain(&mut self, array: &ArrayRef) -> bool {
-        let env = self.env;
+        let env = &mut *self.env;
         let resolved = self.array_prototype.get_or_insert_with(|| {
             let prototype = crate::property::array_prototype(env)?;
             let hazard = crate::bytecode::vm_props::prototype_chain_has_index_hazard(Some(

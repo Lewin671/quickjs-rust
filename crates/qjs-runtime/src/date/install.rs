@@ -1,9 +1,12 @@
-use crate::CallEnv;
 use std::collections::HashMap;
 
 use crate::{Function, NativeFunction, ObjectRef, Property, Value, symbol};
 
-pub(crate) fn install_date(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
+pub(crate) fn install_date(
+    env: &mut crate::context::Context<'_>,
+    global_this: &Value,
+    object_prototype: ObjectRef,
+) {
     let date_prototype =
         ObjectRef::with_prototype(HashMap::new(), Some(object_prototype), env.realm().atoms());
 

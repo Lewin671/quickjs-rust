@@ -1,4 +1,3 @@
-use crate::CallEnv;
 use crate::{
     ObjectRef, PropertyKey, RuntimeError, Value, has_property_key, property_value_key, symbol,
 };
@@ -10,7 +9,7 @@ pub(super) struct SymbolMethod {
 
 pub(super) fn symbol_replace_method(
     search_value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<SymbolMethod, RuntimeError> {
     symbol_method(
         search_value,
@@ -22,21 +21,21 @@ pub(super) fn symbol_replace_method(
 
 pub(super) fn symbol_match_method(
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<SymbolMethod, RuntimeError> {
     symbol_method(value, symbol::match_symbol(env), "Symbol.match", env)
 }
 
 pub(super) fn symbol_match_all_method(
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<SymbolMethod, RuntimeError> {
     symbol_method(value, symbol::match_all_symbol(env), "Symbol.matchAll", env)
 }
 
 pub(super) fn symbol_search_method(
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<SymbolMethod, RuntimeError> {
     symbol_method(value, symbol::search_symbol(env), "Symbol.search", env)
 }
@@ -45,7 +44,7 @@ fn symbol_method(
     value: Value,
     symbol: Option<ObjectRef>,
     name: &str,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<SymbolMethod, RuntimeError> {
     let absent = SymbolMethod {
         present: false,

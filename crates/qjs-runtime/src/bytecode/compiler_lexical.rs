@@ -36,6 +36,7 @@ impl Compiler {
             return *slot;
         }
         let slot = self.locals.len();
+        self.scope_plan.declare(name, slot, true);
         self.locals.push(Local {
             name: storage_name.to_owned(),
             compiler_temporary: false,
@@ -67,6 +68,7 @@ impl Compiler {
             return *slot;
         }
         let slot = self.locals.len();
+        self.scope_plan.declare(name, slot, true);
         self.locals.push(Local {
             name: storage_name.to_owned(),
             compiler_temporary: false,
@@ -145,9 +147,19 @@ impl Compiler {
         &mut self,
         compile: impl FnOnce(&mut Self) -> Result<T, RuntimeError>,
     ) -> Result<T, RuntimeError> {
+        self.with_scope_kind(crate::binding::ScopeKind::Block, compile)
+    }
+
+    pub(super) fn with_scope_kind<T>(
+        &mut self,
+        kind: crate::binding::ScopeKind,
+        compile: impl FnOnce(&mut Self) -> Result<T, RuntimeError>,
+    ) -> Result<T, RuntimeError> {
+        self.scope_plan.enter(kind);
         self.lexical_scopes
             .push(crate::value::name_hash::NameMap::default());
         let result = compile(self);
+        self.scope_plan.exit();
         self.lexical_scopes
             .pop()
             .expect("lexical scope stack should be balanced");
@@ -173,6 +185,7 @@ impl Compiler {
         &self,
         function_bytecode: &Bytecode,
         function_local_names: &[String],
+        self_name: Option<&str>,
     ) -> Vec<LexicalCapture> {
         let mut captures = Vec::new();
         let global_names = function_bytecode.global_names();
@@ -191,9 +204,15 @@ impl Compiler {
             if name.starts_with("\0\0") {
                 continue;
             }
-            if function_local_names
-                .binary_search_by(|local| local.as_str().cmp(name))
-                .is_ok()
+            // A declaration elsewhere in the body does not bind this name
+            // at every reference. Unresolved compiled operations (including
+            // parameter closures) still demand the enclosing cell. Only the
+            // NFE self environment is reserved outside the compiled scopes.
+            if self_name == Some(name)
+                || function_local_names
+                    .binary_search_by(|local| local.as_str().cmp(name))
+                    .is_ok()
+                    && !function_bytecode.references_free_name_tree(name)
             {
                 continue;
             }
@@ -222,27 +241,6 @@ impl Compiler {
                     slot,
                 });
             }
-        }
-        // Lexical `this` and every `super` operation use the surrounding
-        // `this` binding implicitly, so they may have no identifier load/store
-        // for the ordinary name scan above to discover. Arrow functions omit
-        // `this` from `function_local_names`; force that outer slot into their
-        // received-upvalue plan. Ordinary methods/constructors retain their own
-        // `this` local and do not enter this branch.
-        if function_bytecode.needs_call_receiver()
-            && function_local_names
-                .binary_search_by(|local| local.as_str().cmp("this"))
-                .is_err()
-            && let Some(slot) = self.resolve_active_capture_slot("this", false)
-            && !captures
-                .iter()
-                .any(|capture: &LexicalCapture| capture.slot == slot)
-        {
-            captures.push(LexicalCapture {
-                name: "this".to_owned(),
-                storage_name: self.locals[slot].name.clone(),
-                slot,
-            });
         }
         captures
     }

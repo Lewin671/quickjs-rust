@@ -44,8 +44,7 @@ pub(super) fn exit_to_interpreter(
     depth: u16,
     resume_pc: usize,
     window: &mut [Value],
-    env: &CallEnv,
-    this_value: Option<Value>,
+    env: &mut crate::context::Context<'_>,
 ) -> ExitOutcome {
     let bytecode = running_bytecode(callee, root_bytecode);
     let Some(program) = super::super::program_for(bytecode) else {
@@ -54,7 +53,6 @@ pub(super) fn exit_to_interpreter(
     if let Some((header, backedge)) = program.probed_header(resume_pc) {
         return enter_loop_at_header(
             callee, bytecode, program, root, header, backedge, depth, resume_pc, window, env,
-            this_value,
         );
     }
     let probe = program.probed_backedge(ip);
@@ -95,11 +93,9 @@ pub(super) fn exit_to_interpreter(
                     return ExitOutcome::Continue { pc };
                 }
                 let target = std::mem::replace(&mut window[top - 1], Value::Undefined);
-                let mut call_env = env.empty_frame();
+                let call_env = &mut *env;
                 return match crate::bytecode::vm_ops::enumerate_keys_cached(
-                    &target,
-                    cache,
-                    &mut call_env,
+                    &target, cache, call_env,
                 ) {
                     Ok(keys) => {
                         window[top - 1] = Value::Array(keys);
@@ -127,11 +123,9 @@ pub(super) fn exit_to_interpreter(
                 let key = key.clone();
                 let target = std::mem::replace(&mut window[top - 2], Value::Undefined);
                 execute::store(&mut window[top - 1], Value::Undefined);
-                let mut call_env = env.empty_frame();
+                let call_env = &mut *env;
                 return match crate::bytecode::vm_ops::for_in_property_is_enumerable(
-                    target,
-                    &key,
-                    &mut call_env,
+                    target, &key, call_env,
                 ) {
                     Ok(enumerable) => {
                         window[top - 2] = Value::Boolean(enumerable);
@@ -144,18 +138,21 @@ pub(super) fn exit_to_interpreter(
         _ => {}
     }
     // `g = g + value` on a global string: appended in place, then the store
-    // is skipped (see `compile::appends_to_global`).
+    // is skipped (see `compile::appends_to_global`). A store whose reference
+    // was selected before its RHS keeps that reference instead.
     if let (
         Some(crate::bytecode::ir::Op::Binary(qjs_ast::BinaryOp::Add)),
         Some(crate::bytecode::ir::Op::StoreLocalOrGlobalSloppy { name, .. }),
     ) = (
         bytecode.code.get(ip as usize),
         bytecode.code.get(ip as usize + 1),
-    ) && let Some(pc) = program.resume_pc(ip as usize + 2, usize::from(depth) - 2)
+    ) && env.activation.saved_references.is_none()
+        && let Some(pc) = program.resume_pc(ip as usize + 2, usize::from(depth) - 2)
+        && let Some(site) = program.global_write_site(ip as usize + 1)
     {
         let top = usize::from(program.local_registers) + usize::from(depth);
         let (left, right) = window[top - 2..top].split_at_mut(1);
-        if property::try_append_global_var(name, &mut left[0], &mut right[0], env) {
+        if property::try_append_global_var(name, &mut left[0], &mut right[0], site, env) {
             return ExitOutcome::Continue { pc };
         }
     }
@@ -163,7 +160,22 @@ pub(super) fn exit_to_interpreter(
         bytecode.code.get(ip as usize)
     {
         let top = usize::from(program.local_registers) + usize::from(depth) - 1;
-        if property::try_store_global_var(name, &window[top], env) {
+        // PutValue on the reference its `ReferenceCheck` selected.
+        if env.activation.saved_references.is_some()
+            && let Some((reference, strict)) = bytecode
+                .binding_plan
+                .references
+                .take_saved_store(ip as usize, env.activation)
+        {
+            let value = std::mem::replace(&mut window[top], Value::Undefined);
+            return match reference.assign(value, strict, env) {
+                Ok(()) => ExitOutcome::Continue { pc: resume_pc },
+                Err(error) => ExitOutcome::Finished(Err(error)),
+            };
+        }
+        if let Some(site) = program.global_write_site(ip as usize)
+            && property::try_store_global_var(name, &window[top], site, env)
+        {
             execute::store(&mut window[top], Value::Undefined);
             return ExitOutcome::Continue { pc: resume_pc };
         }
@@ -174,13 +186,7 @@ pub(super) fn exit_to_interpreter(
             return ExitOutcome::Continue { pc: resume_pc };
         }
     }
-    let (upvalues, realm_upvalue_slots) = match callee {
-        Value::Function(function) => (
-            crate::bytecode::DirectCallUpvalues::Function(function),
-            function.realm_upvalue_slots,
-        ),
-        _ => (root.upvalues, root.realm_upvalue_slots),
-    };
+    let (upvalues, realm_upvalue_slots) = exit_upvalues(callee, root);
     let (mut ip, mut depth) = (ip, depth);
     let probe_target = probe.and_then(|_| match bytecode.code.get(ip as usize) {
         Some(crate::bytecode::ir::Op::Jump(target)) => Some(*target),
@@ -197,7 +203,6 @@ pub(super) fn exit_to_interpreter(
             env,
             window,
             upvalues.as_slice(),
-            this_value.as_ref(),
             header,
             ip as usize,
             depth as usize,
@@ -251,8 +256,22 @@ pub(super) fn exit_to_interpreter(
         from,
         window,
         env,
-        this_value,
     )
+}
+
+/// The received cells an exit hands over: an inlined callee's own, or the
+/// root activation's.
+fn exit_upvalues<'a>(
+    callee: &'a Value,
+    root: RootExit<'a>,
+) -> (crate::bytecode::DirectCallUpvalues<'a>, u128) {
+    match callee {
+        Value::Function(function) => (
+            crate::bytecode::DirectCallUpvalues::Function(function),
+            function.realm_upvalue_slots,
+        ),
+        _ => (root.upvalues, root.realm_upvalue_slots),
+    }
 }
 
 /// Continues an activation on the interpreter at bytecode `ip`, with `depth`
@@ -267,13 +286,11 @@ fn resume_in_interpreter(
     depth: u16,
     from: ResumeFrom,
     window: &mut [Value],
-    env: &CallEnv,
-    this_value: Option<Value>,
+    env: &mut crate::context::Context<'_>,
 ) -> ExitOutcome {
     let local_registers = program.local_registers as usize;
     let (locals, stack) = window.split_at_mut(local_registers);
     let slots = DirectCallSlots {
-        this_value,
         parameter_slots: bytecode.parameter_slots(),
         arguments: &[],
         upvalues,
@@ -286,9 +303,14 @@ fn resume_in_interpreter(
         depth: depth as usize,
         tdz_marker: &program.tdz_marker,
     };
+    // References selected before an RHS move with the activation; the
+    // interpreter frame adopts them (`resume_direct_call_bytecode`).
+    let mut continuation = env.activation.retain_continuation();
+    continuation.saved_references = env.activation.saved_references.take();
     match crate::bytecode::vm::resume_direct_call_bytecode(
         bytecode,
-        env.clone(),
+        continuation,
+        env.runtime,
         slots,
         ip as usize,
         registers,
@@ -345,8 +367,7 @@ fn enter_loop_at_header(
     depth: u16,
     resume_pc: usize,
     window: &mut [Value],
-    env: &CallEnv,
-    this_value: Option<Value>,
+    env: &mut crate::context::Context<'_>,
 ) -> ExitOutcome {
     let ready = u32::try_from(backedge)
         .ok()
@@ -355,20 +376,13 @@ fn enter_loop_at_header(
     if !ready {
         return ExitOutcome::Continue { pc: resume_pc };
     }
-    let (upvalues, realm_upvalue_slots) = match callee {
-        Value::Function(function) => (
-            crate::bytecode::DirectCallUpvalues::Function(function),
-            function.realm_upvalue_slots,
-        ),
-        _ => (root.upvalues, root.realm_upvalue_slots),
-    };
+    let (upvalues, realm_upvalue_slots) = exit_upvalues(callee, root);
     match run_typed_loop_here(
         bytecode,
         program,
         env,
         window,
         upvalues.as_slice(),
-        this_value.as_ref(),
         header,
         backedge,
         usize::from(depth),
@@ -395,7 +409,6 @@ fn enter_loop_at_header(
                 },
                 window,
                 env,
-                this_value,
             )
         }
     }

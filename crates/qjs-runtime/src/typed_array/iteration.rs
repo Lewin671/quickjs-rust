@@ -16,7 +16,6 @@ use super::{
     typed_array_length, typed_array_receiver, typed_array_species_create,
     typed_array_species_create_read, typed_array_species_create_with_args, validate_typed_array,
 };
-use crate::CallEnv;
 
 // --- shared iteration scaffolding -------------------------------------------
 
@@ -54,7 +53,7 @@ fn call_callback(
     iteration: &Iteration,
     value: Value,
     index: usize,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     crate::function::call_function_slice(
         &iteration.callback,
@@ -74,7 +73,7 @@ fn relative_index(
     value: Value,
     length: usize,
     default: i64,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<usize, RuntimeError> {
     let relative = match value {
         Value::Undefined => default as f64,
@@ -96,7 +95,7 @@ fn relative_index(
 pub(crate) fn native_typed_array_prototype_at(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let (object, length) = validate_typed_array(&this_value)?;
     let argument = argument_values.first().cloned().unwrap_or(Value::Undefined);
@@ -116,7 +115,7 @@ pub(crate) fn native_typed_array_prototype_at(
 pub(crate) fn native_typed_array_prototype_index_of(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let (object, original_length) = validate_typed_array(&this_value)?;
     if original_length == 0 {
@@ -146,7 +145,7 @@ pub(crate) fn native_typed_array_prototype_index_of(
 pub(crate) fn native_typed_array_prototype_last_index_of(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let (object, original_length) = validate_typed_array(&this_value)?;
     if original_length == 0 {
@@ -186,7 +185,7 @@ pub(crate) fn native_typed_array_prototype_last_index_of(
 pub(crate) fn native_typed_array_prototype_includes(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let (object, original_length) = validate_typed_array(&this_value)?;
     if original_length == 0 {
@@ -209,7 +208,7 @@ pub(crate) fn native_typed_array_prototype_includes(
 fn search_start_index(
     value: Value,
     length: usize,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<usize, RuntimeError> {
     let number = to_number_with_env(value, env)?;
     let from = if number.is_nan() { 0.0 } else { number.trunc() };
@@ -238,7 +237,7 @@ fn same_value_zero(left: &Value, right: &Value) -> bool {
 pub(crate) fn native_typed_array_prototype_join(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let (object, length) = validate_typed_array(&this_value)?;
     let separator = match argument_values.first().cloned().unwrap_or(Value::Undefined) {
@@ -260,7 +259,7 @@ pub(crate) fn native_typed_array_prototype_join(
 pub(crate) fn native_typed_array_prototype_to_string(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     // %TypedArray.prototype.toString% is %Array.prototype.toString%, which calls
     // the receiver's own `join` and falls back to Object.prototype.toString.
@@ -270,7 +269,7 @@ pub(crate) fn native_typed_array_prototype_to_string(
 pub(crate) fn native_typed_array_prototype_to_locale_string(
     this_value: Value,
     _argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let (object, length) = validate_typed_array(&this_value)?;
     let mut parts = Vec::with_capacity(length);
@@ -282,7 +281,10 @@ pub(crate) fn native_typed_array_prototype_to_locale_string(
     Ok(Value::String(parts.join(",").into()))
 }
 
-fn call_to_locale_string(value: Value, env: &mut CallEnv) -> Result<String, RuntimeError> {
+fn call_to_locale_string(
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<String, RuntimeError> {
     // Per spec, Invoke the element's own `toLocaleString` (resolved through its
     // prototype, so a user-overridden Number.prototype.toLocaleString is
     // honored) and ToString the result. Elements that became out-of-bounds
@@ -299,7 +301,7 @@ fn call_to_locale_string(value: Value, env: &mut CallEnv) -> Result<String, Runt
 
 pub(crate) fn native_typed_array_prototype_keys(
     this_value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let (object, _) = validate_typed_array(&this_value)?;
     Ok(crate::array::array_key_iterator(Value::Object(object), env))
@@ -307,7 +309,7 @@ pub(crate) fn native_typed_array_prototype_keys(
 
 pub(crate) fn native_typed_array_prototype_values(
     this_value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let (object, _) = validate_typed_array(&this_value)?;
     Ok(crate::array::array_value_iterator(
@@ -318,7 +320,7 @@ pub(crate) fn native_typed_array_prototype_values(
 
 pub(crate) fn native_typed_array_prototype_entries(
     this_value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let (object, _) = validate_typed_array(&this_value)?;
     Ok(crate::array::array_key_value_iterator(
@@ -332,7 +334,7 @@ pub(crate) fn native_typed_array_prototype_entries(
 pub(crate) fn native_typed_array_prototype_for_each(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let iteration = prepare_iteration("forEach", this_value, argument_values)?;
     for index in 0..iteration.length {
@@ -345,7 +347,7 @@ pub(crate) fn native_typed_array_prototype_for_each(
 pub(crate) fn native_typed_array_prototype_some(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let iteration = prepare_iteration("some", this_value, argument_values)?;
     for index in 0..iteration.length {
@@ -360,7 +362,7 @@ pub(crate) fn native_typed_array_prototype_some(
 pub(crate) fn native_typed_array_prototype_every(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let iteration = prepare_iteration("every", this_value, argument_values)?;
     for index in 0..iteration.length {
@@ -375,7 +377,7 @@ pub(crate) fn native_typed_array_prototype_every(
 pub(crate) fn native_typed_array_prototype_find(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let iteration = prepare_iteration("find", this_value, argument_values)?;
     for index in 0..iteration.length {
@@ -390,7 +392,7 @@ pub(crate) fn native_typed_array_prototype_find(
 pub(crate) fn native_typed_array_prototype_find_index(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let iteration = prepare_iteration("findIndex", this_value, argument_values)?;
     for index in 0..iteration.length {
@@ -405,7 +407,7 @@ pub(crate) fn native_typed_array_prototype_find_index(
 pub(crate) fn native_typed_array_prototype_find_last(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let iteration = prepare_iteration("findLast", this_value, argument_values)?;
     for index in (0..iteration.length).rev() {
@@ -420,7 +422,7 @@ pub(crate) fn native_typed_array_prototype_find_last(
 pub(crate) fn native_typed_array_prototype_find_last_index(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let iteration = prepare_iteration("findLastIndex", this_value, argument_values)?;
     for index in (0..iteration.length).rev() {
@@ -437,7 +439,7 @@ pub(crate) fn native_typed_array_prototype_find_last_index(
 pub(crate) fn native_typed_array_prototype_map(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let iteration = prepare_iteration("map", this_value, argument_values)?;
     let len = iteration.length;
@@ -459,7 +461,7 @@ pub(crate) fn native_typed_array_prototype_map(
 pub(crate) fn native_typed_array_prototype_filter(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let iteration = prepare_iteration("filter", this_value, argument_values)?;
     let mut kept = Vec::new();
@@ -482,7 +484,7 @@ pub(crate) fn native_typed_array_prototype_filter(
 pub(crate) fn native_typed_array_prototype_reduce(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let (object, length) = validate_typed_array(&this_value)?;
     let callback = require_callback("reduce", argument_values)?;
@@ -515,7 +517,7 @@ pub(crate) fn native_typed_array_prototype_reduce(
 pub(crate) fn native_typed_array_prototype_reduce_right(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let (object, length) = validate_typed_array(&this_value)?;
     let callback = require_callback("reduceRight", argument_values)?;
@@ -569,7 +571,7 @@ fn reduce_empty_error() -> RuntimeError {
 pub(crate) fn native_typed_array_prototype_slice(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let (object, length) = validate_typed_array(&this_value)?;
     let start = relative_index(
@@ -637,7 +639,7 @@ fn slice_uses_overlapping_same_type_buffer(source: &ObjectRef, target: &ObjectRe
 pub(crate) fn native_typed_array_prototype_subarray(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     // subarray only brand-checks O up front; a detached or out-of-bounds view
     // yields srcLength 0 but still coerces start/end (observable valueOf) and

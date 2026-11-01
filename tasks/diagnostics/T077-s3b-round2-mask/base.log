@@ -1,0 +1,4 @@
+
+thread 'main' (423318696) panicked at crates/qjs-runtime/src/function/value.rs:738:28:
+attempt to shift left with overflow
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

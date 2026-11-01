@@ -1,12 +1,13 @@
+use crate::function::NativeCaptures;
 use std::collections::HashMap;
 
 use crate::JsString;
 use crate::reflect::ordinary_set;
 use crate::string::string_code_units;
 use crate::{
-    ArrayRef, Function, GLOBAL_THIS_BINDING, NativeFunction, ObjectRef, Property, PropertyKey,
-    RuntimeError, Value, ensure_constructor, error, function_prototype, is_truthy, property_value,
-    property_value_key, symbol, to_js_string_with_env, to_length_with_env,
+    ArrayRef, Function, NativeFunction, ObjectRef, Property, PropertyKey, RuntimeError, Value,
+    ensure_constructor, error, function_prototype, is_truthy, property_value, property_value_key,
+    symbol, to_js_string_with_env, to_length_with_env,
 };
 
 mod escape;
@@ -20,7 +21,6 @@ mod symbol_search;
 mod symbol_split;
 mod validation;
 
-use crate::CallEnv;
 pub(crate) use escape::native_regexp_escape;
 use formatting::canonical_regexp_flags;
 pub(crate) use formatting::escape_regexp_source;
@@ -37,7 +37,11 @@ const REGEXP_SOURCE_PROPERTY: &str = "\0RegExpSource";
 const REGEXP_FLAGS_PROPERTY: &str = "\0RegExpFlags";
 const REGEXP_PROTOTYPE_BINDING: &str = "\0RegExpPrototype";
 
-pub(crate) fn install_regexp(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
+pub(crate) fn install_regexp(
+    env: &mut crate::context::Context<'_>,
+    global_this: &Value,
+    object_prototype: ObjectRef,
+) {
     let regexp_prototype =
         ObjectRef::with_prototype(HashMap::new(), Some(object_prototype), env.realm().atoms());
     regexp_prototype.set_to_string_tag("RegExp");
@@ -203,17 +207,13 @@ pub(crate) fn install_regexp(env: &mut CallEnv, global_this: &Value, object_prot
 
 fn define_regexp_accessor(
     realm: &crate::function::Realm,
-    global_this: &Value,
+    _global_this: &Value,
     prototype: &ObjectRef,
     name: &str,
     native: NativeFunction,
 ) {
     let mut getter = Function::new_native(Some(&format!("get {name}")), 0, native, false, realm);
-    getter.insert_native_context(
-        REGEXP_PROTOTYPE_BINDING.to_owned(),
-        Value::Object(prototype.clone()),
-    );
-    getter.insert_native_context(GLOBAL_THIS_BINDING.to_owned(), global_this.clone());
+    getter.set_native_captures(NativeCaptures::RegExpPrototype(prototype.clone()));
     prototype.define_property(
         name.to_owned(),
         Property::accessor(Some(Value::Function(getter)), None, false, true),
@@ -225,7 +225,7 @@ pub(crate) fn native_regexp(
     this_value: Value,
     argument_values: &[Value],
     is_construct: bool,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let pattern = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let flags_value = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
@@ -279,7 +279,7 @@ thread_local! {
 pub(crate) fn construct_regexp_from_strings(
     function: &Function,
     argument_values: &[Value],
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
 ) -> Option<Result<Value, RuntimeError>> {
     let Some(Value::String(source)) = argument_values.first() else {
         return None;
@@ -321,7 +321,7 @@ pub(crate) fn construct_regexp_from_strings(
 pub(crate) fn regexp_literal_value(
     source: &str,
     flags: &str,
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     validate_regexp_init_cached(source, flags, env)?;
     let prototype = match env.get(REGEXP_PROTOTYPE_BINDING) {
@@ -336,7 +336,7 @@ pub(crate) fn regexp_literal_value(
 pub(crate) fn native_regexp_prototype_compile(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let Value::Object(object) = &this_value else {
         return Err(RuntimeError {
@@ -384,7 +384,7 @@ pub(crate) fn native_regexp_prototype_compile(
 pub(crate) fn native_regexp_prototype_exec(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let Value::Object(object) = this_value.clone() else {
         return Err(RuntimeError {
@@ -485,7 +485,7 @@ pub(crate) fn native_regexp_prototype_to_string(this_value: Value) -> Result<Val
 pub(crate) fn native_regexp_prototype_test(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let Value::Object(object) = this_value.clone() else {
         return Err(RuntimeError {
@@ -556,7 +556,7 @@ pub(crate) fn native_regexp_prototype_test(
 pub(crate) fn native_regexp_prototype_source(
     function: &Function,
     this_value: Value,
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let source = regexp_accessor_data(function, &this_value, env, REGEXP_SOURCE_PROPERTY, "(?:)")?;
     Ok(Value::String(escape_regexp_source(&source).into()))
@@ -565,7 +565,7 @@ pub(crate) fn native_regexp_prototype_source(
 pub(crate) fn native_regexp_prototype_flags(
     function: &Function,
     this_value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if !is_regexp_accessor_object_receiver(&this_value) {
         return Err(regexp_receiver_error(function));
@@ -591,7 +591,7 @@ pub(crate) fn native_regexp_prototype_flags(
 pub(crate) fn native_regexp_prototype_flag(
     function: &Function,
     this_value: Value,
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
     flag: char,
 ) -> Result<Value, RuntimeError> {
     let flags = regexp_accessor_data(function, &this_value, env, REGEXP_FLAGS_PROPERTY, "")?;
@@ -604,7 +604,7 @@ pub(crate) fn native_regexp_prototype_flag(
 pub(crate) fn default_regexp_source_accessor_value(
     object: &ObjectRef,
     key: &str,
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
 ) -> Option<Value> {
     if key != "source" || object.own_property(key).is_some() {
         return None;
@@ -628,7 +628,7 @@ pub(crate) fn default_regexp_source_accessor_value(
 fn regexp_accessor_data(
     function: &Function,
     this_value: &Value,
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
     key: &str,
     prototype_value: &str,
 ) -> Result<String, RuntimeError> {
@@ -651,7 +651,7 @@ fn is_regexp_accessor_object_receiver(value: &Value) -> bool {
     matches!(value, Value::Object(object) if !symbol::is_symbol_primitive(object))
 }
 
-fn is_regexp_prototype_value(value: &Value, env: &CallEnv) -> bool {
+fn is_regexp_prototype_value(value: &Value, env: &crate::context::Context<'_>) -> bool {
     let Value::Object(object) = value else {
         return false;
     };
@@ -666,12 +666,12 @@ fn is_regexp_prototype_value(value: &Value, env: &CallEnv) -> bool {
 fn is_regexp_prototype_value_for_accessor(
     function: &Function,
     value: &Value,
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
 ) -> bool {
     let Value::Object(object) = value else {
         return false;
     };
-    if let Some(Value::Object(prototype)) = function.native_context.get(REGEXP_PROTOTYPE_BINDING) {
+    if let NativeCaptures::RegExpPrototype(prototype) = function.native_captures() {
         return object.ptr_eq(prototype);
     }
     is_regexp_prototype_value(value, env)
@@ -686,28 +686,11 @@ fn regexp_receiver_error(function: &Function) -> RuntimeError {
 }
 
 fn regexp_receiver_error_value(function: &Function, message: &str) -> Option<Value> {
-    let constructor = match function.native_context.get("TypeError").cloned() {
-        Some(value) => Some(value),
-        None => match function.native_context.get(GLOBAL_THIS_BINDING) {
-            Some(Value::Object(global_this)) => global_this.get("TypeError"),
-            _ => None,
-        },
-    };
-    let Value::Function(constructor) = constructor? else {
-        return None;
-    };
-    let mut env = CallEnv::new(crate::function::new_realm_sharing_atoms(
-        function.native_context.clone_map(),
-        function.property_domain().clone(),
-    ));
-    error::native_error(
-        &constructor,
-        Value::Undefined,
-        &[Value::String(message.to_owned().into())],
-        false,
-        &mut env,
+    error::intrinsic_error_from_creation(
+        function.creation_context(),
+        crate::context::ErrorKind::TypeError,
+        message,
     )
-    .ok()
 }
 
 fn define_regexp_data(object: &ObjectRef, source: &str, flags: &str) {
@@ -732,7 +715,7 @@ fn define_regexp_data_without_last_index(object: &ObjectRef, source: &str, flags
 fn regexp_source(
     pattern: Value,
     pattern_is_regexp: bool,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<String, RuntimeError> {
     if pattern_is_regexp {
         return to_js_string_with_env(property_value(pattern, "source", env)?, env);
@@ -754,7 +737,7 @@ fn regexp_flags(
     pattern: Value,
     pattern_is_regexp: bool,
     flags_value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<String, RuntimeError> {
     match flags_value {
         Value::Undefined if pattern_is_regexp => {
@@ -800,7 +783,7 @@ pub(crate) fn regexp_is_regexp(value: &Value) -> bool {
 
 pub(crate) fn regexp_is_regexp_with_env(
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<bool, RuntimeError> {
     let is_object = matches!(
         value,
@@ -829,7 +812,7 @@ pub(crate) fn regexp_set_last_index(value: &Value, index: usize) {
 pub(crate) fn native_regexp_global_match(
     regexp: Value,
     input: &JsString,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     regexp_set_last_index(&regexp, 0);
     let mut matches = Vec::new();
@@ -902,7 +885,7 @@ fn regexp_flags_contains(object: &ObjectRef, flag: char) -> bool {
 /// `constructor[@@species]` override and falling back to the realm `%RegExp%`.
 pub(super) fn regexp_species_constructor(
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let default_constructor = env.get("RegExp").ok_or_else(|| RuntimeError {
         thrown: None,
@@ -936,18 +919,24 @@ pub(super) fn regexp_species_constructor(
     Ok(species)
 }
 
-fn regexp_last_index(value: &Value, env: &mut CallEnv) -> Result<usize, RuntimeError> {
+fn regexp_last_index(
+    value: &Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<usize, RuntimeError> {
     to_length_with_env(property_value(value.clone(), "lastIndex", env)?, env)
 }
 
-fn regexp_last_index_value(value: &Value, env: &mut CallEnv) -> Result<usize, RuntimeError> {
+fn regexp_last_index_value(
+    value: &Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<usize, RuntimeError> {
     regexp_last_index(value, env)
 }
 
 fn regexp_set_last_index_object(
     object: &ObjectRef,
     index: usize,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<(), RuntimeError> {
     // A RegExp's own writable data property -- the case for every instance --
     // is written in place; anything else takes the full [[Set]].
@@ -1225,7 +1214,7 @@ fn char_code_unit_len(character: char) -> usize {
 fn validate_regexp_init_cached(
     source: &str,
     flags: &str,
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
 ) -> Result<(), RuntimeError> {
     if env
         .realm()

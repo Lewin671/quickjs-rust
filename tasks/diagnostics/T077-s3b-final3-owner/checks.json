@@ -1,0 +1,137 @@
+{
+ "source": "8abd4c69b1c6aadbfdd551696211d1d52b6c4520",
+ "runtime_source": "0148b2eb",
+ "command": "cargo test -p qjs-runtime --lib -- --test-threads=4 (combined-off adds the 42 --skip IC-mechanism controls of skipped-ic-controls.txt)",
+ "stress": {
+  "verify": {
+   "passed": 2728,
+   "failed": 0,
+   "ignored": 0,
+   "filtered": 0,
+   "log_sha256": "03cf0793c6954631a1d8c859478fdd588cf6a5ada9bb17d891af858c68ff96bc",
+   "environment": {
+    "QJS_VERIFY_BINDINGS": "1"
+   }
+  },
+  "force": {
+   "passed": 2728,
+   "failed": 0,
+   "ignored": 0,
+   "filtered": 0,
+   "log_sha256": "cec9be7110c57281227094a6bf3f711368161a80322fd4d77e730a2473129880",
+   "environment": {
+    "QJS_FORCE_EVAL_EXPOSURE": "1"
+   }
+  },
+  "poison": {
+   "passed": 2728,
+   "failed": 0,
+   "ignored": 0,
+   "filtered": 0,
+   "log_sha256": "9f97171a115e37799e5dbc678b814d826317a906d6f8a96cc9df64138926ac5e",
+   "environment": {
+    "QJS_POISON_RELEASED_SCOPES": "1"
+   }
+  },
+  "activation-poison": {
+   "passed": 2728,
+   "failed": 0,
+   "ignored": 0,
+   "filtered": 0,
+   "log_sha256": "785c09664ccbac11012dcf362eeb49362c86823296dda725b3c71bc19d0c186d",
+   "environment": {
+    "QJS_POISON_RELEASED_ACTIVATIONS": "1"
+   }
+  },
+  "ic-verify": {
+   "passed": 2728,
+   "failed": 0,
+   "ignored": 0,
+   "filtered": 0,
+   "log_sha256": "113d206d909a859d81fa0843f3551c9056f370b2c988b3283d556bb6c4b0c962",
+   "environment": {
+    "QJS_VERIFY_IC": "1"
+   }
+  },
+  "combined": {
+   "passed": 2728,
+   "failed": 0,
+   "ignored": 0,
+   "filtered": 0,
+   "log_sha256": "ef9a4c04225b30397af976de38d63a0c2cb87f862078dfc8bf8af50f689a2fee",
+   "environment": {
+    "QJS_VERIFY_BINDINGS": "1",
+    "QJS_FORCE_EVAL_EXPOSURE": "1",
+    "QJS_POISON_RELEASED_SCOPES": "1",
+    "QJS_VERIFY_IC": "1"
+   }
+  },
+  "combined-all": {
+   "passed": 2728,
+   "failed": 0,
+   "ignored": 0,
+   "filtered": 0,
+   "log_sha256": "f54f2652bbdbb541365defacc2da5d27a984c4b4213966b93828a5ad74fad844",
+   "environment": {
+    "QJS_VERIFY_BINDINGS": "1",
+    "QJS_FORCE_EVAL_EXPOSURE": "1",
+    "QJS_POISON_RELEASED_SCOPES": "1",
+    "QJS_POISON_RELEASED_ACTIVATIONS": "1",
+    "QJS_VERIFY_IC": "1"
+   }
+  },
+  "combined-off": {
+   "passed": 2686,
+   "failed": 0,
+   "ignored": 0,
+   "filtered": 42,
+   "log_sha256": "a7db2990b1277704aef7073c43882070f2b5a96bf882fdc751a1b1f0a440e875",
+   "environment": {
+    "QJS_DISABLE_IC": "1",
+    "QJS_VERIFY_BINDINGS": "1",
+    "QJS_FORCE_EVAL_EXPOSURE": "1",
+    "QJS_POISON_RELEASED_SCOPES": "1"
+   }
+  }
+ },
+ "suites": {
+  "agents": {
+   "passed": 2739,
+   "failed": 0,
+   "ignored": 0,
+   "filtered": 0,
+   "log_sha256": "566667225b8fe08ecd09ba41698d63f9a46ef135ea04ae8951eb34df58af928b"
+  },
+  "perf-counters": {
+   "passed": 2777,
+   "failed": 0,
+   "ignored": 0,
+   "filtered": 0,
+   "log_sha256": "0da6393fe25d030879e8703e6961468f0d45071c221cbc555d613af258101d63"
+  }
+ },
+ "full_gate": {
+  "command": "./scripts/check.sh",
+  "exit": 0,
+  "runtime_test_results": [
+   "test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 2718 filtered out; finished in 0.14s",
+   "test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 2753 filtered out; finished in 0.09s",
+   "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+   "test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s",
+   "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.71s",
+   "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s",
+   "test result: ok. 64 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+   "test result: ok. 274 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s",
+   "test result: ok. 59 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+   "test result: ok. 2728 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 18.26s",
+   "test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+   "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+   "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+   "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+   "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+   "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+  ],
+  "test262_subset": 5174,
+  "log_sha256": "86c1b980e0610a3f642aa0b7328e6511cd521667706e5f16825a3b8b08e2691e"
+ }
+}

@@ -12,6 +12,37 @@ use crate::{
 
 use super::{compiler::Compiler, ir::Op};
 
+/// ContainsExpression for formal parameters, distinct from IsSimpleParameterList.
+/// Rest and bare patterns are non-simple without requiring a second var holder.
+pub(super) fn contains_expressions(params: &FunctionParams) -> bool {
+    fn pattern(binding: &BindingPattern) -> bool {
+        match binding {
+            BindingPattern::Identifier { .. } => false,
+            BindingPattern::Array { elements, rest, .. } => {
+                elements
+                    .iter()
+                    .flatten()
+                    .any(|e| e.default.is_some() || pattern(&e.binding))
+                    || rest.as_deref().is_some_and(pattern)
+            }
+            BindingPattern::Object {
+                properties, rest, ..
+            } => {
+                properties.iter().any(|p| {
+                    p.default.is_some()
+                        || matches!(p.key, qjs_ast::ObjectBindingPropertyKey::Computed(_))
+                        || pattern(&p.binding)
+                }) || rest.as_deref().is_some_and(pattern)
+            }
+        }
+    }
+    params
+        .positional
+        .iter()
+        .any(|e| e.default.is_some() || pattern(&e.binding))
+        || params.rest.as_deref().is_some_and(pattern)
+}
+
 impl Compiler {
     /// Snapshots identifier parameters before clearing their real slots for a
     /// non-simple parameter list. Default initializers then observe the
@@ -21,6 +52,7 @@ impl Compiler {
         &mut self,
         params: &FunctionParams,
     ) -> Result<(), RuntimeError> {
+        let mut cleared = Vec::new();
         for (index, element) in params.positional.iter().enumerate() {
             let BindingPattern::Identifier { name, .. } = &element.binding else {
                 continue;
@@ -32,6 +64,7 @@ impl Compiler {
             self.emit(Op::LoadLocalOrUndefined(slot));
             self.emit(Op::StoreLocal(raw_slot));
             self.emit(Op::ClearLocal(slot));
+            cleared.push(slot);
         }
         if let Some(rest) = &params.rest
             && let BindingPattern::Identifier { name, .. } = rest.as_ref()
@@ -43,6 +76,16 @@ impl Compiler {
             self.emit(Op::LoadLocalOrUndefined(slot));
             self.emit(Op::StoreLocal(raw_slot));
             self.emit(Op::ClearLocal(slot));
+            cleared.push(slot);
+        }
+        for name in params.names() {
+            let slot = self
+                .resolve_local_slot(&name)
+                .expect("parameter binding declared");
+            if !cleared.contains(&slot) {
+                self.emit(Op::ClearLocal(slot));
+                cleared.push(slot);
+            }
         }
         Ok(())
     }

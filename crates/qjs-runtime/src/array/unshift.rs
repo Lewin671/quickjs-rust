@@ -4,14 +4,13 @@ use super::{
     array_like::array_like_length,
     mutation::{delete_array_like_property_with_error, set_array_like_property_with_error},
 };
-use crate::CallEnv;
 
 const MAX_SAFE_INTEGER_LENGTH: usize = 9_007_199_254_740_991;
 
 pub(crate) fn native_array_prototype_unshift(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if matches!(this_value, Value::String(_)) {
         return Err(unshift_length_error());
@@ -61,7 +60,7 @@ fn unshift_set_property(
     receiver: Value,
     key: &str,
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<(), RuntimeError> {
     set_array_like_property_with_error(receiver, key.to_owned(), value, env, unshift_property_error)
 }
@@ -69,7 +68,7 @@ fn unshift_set_property(
 fn unshift_delete_property(
     receiver: Value,
     key: &str,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<(), RuntimeError> {
     delete_array_like_property_with_error(receiver, key, env, unshift_delete_error)
 }
@@ -77,7 +76,7 @@ fn unshift_delete_property(
 fn unshift_set_length(
     receiver: Value,
     length: usize,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<(), RuntimeError> {
     set_array_like_property_with_error(
         receiver,

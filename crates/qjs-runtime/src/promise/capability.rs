@@ -7,6 +7,7 @@
 //! where `executor` is a fresh GetCapabilitiesExecutor function that records the
 //! resolve/reject arguments it is called with.
 
+use crate::function::NativeCaptures;
 use std::collections::HashMap;
 
 use crate::{
@@ -15,11 +16,9 @@ use crate::{
 };
 
 use super::{PROMISE_PROTOTYPE, new_pending_promise, resolving_function_pair};
-use crate::CallEnv;
 
 /// Internal slot on a GetCapabilitiesExecutor holding the shared capability
 /// record it writes `resolve`/`reject` into.
-const CAPABILITY_RECORD: &str = "\0PromiseCapabilityRecord";
 const CAPABILITY_RESOLVE: &str = "resolve";
 const CAPABILITY_REJECT: &str = "reject";
 
@@ -39,7 +38,7 @@ pub(crate) struct PromiseCapability {
 /// resolve/reject it captured, validating that both are callable.
 pub(crate) fn new_promise_capability(
     c: &Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<PromiseCapability, RuntimeError> {
     ensure_constructor(c)?;
 
@@ -67,7 +66,7 @@ pub(crate) fn new_promise_capability(
         false,
         env.realm(),
     );
-    executor.insert_native_context(CAPABILITY_RECORD.to_owned(), Value::Object(record.clone()));
+    executor.set_native_captures(NativeCaptures::PromiseCapability(record.clone()));
 
     let promise = construct_function(c.clone(), c.clone(), vec![Value::Function(executor)], env)?;
 
@@ -98,10 +97,9 @@ pub(crate) fn new_promise_capability(
 pub(crate) fn native_get_capabilities_executor(
     function: &Function,
     argument_values: &[Value],
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
-    let Some(Value::Object(record)) = function.native_context.get(CAPABILITY_RECORD).cloned()
-    else {
+    let NativeCaptures::PromiseCapability(record) = function.native_captures() else {
         return Err(RuntimeError {
             thrown: None,
             message: "Promise capability executor is missing its record".to_owned(),
@@ -134,7 +132,7 @@ pub(crate) fn native_get_capabilities_executor(
 
 /// Returns true when `c` is the realm's own `%Promise%` constructor, so the
 /// capability can be built without observable user code.
-fn is_native_promise_constructor(c: &Value, env: &CallEnv) -> bool {
+fn is_native_promise_constructor(c: &Value, env: &crate::context::Context<'_>) -> bool {
     let Value::Function(function) = c else {
         return false;
     };
@@ -160,7 +158,7 @@ fn is_native_promise_constructor(c: &Value, env: &CallEnv) -> bool {
 pub(crate) fn capability_resolve(
     capability: &PromiseCapability,
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     call_function(
         capability.resolve.clone(),
@@ -175,7 +173,7 @@ pub(crate) fn capability_resolve(
 pub(crate) fn capability_reject(
     capability: &PromiseCapability,
     reason: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     call_function(
         capability.reject.clone(),

@@ -1,10 +1,10 @@
 //! Operation entries for reflect; bound once when a native is created.
 
 use super::CallInfo;
-use crate::{CallEnv, RuntimeError, Value, reflect};
+use crate::{RuntimeError, Value, reflect};
 
 pub(super) fn reflect_apply(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -12,7 +12,7 @@ pub(super) fn reflect_apply(
 }
 
 pub(super) fn reflect_construct(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -20,7 +20,7 @@ pub(super) fn reflect_construct(
 }
 
 pub(super) fn reflect_define_property(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -28,7 +28,7 @@ pub(super) fn reflect_define_property(
 }
 
 pub(super) fn reflect_delete_property(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -36,7 +36,7 @@ pub(super) fn reflect_delete_property(
 }
 
 pub(super) fn reflect_get(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -44,7 +44,7 @@ pub(super) fn reflect_get(
 }
 
 pub(super) fn reflect_get_prototype_of(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -52,7 +52,7 @@ pub(super) fn reflect_get_prototype_of(
 }
 
 pub(super) fn reflect_get_own_property_descriptor(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -60,7 +60,7 @@ pub(super) fn reflect_get_own_property_descriptor(
 }
 
 pub(super) fn reflect_has(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -68,7 +68,7 @@ pub(super) fn reflect_has(
 }
 
 pub(super) fn reflect_is_extensible(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -76,7 +76,7 @@ pub(super) fn reflect_is_extensible(
 }
 
 pub(super) fn reflect_own_keys(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -84,7 +84,7 @@ pub(super) fn reflect_own_keys(
 }
 
 pub(super) fn reflect_prevent_extensions(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -92,7 +92,7 @@ pub(super) fn reflect_prevent_extensions(
 }
 
 pub(super) fn reflect_set(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -100,7 +100,7 @@ pub(super) fn reflect_set(
 }
 
 pub(super) fn reflect_set_prototype_of(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {

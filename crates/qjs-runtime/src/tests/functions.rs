@@ -1945,3 +1945,13 @@ fn math_intrinsics_run_natively_with_computed_arguments() {
         Ok(Value::String("149.575891".to_owned().into()))
     );
 }
+
+#[test]
+fn typed_native_reactions_preserve_indices_and_shared_single_call_guards() {
+    assert_eq!(
+        eval(include_str!(
+            "../../../../tests/fixtures/compare-qjs/s3b-scope-native-reaction-captures.js"
+        )),
+        Ok(Value::String("1,2|fulfilled:3,fulfilled:4|true:5,6".into()))
+    );
+}

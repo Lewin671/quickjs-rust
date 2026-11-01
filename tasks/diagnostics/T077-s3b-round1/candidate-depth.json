@@ -1,0 +1,2078 @@
+{
+  "label": "s3b-0b659b89",
+  "features": "default",
+  "host_stack": "ordinary CLI main thread; no stack override",
+  "measure": "depth/exit/semantic-output only; no timing",
+  "profiles": {
+    "debug": {
+      "binary_sha256": "f719b2464e7362e7ec4f57d2816d87244ca5b1f4d6d21b008b33b006890b261d",
+      "cases": {
+        "forEach": {
+          "largest_pass": 162,
+          "first_failure": 163,
+          "failure_kind": "stack-abort",
+          "ceiling": true,
+          "trace": [
+            {
+              "depth": 0,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "1\n",
+              "stderr": ""
+            },
+            {
+              "depth": 16,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "17\n",
+              "stderr": ""
+            },
+            {
+              "depth": 32,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "33\n",
+              "stderr": ""
+            },
+            {
+              "depth": 64,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "65\n",
+              "stderr": ""
+            },
+            {
+              "depth": 128,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "129\n",
+              "stderr": ""
+            },
+            {
+              "depth": 256,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401241741) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 192,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401241744) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 160,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "161\n",
+              "stderr": ""
+            },
+            {
+              "depth": 176,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401241750) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 168,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401241753) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 164,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401241759) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 162,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "163\n",
+              "stderr": ""
+            },
+            {
+              "depth": 163,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401241764) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            }
+          ]
+        },
+        "map": {
+          "largest_pass": 161,
+          "first_failure": 162,
+          "failure_kind": "stack-abort",
+          "ceiling": true,
+          "trace": [
+            {
+              "depth": 0,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "1\n",
+              "stderr": ""
+            },
+            {
+              "depth": 16,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "17\n",
+              "stderr": ""
+            },
+            {
+              "depth": 32,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "33\n",
+              "stderr": ""
+            },
+            {
+              "depth": 64,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "65\n",
+              "stderr": ""
+            },
+            {
+              "depth": 128,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "129\n",
+              "stderr": ""
+            },
+            {
+              "depth": 256,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401241786) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 192,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401241789) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 160,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "161\n",
+              "stderr": ""
+            },
+            {
+              "depth": 176,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401241796) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 168,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401241798) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 164,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401241800) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 162,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401241804) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 161,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "162\n",
+              "stderr": ""
+            }
+          ]
+        },
+        "reduce": {
+          "largest_pass": 209,
+          "first_failure": 210,
+          "failure_kind": "stack-abort",
+          "ceiling": true,
+          "trace": [
+            {
+              "depth": 0,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "1\n",
+              "stderr": ""
+            },
+            {
+              "depth": 16,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "17\n",
+              "stderr": ""
+            },
+            {
+              "depth": 32,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "33\n",
+              "stderr": ""
+            },
+            {
+              "depth": 64,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "65\n",
+              "stderr": ""
+            },
+            {
+              "depth": 128,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "129\n",
+              "stderr": ""
+            },
+            {
+              "depth": 256,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401241828) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 192,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "193\n",
+              "stderr": ""
+            },
+            {
+              "depth": 224,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401241838) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 208,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "209\n",
+              "stderr": ""
+            },
+            {
+              "depth": 216,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401241853) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 212,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401241859) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 210,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401241896) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 209,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "210\n",
+              "stderr": ""
+            }
+          ]
+        },
+        "call": {
+          "largest_pass": 337,
+          "first_failure": 338,
+          "failure_kind": "stack-abort",
+          "ceiling": true,
+          "trace": [
+            {
+              "depth": 0,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "0\n",
+              "stderr": ""
+            },
+            {
+              "depth": 16,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "16\n",
+              "stderr": ""
+            },
+            {
+              "depth": 32,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "32\n",
+              "stderr": ""
+            },
+            {
+              "depth": 64,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "64\n",
+              "stderr": ""
+            },
+            {
+              "depth": 128,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "128\n",
+              "stderr": ""
+            },
+            {
+              "depth": 256,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "256\n",
+              "stderr": ""
+            },
+            {
+              "depth": 512,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401241929) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 384,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401241932) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 320,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "320\n",
+              "stderr": ""
+            },
+            {
+              "depth": 352,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401241937) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 336,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "336\n",
+              "stderr": ""
+            },
+            {
+              "depth": 344,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401241942) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 340,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401241947) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 338,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401241950) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 337,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "337\n",
+              "stderr": ""
+            }
+          ]
+        },
+        "apply": {
+          "largest_pass": 290,
+          "first_failure": 291,
+          "failure_kind": "stack-abort",
+          "ceiling": true,
+          "trace": [
+            {
+              "depth": 0,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "0\n",
+              "stderr": ""
+            },
+            {
+              "depth": 16,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "16\n",
+              "stderr": ""
+            },
+            {
+              "depth": 32,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "32\n",
+              "stderr": ""
+            },
+            {
+              "depth": 64,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "64\n",
+              "stderr": ""
+            },
+            {
+              "depth": 128,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "128\n",
+              "stderr": ""
+            },
+            {
+              "depth": 256,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "256\n",
+              "stderr": ""
+            },
+            {
+              "depth": 512,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401241972) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 384,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401241975) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 320,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401241978) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 288,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "288\n",
+              "stderr": ""
+            },
+            {
+              "depth": 304,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401241983) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 296,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401241986) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 292,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401241989) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 290,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "290\n",
+              "stderr": ""
+            },
+            {
+              "depth": 291,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401241993) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            }
+          ]
+        },
+        "reflect_apply": {
+          "largest_pass": 290,
+          "first_failure": 291,
+          "failure_kind": "stack-abort",
+          "ceiling": true,
+          "trace": [
+            {
+              "depth": 0,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "0\n",
+              "stderr": ""
+            },
+            {
+              "depth": 16,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "16\n",
+              "stderr": ""
+            },
+            {
+              "depth": 32,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "32\n",
+              "stderr": ""
+            },
+            {
+              "depth": 64,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "64\n",
+              "stderr": ""
+            },
+            {
+              "depth": 128,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "128\n",
+              "stderr": ""
+            },
+            {
+              "depth": 256,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "256\n",
+              "stderr": ""
+            },
+            {
+              "depth": 512,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401242009) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 384,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401242012) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 320,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401242016) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 288,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "288\n",
+              "stderr": ""
+            },
+            {
+              "depth": 304,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401242025) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 296,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401242028) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 292,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401242032) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 290,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "290\n",
+              "stderr": ""
+            },
+            {
+              "depth": 291,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401242037) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            }
+          ]
+        },
+        "yield_star": {
+          "largest_pass": 148,
+          "first_failure": 149,
+          "failure_kind": "stack-abort",
+          "ceiling": true,
+          "trace": [
+            {
+              "depth": 0,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "42\n",
+              "stderr": ""
+            },
+            {
+              "depth": 16,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "42\n",
+              "stderr": ""
+            },
+            {
+              "depth": 32,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "42\n",
+              "stderr": ""
+            },
+            {
+              "depth": 64,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "42\n",
+              "stderr": ""
+            },
+            {
+              "depth": 128,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "42\n",
+              "stderr": ""
+            },
+            {
+              "depth": 256,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401242050) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 192,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401242053) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 160,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401242057) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 144,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "42\n",
+              "stderr": ""
+            },
+            {
+              "depth": 152,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401242063) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 148,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "42\n",
+              "stderr": ""
+            },
+            {
+              "depth": 150,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401242097) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 149,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401242117) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            }
+          ]
+        },
+        "plain_in_callback": {
+          "largest_pass": 4096,
+          "ceiling": false,
+          "trace": [
+            {
+              "depth": 0,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "0\n",
+              "stderr": ""
+            },
+            {
+              "depth": 16,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "16\n",
+              "stderr": ""
+            },
+            {
+              "depth": 32,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "32\n",
+              "stderr": ""
+            },
+            {
+              "depth": 64,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "64\n",
+              "stderr": ""
+            },
+            {
+              "depth": 128,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "128\n",
+              "stderr": ""
+            },
+            {
+              "depth": 256,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "256\n",
+              "stderr": ""
+            },
+            {
+              "depth": 512,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "512\n",
+              "stderr": ""
+            },
+            {
+              "depth": 1024,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "1024\n",
+              "stderr": ""
+            },
+            {
+              "depth": 2048,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "2048\n",
+              "stderr": ""
+            },
+            {
+              "depth": 4096,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "4096\n",
+              "stderr": ""
+            }
+          ]
+        }
+      }
+    },
+    "release": {
+      "binary_sha256": "305aea83371a6030612f055314b429201e20a3d67e662dc62eed24b45d170e98",
+      "cases": {
+        "forEach": {
+          "largest_pass": 723,
+          "first_failure": 724,
+          "failure_kind": "stack-abort",
+          "ceiling": true,
+          "trace": [
+            {
+              "depth": 0,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "1\n",
+              "stderr": ""
+            },
+            {
+              "depth": 16,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "17\n",
+              "stderr": ""
+            },
+            {
+              "depth": 32,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "33\n",
+              "stderr": ""
+            },
+            {
+              "depth": 64,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "65\n",
+              "stderr": ""
+            },
+            {
+              "depth": 128,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "129\n",
+              "stderr": ""
+            },
+            {
+              "depth": 256,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "257\n",
+              "stderr": ""
+            },
+            {
+              "depth": 512,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "513\n",
+              "stderr": ""
+            },
+            {
+              "depth": 1024,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401242230) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 768,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401242233) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 640,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "641\n",
+              "stderr": ""
+            },
+            {
+              "depth": 704,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "705\n",
+              "stderr": ""
+            },
+            {
+              "depth": 736,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401242240) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 720,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "721\n",
+              "stderr": ""
+            },
+            {
+              "depth": 728,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401242245) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 724,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401242248) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 722,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "723\n",
+              "stderr": ""
+            },
+            {
+              "depth": 723,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "724\n",
+              "stderr": ""
+            }
+          ]
+        },
+        "map": {
+          "largest_pass": 718,
+          "first_failure": 719,
+          "failure_kind": "stack-abort",
+          "ceiling": true,
+          "trace": [
+            {
+              "depth": 0,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "1\n",
+              "stderr": ""
+            },
+            {
+              "depth": 16,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "17\n",
+              "stderr": ""
+            },
+            {
+              "depth": 32,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "33\n",
+              "stderr": ""
+            },
+            {
+              "depth": 64,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "65\n",
+              "stderr": ""
+            },
+            {
+              "depth": 128,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "129\n",
+              "stderr": ""
+            },
+            {
+              "depth": 256,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "257\n",
+              "stderr": ""
+            },
+            {
+              "depth": 512,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "513\n",
+              "stderr": ""
+            },
+            {
+              "depth": 1024,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401242269) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 768,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401242271) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 640,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "641\n",
+              "stderr": ""
+            },
+            {
+              "depth": 704,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "705\n",
+              "stderr": ""
+            },
+            {
+              "depth": 736,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401242277) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 720,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401242279) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 712,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "713\n",
+              "stderr": ""
+            },
+            {
+              "depth": 716,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "717\n",
+              "stderr": ""
+            },
+            {
+              "depth": 718,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "719\n",
+              "stderr": ""
+            },
+            {
+              "depth": 719,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401242287) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            }
+          ]
+        },
+        "reduce": {
+          "largest_pass": 754,
+          "first_failure": 755,
+          "failure_kind": "stack-abort",
+          "ceiling": true,
+          "trace": [
+            {
+              "depth": 0,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "1\n",
+              "stderr": ""
+            },
+            {
+              "depth": 16,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "17\n",
+              "stderr": ""
+            },
+            {
+              "depth": 32,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "33\n",
+              "stderr": ""
+            },
+            {
+              "depth": 64,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "65\n",
+              "stderr": ""
+            },
+            {
+              "depth": 128,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "129\n",
+              "stderr": ""
+            },
+            {
+              "depth": 256,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "257\n",
+              "stderr": ""
+            },
+            {
+              "depth": 512,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "513\n",
+              "stderr": ""
+            },
+            {
+              "depth": 1024,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401242303) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 768,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401242305) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 640,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "641\n",
+              "stderr": ""
+            },
+            {
+              "depth": 704,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "705\n",
+              "stderr": ""
+            },
+            {
+              "depth": 736,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "737\n",
+              "stderr": ""
+            },
+            {
+              "depth": 752,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "753\n",
+              "stderr": ""
+            },
+            {
+              "depth": 760,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401242317) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 756,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401242320) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 754,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "755\n",
+              "stderr": ""
+            },
+            {
+              "depth": 755,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401242325) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            }
+          ]
+        },
+        "call": {
+          "largest_pass": 1814,
+          "first_failure": 1815,
+          "failure_kind": "stack-abort",
+          "ceiling": true,
+          "trace": [
+            {
+              "depth": 0,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "0\n",
+              "stderr": ""
+            },
+            {
+              "depth": 16,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "16\n",
+              "stderr": ""
+            },
+            {
+              "depth": 32,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "32\n",
+              "stderr": ""
+            },
+            {
+              "depth": 64,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "64\n",
+              "stderr": ""
+            },
+            {
+              "depth": 128,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "128\n",
+              "stderr": ""
+            },
+            {
+              "depth": 256,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "256\n",
+              "stderr": ""
+            },
+            {
+              "depth": 512,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "512\n",
+              "stderr": ""
+            },
+            {
+              "depth": 1024,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "1024\n",
+              "stderr": ""
+            },
+            {
+              "depth": 2048,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401242346) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 1536,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "1536\n",
+              "stderr": ""
+            },
+            {
+              "depth": 1792,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "1792\n",
+              "stderr": ""
+            },
+            {
+              "depth": 1920,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401242353) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 1856,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401242356) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 1824,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401242358) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 1808,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "1808\n",
+              "stderr": ""
+            },
+            {
+              "depth": 1816,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401242362) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 1812,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "1812\n",
+              "stderr": ""
+            },
+            {
+              "depth": 1814,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "1814\n",
+              "stderr": ""
+            },
+            {
+              "depth": 1815,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401242368) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            }
+          ]
+        },
+        "apply": {
+          "largest_pass": 1399,
+          "first_failure": 1400,
+          "failure_kind": "stack-abort",
+          "ceiling": true,
+          "trace": [
+            {
+              "depth": 0,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "0\n",
+              "stderr": ""
+            },
+            {
+              "depth": 16,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "16\n",
+              "stderr": ""
+            },
+            {
+              "depth": 32,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "32\n",
+              "stderr": ""
+            },
+            {
+              "depth": 64,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "64\n",
+              "stderr": ""
+            },
+            {
+              "depth": 128,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "128\n",
+              "stderr": ""
+            },
+            {
+              "depth": 256,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "256\n",
+              "stderr": ""
+            },
+            {
+              "depth": 512,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "512\n",
+              "stderr": ""
+            },
+            {
+              "depth": 1024,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "1024\n",
+              "stderr": ""
+            },
+            {
+              "depth": 2048,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401242389) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 1536,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401242392) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 1280,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "1280\n",
+              "stderr": ""
+            },
+            {
+              "depth": 1408,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401242396) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 1344,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "1344\n",
+              "stderr": ""
+            },
+            {
+              "depth": 1376,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "1376\n",
+              "stderr": ""
+            },
+            {
+              "depth": 1392,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "1392\n",
+              "stderr": ""
+            },
+            {
+              "depth": 1400,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401242405) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 1396,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "1396\n",
+              "stderr": ""
+            },
+            {
+              "depth": 1398,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "1398\n",
+              "stderr": ""
+            },
+            {
+              "depth": 1399,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "1399\n",
+              "stderr": ""
+            }
+          ]
+        },
+        "reflect_apply": {
+          "largest_pass": 1454,
+          "first_failure": 1455,
+          "failure_kind": "stack-abort",
+          "ceiling": true,
+          "trace": [
+            {
+              "depth": 0,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "0\n",
+              "stderr": ""
+            },
+            {
+              "depth": 16,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "16\n",
+              "stderr": ""
+            },
+            {
+              "depth": 32,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "32\n",
+              "stderr": ""
+            },
+            {
+              "depth": 64,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "64\n",
+              "stderr": ""
+            },
+            {
+              "depth": 128,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "128\n",
+              "stderr": ""
+            },
+            {
+              "depth": 256,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "256\n",
+              "stderr": ""
+            },
+            {
+              "depth": 512,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "512\n",
+              "stderr": ""
+            },
+            {
+              "depth": 1024,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "1024\n",
+              "stderr": ""
+            },
+            {
+              "depth": 2048,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401242429) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 1536,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401242432) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 1280,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "1280\n",
+              "stderr": ""
+            },
+            {
+              "depth": 1408,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "1408\n",
+              "stderr": ""
+            },
+            {
+              "depth": 1472,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401242439) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 1440,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "1440\n",
+              "stderr": ""
+            },
+            {
+              "depth": 1456,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401242444) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 1448,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "1448\n",
+              "stderr": ""
+            },
+            {
+              "depth": 1452,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "1452\n",
+              "stderr": ""
+            },
+            {
+              "depth": 1454,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "1454\n",
+              "stderr": ""
+            },
+            {
+              "depth": 1455,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401242453) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            }
+          ]
+        },
+        "yield_star": {
+          "largest_pass": 781,
+          "first_failure": 782,
+          "failure_kind": "stack-abort",
+          "ceiling": true,
+          "trace": [
+            {
+              "depth": 0,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "42\n",
+              "stderr": ""
+            },
+            {
+              "depth": 16,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "42\n",
+              "stderr": ""
+            },
+            {
+              "depth": 32,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "42\n",
+              "stderr": ""
+            },
+            {
+              "depth": 64,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "42\n",
+              "stderr": ""
+            },
+            {
+              "depth": 128,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "42\n",
+              "stderr": ""
+            },
+            {
+              "depth": 256,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "42\n",
+              "stderr": ""
+            },
+            {
+              "depth": 512,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "42\n",
+              "stderr": ""
+            },
+            {
+              "depth": 1024,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401242470) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 768,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "42\n",
+              "stderr": ""
+            },
+            {
+              "depth": 896,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401242474) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 832,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401242476) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 800,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401242478) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 784,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401242480) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 776,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "42\n",
+              "stderr": ""
+            },
+            {
+              "depth": 780,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "42\n",
+              "stderr": ""
+            },
+            {
+              "depth": 782,
+              "ok": false,
+              "kind": "stack-abort",
+              "exit": -6,
+              "stdout": "",
+              "stderr": "\nthread 'main' (401242486) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n"
+            },
+            {
+              "depth": 781,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "42\n",
+              "stderr": ""
+            }
+          ]
+        },
+        "plain_in_callback": {
+          "largest_pass": 4096,
+          "ceiling": false,
+          "trace": [
+            {
+              "depth": 0,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "0\n",
+              "stderr": ""
+            },
+            {
+              "depth": 16,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "16\n",
+              "stderr": ""
+            },
+            {
+              "depth": 32,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "32\n",
+              "stderr": ""
+            },
+            {
+              "depth": 64,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "64\n",
+              "stderr": ""
+            },
+            {
+              "depth": 128,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "128\n",
+              "stderr": ""
+            },
+            {
+              "depth": 256,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "256\n",
+              "stderr": ""
+            },
+            {
+              "depth": 512,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "512\n",
+              "stderr": ""
+            },
+            {
+              "depth": 1024,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "1024\n",
+              "stderr": ""
+            },
+            {
+              "depth": 2048,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "2048\n",
+              "stderr": ""
+            },
+            {
+              "depth": 4096,
+              "ok": true,
+              "kind": "pass",
+              "exit": 0,
+              "stdout": "4096\n",
+              "stderr": ""
+            }
+          ]
+        }
+      }
+    }
+  }
+}

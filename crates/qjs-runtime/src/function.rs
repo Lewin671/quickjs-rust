@@ -1,15 +1,17 @@
 mod arguments;
+pub(crate) use arguments::{ArgumentsRecipe, CallInputs, LazyArguments};
 mod call;
 mod call_frame;
-mod env;
-mod eval_cache;
 mod install;
 mod intrinsic_construct;
 mod local_names;
+mod native_captures;
 mod native_kind;
+pub(crate) use native_captures::{
+    NativeCaptures, PromiseElementCaptures, PromisePrototypeCaptures,
+};
 mod prototype;
 mod strict;
-mod upvalue;
 mod value;
 
 /// Realm key under which the single shared %ThrowTypeError% intrinsic is
@@ -39,30 +41,22 @@ pub(crate) use call::{
     call_direct_function_literal, call_direct_leaf_function, call_field_initializer, call_function,
     call_function_slice, construct_function, construct_function_slice, ensure_constructor,
     initialize_direct_instance_fields, initialize_instance_fields, is_direct_construct_class,
-    is_direct_leaf_function, try_construct_direct_leaf_function,
+    is_direct_leaf_function, is_direct_leaf_shape, lexical_scope_admits_entry,
+    try_construct_direct_leaf_function,
 };
 pub(crate) use intrinsic_construct::construct_intrinsic_directly;
 pub(crate) fn is_call_frame_binding(name: &str) -> bool {
-    matches!(
-        name,
-        crate::GLOBAL_THIS_BINDING
-            | crate::DIRECT_EVAL_STRICT_BINDING
-            | crate::DIRECT_EVAL_ARGUMENTS_BINDING
-            | crate::DIRECT_EVAL_FUNCTION_CONTEXT_BINDING
-            | crate::FIELD_INITIALIZER_EVAL_BINDING
-            | crate::HOME_OBJECT_BINDING
-            | crate::NEW_TARGET_BINDING
-            | crate::SUPER_CONSTRUCTOR_BINDING
-            | crate::ACTIVE_CONSTRUCTOR_BINDING
-            | "this"
-            | "arguments"
-    )
+    matches!(name, crate::GLOBAL_THIS_BINDING | "this" | "arguments")
 }
+pub(crate) use crate::binding::BindingCell;
+pub(crate) use crate::binding::DynamicBindings;
+#[cfg(test)]
+pub(crate) use crate::context::ModuleImports;
+pub(crate) use crate::context::Realm;
 #[allow(unused_imports)]
 #[cfg(test)]
-pub(crate) use env::new_realm;
-pub(crate) use env::new_realm_sharing_atoms;
-pub(crate) use env::{CallEnv, DynamicBindings, ModuleImports, Realm};
+pub(crate) use crate::context::new_realm;
+pub(crate) use crate::context::new_realm_sharing_atoms;
 pub(crate) use install::install_function;
 pub(crate) use local_names::{
     collect_function_local_names, parameter_argument_binding_name, parameter_binding_name,
@@ -78,8 +72,14 @@ pub(crate) use prototype::{
     native_generator_function, native_realm_throw_type_error, native_throw_type_error,
 };
 pub(crate) use strict::is_strict_function_body;
-pub(crate) use upvalue::Upvalue;
 pub(crate) use value::{
     CompiledUserFunction, Function, FunctionWeakRef, InstanceElementInitializer,
-    InstanceFieldInitializer, InstancePrivateElement, NativeContextData, PrivateFieldInit,
+    InstanceFieldInitializer, InstancePrivateElement, PrivateFieldInit,
+};
+
+#[cfg(test)]
+pub(crate) use call::enter_indexed_activation;
+pub(crate) use call::{
+    bind_indexed_call_owner, keep_released_activation, reenter_indexed_activation,
+    released_indexed_activation,
 };

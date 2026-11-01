@@ -1,10 +1,10 @@
 //! Operation entries for math; bound once when a native is created.
 
 use super::CallInfo;
-use crate::{CallEnv, RuntimeError, Value, math as math_builtins};
+use crate::{RuntimeError, Value, math as math_builtins};
 
 pub(super) fn math_abs(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -12,7 +12,7 @@ pub(super) fn math_abs(
 }
 
 pub(super) fn math_acos(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -20,7 +20,7 @@ pub(super) fn math_acos(
 }
 
 pub(super) fn math_acosh(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -28,7 +28,7 @@ pub(super) fn math_acosh(
 }
 
 pub(super) fn math_asin(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -36,7 +36,7 @@ pub(super) fn math_asin(
 }
 
 pub(super) fn math_asinh(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -44,7 +44,7 @@ pub(super) fn math_asinh(
 }
 
 pub(super) fn math_atan(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -52,7 +52,7 @@ pub(super) fn math_atan(
 }
 
 pub(super) fn math_atan2(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -60,7 +60,7 @@ pub(super) fn math_atan2(
 }
 
 pub(super) fn math_atanh(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -68,7 +68,7 @@ pub(super) fn math_atanh(
 }
 
 pub(super) fn math_cbrt(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -76,7 +76,7 @@ pub(super) fn math_cbrt(
 }
 
 pub(super) fn math_ceil(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -84,7 +84,7 @@ pub(super) fn math_ceil(
 }
 
 pub(super) fn math_clz32(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -92,7 +92,7 @@ pub(super) fn math_clz32(
 }
 
 pub(super) fn math_cos(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -100,7 +100,7 @@ pub(super) fn math_cos(
 }
 
 pub(super) fn math_cosh(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -108,7 +108,7 @@ pub(super) fn math_cosh(
 }
 
 pub(super) fn math_exp(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -116,7 +116,7 @@ pub(super) fn math_exp(
 }
 
 pub(super) fn math_expm1(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -124,7 +124,7 @@ pub(super) fn math_expm1(
 }
 
 pub(super) fn math_f16round(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -132,7 +132,7 @@ pub(super) fn math_f16round(
 }
 
 pub(super) fn math_floor(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -140,7 +140,7 @@ pub(super) fn math_floor(
 }
 
 pub(super) fn math_fround(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -148,7 +148,7 @@ pub(super) fn math_fround(
 }
 
 pub(super) fn math_hypot(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -156,7 +156,7 @@ pub(super) fn math_hypot(
 }
 
 pub(super) fn math_imul(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -164,7 +164,7 @@ pub(super) fn math_imul(
 }
 
 pub(super) fn math_log(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -172,7 +172,7 @@ pub(super) fn math_log(
 }
 
 pub(super) fn math_log1p(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -180,7 +180,7 @@ pub(super) fn math_log1p(
 }
 
 pub(super) fn math_log10(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -188,7 +188,7 @@ pub(super) fn math_log10(
 }
 
 pub(super) fn math_log2(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -196,7 +196,7 @@ pub(super) fn math_log2(
 }
 
 pub(super) fn math_max(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -204,7 +204,7 @@ pub(super) fn math_max(
 }
 
 pub(super) fn math_min(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -212,7 +212,7 @@ pub(super) fn math_min(
 }
 
 pub(super) fn math_pow(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -220,7 +220,7 @@ pub(super) fn math_pow(
 }
 
 pub(super) fn math_random(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -228,7 +228,7 @@ pub(super) fn math_random(
 }
 
 pub(super) fn math_round(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -236,7 +236,7 @@ pub(super) fn math_round(
 }
 
 pub(super) fn math_sign(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -244,7 +244,7 @@ pub(super) fn math_sign(
 }
 
 pub(super) fn math_sin(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -252,7 +252,7 @@ pub(super) fn math_sin(
 }
 
 pub(super) fn math_sinh(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -260,7 +260,7 @@ pub(super) fn math_sinh(
 }
 
 pub(super) fn math_sqrt(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -268,7 +268,7 @@ pub(super) fn math_sqrt(
 }
 
 pub(super) fn math_sum_precise(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -279,7 +279,7 @@ pub(super) fn math_sum_precise(
 }
 
 pub(super) fn math_tan(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -287,7 +287,7 @@ pub(super) fn math_tan(
 }
 
 pub(super) fn math_tanh(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -295,7 +295,7 @@ pub(super) fn math_tanh(
 }
 
 pub(super) fn math_trunc(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {

@@ -1,4 +1,3 @@
-use crate::CallEnv;
 use crate::{
     ArrayRef, Property, PropertyKey, RuntimeError, Value, construct_function, ensure_constructor,
     property_value, property_value_key, symbol,
@@ -10,7 +9,7 @@ pub(super) fn array_species_create(
     receiver: Value,
     length: usize,
     method: &str,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if !is_array_species_receiver(&receiver)? {
         return default_array_species_create(length, env);
@@ -54,7 +53,10 @@ pub(super) fn array_species_create(
 /// whose own `@@species` is the intrinsic getter returning Array itself.
 /// Constructing the intrinsic with a length makes the same fresh array the
 /// default creation does. Anything else takes the observable lookups.
-pub(super) fn species_is_intrinsic_array(array: &ArrayRef, env: &CallEnv) -> bool {
+pub(super) fn species_is_intrinsic_array(
+    array: &ArrayRef,
+    env: &crate::context::Context<'_>,
+) -> bool {
     if !array.has_no_own_named_properties()
         || env.array_prototype_intrinsic_override().is_some()
         || env.has_dynamic_function_realm_global()
@@ -89,7 +91,10 @@ pub(super) fn species_is_intrinsic_array(array: &ArrayRef, env: &CallEnv) -> boo
         })
 }
 
-fn default_array_species_create(length: usize, env: &CallEnv) -> Result<Value, RuntimeError> {
+fn default_array_species_create(
+    length: usize,
+    env: &crate::context::Context<'_>,
+) -> Result<Value, RuntimeError> {
     if length > MAX_ARRAY_LENGTH {
         return Err(RuntimeError {
             thrown: None,
@@ -102,7 +107,7 @@ fn default_array_species_create(length: usize, env: &CallEnv) -> Result<Value, R
 pub(super) fn validate_array_species_constructor(
     receiver: Value,
     method: &str,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<(), RuntimeError> {
     let Value::Array(array) = &receiver else {
         return Ok(());
@@ -126,7 +131,7 @@ pub(super) fn create_data_property_or_throw(
     target: Value,
     key: String,
     value: Value,
-    env: &mut crate::CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<(), RuntimeError> {
     if crate::object::define_property_on_value_key(
         target,
@@ -145,7 +150,7 @@ pub(super) fn create_data_property_or_throw(
 pub(super) fn set_array_like_length(
     target: Value,
     length: usize,
-    env: &mut crate::CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<(), RuntimeError> {
     if crate::object::define_property_on_value_key(
         target,
@@ -183,7 +188,7 @@ fn is_object_like(value: &Value) -> bool {
 
 fn is_cross_realm_array_constructor(
     constructor: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<bool, RuntimeError> {
     if !is_object_like(&constructor) {
         return Ok(false);

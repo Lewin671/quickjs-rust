@@ -1,6 +1,5 @@
 use std::{cell::RefCell, fmt, rc::Rc};
 
-use crate::CallEnv;
 use crate::{
     Function, NativeFunction, ObjectRef, Property, PropertyKey, RuntimeError, Value, call_function,
     has_property_key, is_truthy,
@@ -115,7 +114,11 @@ impl ProxyRef {
     }
 }
 
-pub(crate) fn install_proxy(env: &mut CallEnv, global_this: &Value, _object_prototype: ObjectRef) {
+pub(crate) fn install_proxy(
+    env: &mut crate::context::Context<'_>,
+    global_this: &Value,
+    _object_prototype: ObjectRef,
+) {
     let proxy_function =
         Function::new_native(Some("Proxy"), 2, NativeFunction::Proxy, true, env.realm());
     // `Proxy` is constructable but exposes no own `prototype`; the generic
@@ -210,7 +213,7 @@ pub(crate) fn proxy_get(
     proxy: ProxyRef,
     key: &PropertyKey,
     receiver: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let target = proxy.target_result()?;
     let handler = proxy.handler_result()?;
@@ -249,7 +252,7 @@ pub(crate) fn proxy_get(
 pub(crate) fn proxy_has(
     proxy: ProxyRef,
     key: &PropertyKey,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<bool, RuntimeError> {
     let target = proxy.target_result()?;
     let handler = proxy.handler_result()?;
@@ -290,7 +293,7 @@ pub(crate) fn proxy_set(
     key: &PropertyKey,
     value: Value,
     receiver: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<bool, RuntimeError> {
     let target = proxy.target_result()?;
     let handler = proxy.handler_result()?;
@@ -336,7 +339,7 @@ pub(crate) fn proxy_set(
 pub(crate) fn proxy_delete_property(
     proxy: ProxyRef,
     key: &PropertyKey,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<bool, RuntimeError> {
     let target = proxy.target_result()?;
     let handler = proxy.handler_result()?;
@@ -381,8 +384,8 @@ pub(crate) fn proxy_define_property(
     proxy: ProxyRef,
     key: &PropertyKey,
     descriptor: &crate::object::PropertyDescriptor,
-    env: &mut CallEnv,
-    forward: impl FnOnce(Value, &mut CallEnv) -> Result<bool, RuntimeError>,
+    env: &mut crate::context::Context<'_>,
+    forward: impl FnOnce(Value, &mut crate::context::Context<'_>) -> Result<bool, RuntimeError>,
 ) -> Result<bool, RuntimeError> {
     let target = proxy.target_result()?;
     let handler = proxy.handler_result()?;
@@ -470,8 +473,11 @@ pub(crate) fn proxy_define_property(
 pub(crate) fn proxy_get_own_property_descriptor(
     proxy: ProxyRef,
     key: &PropertyKey,
-    env: &mut CallEnv,
-    forward: impl FnOnce(Value, &mut CallEnv) -> Result<Option<Property>, RuntimeError>,
+    env: &mut crate::context::Context<'_>,
+    forward: impl FnOnce(
+        Value,
+        &mut crate::context::Context<'_>,
+    ) -> Result<Option<Property>, RuntimeError>,
 ) -> Result<Option<Property>, RuntimeError> {
     let target = proxy.target_result()?;
     let handler = proxy.handler_result()?;
@@ -560,7 +566,7 @@ pub(crate) fn proxy_get_own_property_descriptor(
 /// enforce that the boolean result matches the target's own extensibility.
 pub(crate) fn proxy_is_extensible(
     proxy: ProxyRef,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<bool, RuntimeError> {
     let target = proxy.target_result()?;
     let handler = proxy.handler_result()?;
@@ -585,7 +591,7 @@ pub(crate) fn proxy_is_extensible(
 /// trap; a truthy result requires that the target is already non-extensible.
 pub(crate) fn proxy_prevent_extensions(
     proxy: ProxyRef,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<bool, RuntimeError> {
     let target = proxy.target_result()?;
     let handler = proxy.handler_result()?;
@@ -610,7 +616,7 @@ pub(crate) fn proxy_prevent_extensions(
 
 /// The ordinary `[[Prototype]]` of a value as a JavaScript value (object or
 /// null), without dispatching through any Proxy trap.
-fn ordinary_prototype_value(target: &Value, env: &CallEnv) -> Value {
+fn ordinary_prototype_value(target: &Value, env: &crate::context::Context<'_>) -> Value {
     crate::value_prototype_slot(target.clone(), env)
         .map(|prototype| prototype.to_value())
         .unwrap_or(Value::Null)
@@ -621,7 +627,7 @@ fn ordinary_prototype_value(target: &Value, env: &CallEnv) -> Value {
 /// non-extensible the result must equal the target's own prototype.
 pub(crate) fn proxy_get_prototype_of(
     proxy: ProxyRef,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let target = proxy.target_result()?;
     let handler = proxy.handler_result()?;
@@ -662,7 +668,7 @@ pub(crate) fn proxy_get_prototype_of(
 pub(crate) fn proxy_set_prototype_of(
     proxy: ProxyRef,
     prototype_value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<bool, RuntimeError> {
     let target = proxy.target_result()?;
     let handler = proxy.handler_result()?;
@@ -697,7 +703,10 @@ pub(crate) fn proxy_set_prototype_of(
 
 /// The target's [[GetPrototypeOf]] result: a Proxy target consults its trap so
 /// an abrupt completion or trap-driven value participates in invariant checks.
-fn target_prototype_value(target: &Value, env: &mut CallEnv) -> Result<Value, RuntimeError> {
+fn target_prototype_value(
+    target: &Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<Value, RuntimeError> {
     match target {
         Value::Proxy(inner) => proxy_get_prototype_of(inner.clone(), env),
         _ => Ok(ordinary_prototype_value(target, env)),
@@ -709,7 +718,7 @@ fn target_prototype_value(target: &Value, env: &mut CallEnv) -> Result<Value, Ru
 /// keys (strings then symbols) are returned.
 pub(crate) fn proxy_own_keys(
     proxy: ProxyRef,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Vec<PropertyKey>, RuntimeError> {
     let target = proxy.target_result()?;
     let handler = proxy.handler_result()?;
@@ -796,7 +805,7 @@ pub(crate) fn proxy_own_keys(
 
 fn create_list_from_array_like(
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Vec<Value>, RuntimeError> {
     match value {
         Value::Array(array) => Ok(array.to_vec()),
@@ -833,7 +842,7 @@ fn ordinary_own_keys(target: &Value) -> Vec<PropertyKey> {
 /// own trap and invariant semantics, while ordinary values use raw own keys.
 fn observable_own_keys(
     target: &Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Vec<PropertyKey>, RuntimeError> {
     match target {
         Value::Proxy(proxy) => proxy_own_keys(proxy.clone(), env),
@@ -856,7 +865,7 @@ pub(crate) fn proxy_apply(
     proxy: ProxyRef,
     this_value: Value,
     arguments: Vec<Value>,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let target = proxy.target_result()?;
     let handler = proxy.handler_result()?;
@@ -880,7 +889,7 @@ pub(crate) fn proxy_construct(
     proxy: ProxyRef,
     new_target: Value,
     arguments: Vec<Value>,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let target = proxy.target_result()?;
     let handler = proxy.handler_result()?;
@@ -960,7 +969,7 @@ fn invariant_error(detail: &str) -> RuntimeError {
 fn proxy_trap(
     handler: Value,
     name: &str,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Option<Value>, RuntimeError> {
     match property_value(handler, name, env)? {
         Value::Undefined | Value::Null => Ok(None),

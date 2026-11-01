@@ -1,4 +1,4 @@
-use crate::{CallEnv, RuntimeError, Value, string::string_from_code_unit};
+use crate::{RuntimeError, Value, string::string_from_code_unit};
 
 pub(crate) fn native_assert_native_function(
     argument_values: &[Value],
@@ -58,7 +58,7 @@ pub(crate) fn native_assert_regexp_source_loop(
 }
 
 pub(crate) fn native_assert_regexp_whitespace_loop(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let regexp = crate::regexp::regexp_literal_value("\\S+", "", env)?;
     for cu in 0..=0xffffu32 {
@@ -95,7 +95,7 @@ pub(crate) fn native_assert_uri_loop(argument_values: &[Value]) -> Result<Value,
 }
 
 pub(crate) fn native_assert_string_substr_number_loop(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let positive_integers = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 10.0, 100.0];
     let mut integers = Vec::with_capacity(positive_integers.len() * 2);
@@ -133,7 +133,7 @@ pub(crate) fn native_assert_string_substr_number_loop(
 }
 
 pub(crate) fn native_assert_array_buffer_slice_to_immutable_argument_coercion(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let inputs = slice_to_immutable_good_inputs();
     assert_slice_to_immutable_matrix(env, &inputs, false)?;
@@ -467,7 +467,7 @@ fn slice_to_immutable_good_inputs() -> Vec<SliceInput> {
 }
 
 fn assert_slice_to_immutable_matrix(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     inputs: &[SliceInput],
     padded: bool,
 ) -> Result<(), RuntimeError> {
@@ -500,7 +500,7 @@ fn assert_slice_to_immutable_matrix(
     Ok(())
 }
 
-fn make_32_byte_array_buffer(env: &CallEnv) -> crate::ObjectRef {
+fn make_32_byte_array_buffer(env: &crate::context::Context<'_>) -> crate::ObjectRef {
     let object = crate::array_buffer::new_array_buffer(env, 32);
     let mut bytes = vec![0; 32];
     for (index, byte) in bytes.iter_mut().take(8).enumerate() {

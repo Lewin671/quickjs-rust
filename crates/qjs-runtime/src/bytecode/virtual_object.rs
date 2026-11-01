@@ -149,7 +149,6 @@ impl SlotAuthority {
                     && !bytecode.local_is_parameter(slot)
                     && !bytecode.locals[slot].is_received_upvalue()
                     && !bytecode.local_is_sloppy_global_fallback(slot)
-                    && !bytecode.local_is_eval_deletable(slot)
             })
             .collect();
         Self {

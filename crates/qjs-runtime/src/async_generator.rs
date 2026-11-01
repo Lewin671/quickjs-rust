@@ -15,9 +15,9 @@
 //! `{ value, done: true }`; an exception rejects the pending request and
 //! completes the generator.
 
+use crate::function::NativeCaptures;
 use std::collections::HashMap;
 
-use crate::CallEnv;
 use crate::{
     Function, NativeFunction, ObjectRef, Property, RuntimeError, Value,
     bytecode::{
@@ -38,18 +38,6 @@ pub(crate) const ASYNC_ITERATOR_PROTOTYPE_BINDING: &str = "\0AsyncIteratorProtot
 /// Intrinsic binding for `%AsyncGeneratorPrototype%`, the object async generator
 /// instances inherit from.
 pub(crate) const ASYNC_GENERATOR_PROTOTYPE_BINDING: &str = "\0AsyncGeneratorPrototype";
-
-/// Internal slot names carried in a reaction native's environment.
-const ASYNC_GEN: &str = "\0AsyncGenObject";
-/// The sync iterator wrapped by a CreateAsyncFromSyncIterator object.
-const SYNC_ITERATOR: &str = "\0SyncIterator";
-const SYNC_ITERATOR_NEXT: &str = "\0SyncIteratorNext";
-/// The wrapper promise capability and the `done` flag for an async-from-sync
-/// value await reaction.
-const WRAP_PROMISE: &str = "\0WrapPromise";
-const WRAP_DONE: &str = "\0WrapDone";
-const WRAP_SYNC_ITERATOR: &str = "\0WrapSyncIterator";
-const WRAP_CLOSE_ON_REJECTION: &str = "\0WrapCloseOnRejection";
 
 /// How a pending async-generator request was requested.
 #[derive(Clone)]
@@ -79,7 +67,7 @@ pub(crate) struct AsyncGeneratorInternal {
 /// bindings. `%AsyncGeneratorFunction%` is created only for prototype-chain
 /// consistency and is not exposed as a global binding.
 pub(crate) fn install_async_generator(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _global_this: &Value,
     object_prototype: ObjectRef,
 ) {
@@ -221,7 +209,9 @@ pub(crate) fn install_async_generator(
 }
 
 /// Returns `%AsyncGeneratorFunction.prototype%` from the current environment.
-pub(crate) fn async_generator_function_prototype(env: &CallEnv) -> Option<ObjectRef> {
+pub(crate) fn async_generator_function_prototype(
+    env: &crate::context::Context<'_>,
+) -> Option<ObjectRef> {
     match env.get(ASYNC_GENERATOR_FUNCTION_PROTOTYPE_BINDING) {
         Some(Value::Object(object)) => Some(object.clone()),
         _ => None,
@@ -229,7 +219,7 @@ pub(crate) fn async_generator_function_prototype(env: &CallEnv) -> Option<Object
 }
 
 /// Returns `%AsyncGeneratorPrototype%` from the current environment.
-pub(crate) fn async_generator_prototype(env: &CallEnv) -> Option<ObjectRef> {
+pub(crate) fn async_generator_prototype(env: &crate::context::Context<'_>) -> Option<ObjectRef> {
     match env.get(ASYNC_GENERATOR_PROTOTYPE_BINDING) {
         Some(Value::Object(object)) => Some(object.clone()),
         _ => None,
@@ -245,9 +235,10 @@ pub(crate) fn async_generator_prototype(env: &CallEnv) -> Option<ObjectRef> {
 pub(crate) fn make_async_generator_object(
     function: &Function,
     start: GeneratorStart,
-    env: &mut CallEnv,
+    inputs: Option<crate::function::CallInputs<'_>>,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
-    let state = crate::bytecode::start_suspended_at_body(start, env)?;
+    let state = crate::bytecode::start_suspended_at_body(start, inputs, env)?;
     let prototype = async_generator_object_prototype(function, env);
     let generator = ObjectRef::with_prototype(HashMap::new(), prototype, env.realm().atoms());
     *generator.generator_state().borrow_mut() = Some(state);
@@ -258,7 +249,10 @@ pub(crate) fn make_async_generator_object(
     Ok(Value::Object(generator))
 }
 
-fn async_generator_object_prototype(function: &Function, env: &CallEnv) -> Option<ObjectRef> {
+fn async_generator_object_prototype(
+    function: &Function,
+    env: &crate::context::Context<'_>,
+) -> Option<ObjectRef> {
     if let Some(Value::Object(prototype)) = function
         .own_property("prototype")
         .map(|property| property.value)
@@ -278,7 +272,7 @@ fn async_generator_object_prototype(function: &Function, env: &CallEnv) -> Optio
 /// Operation entries for `%AsyncGeneratorPrototype%`; each method enqueues a request
 /// and returns a promise of the eventual iterator result.
 pub(crate) fn async_generator_prototype_next(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: crate::native::CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -290,7 +284,7 @@ pub(crate) fn async_generator_prototype_next(
 }
 
 pub(crate) fn async_generator_prototype_return(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: crate::native::CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -302,7 +296,7 @@ pub(crate) fn async_generator_prototype_return(
 }
 
 pub(crate) fn async_generator_prototype_throw(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: crate::native::CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -314,7 +308,7 @@ pub(crate) fn async_generator_prototype_throw(
 }
 
 pub(crate) fn async_generator_prototype_async_iterator(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: crate::native::CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -322,7 +316,7 @@ pub(crate) fn async_generator_prototype_async_iterator(
 }
 
 pub(crate) fn async_iterator_prototype_async_dispose(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: crate::native::CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -330,7 +324,7 @@ pub(crate) fn async_iterator_prototype_async_dispose(
 }
 
 pub(crate) fn async_dispose_return_undefined(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     _info: crate::native::CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -340,7 +334,7 @@ pub(crate) fn async_dispose_return_undefined(
 fn request_method(
     this_value: &Value,
     kind: RequestKind,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let capability = promise::new_pending_promise(env);
     let Value::Object(generator) = this_value else {
@@ -360,7 +354,12 @@ fn request_method(
 
 /// AsyncGeneratorEnqueue: appends a request and, unless the queue is already
 /// being drained, starts draining.
-fn enqueue(generator: &ObjectRef, kind: RequestKind, capability: ObjectRef, env: &mut CallEnv) {
+fn enqueue(
+    generator: &ObjectRef,
+    kind: RequestKind,
+    capability: ObjectRef,
+    env: &mut crate::context::Context<'_>,
+) {
     {
         let mut slot = generator.async_generator_state().borrow_mut();
         let Some(state) = slot.as_mut() else { return };
@@ -376,7 +375,7 @@ fn enqueue(generator: &ObjectRef, kind: RequestKind, capability: ObjectRef, env:
 /// Serves the front request: resumes the body once and dispatches on the
 /// outcome. Each path either re-enters `drain` synchronously (when the request
 /// settles without an await) or schedules a reaction that re-enters it later.
-fn drain(generator: &ObjectRef, env: &mut CallEnv) {
+fn drain(generator: &ObjectRef, env: &mut crate::context::Context<'_>) {
     loop {
         // If the generator has completed, settle any queued requests directly.
         if matches!(
@@ -444,7 +443,7 @@ fn drain(generator: &ObjectRef, env: &mut CallEnv) {
 /// generator: a queued `next`/`return` yields `{ value: undefined, done: true }`
 /// (or `{ value, done: true }` for a `return(v)`), while a `throw` rejects.
 /// Returns whether a request was served (so the caller keeps draining).
-fn settle_completed_front(generator: &ObjectRef, env: &mut CallEnv) -> bool {
+fn settle_completed_front(generator: &ObjectRef, env: &mut crate::context::Context<'_>) -> bool {
     let kind = {
         let slot = generator.async_generator_state().borrow();
         let Some(state) = slot.as_ref() else {
@@ -505,20 +504,29 @@ fn set_draining(generator: &ObjectRef, value: bool) {
 }
 
 /// Resolves the front request with `{ value, done }`, dequeues it.
-fn resolve_front(generator: &ObjectRef, value: Value, done: bool, env: &mut CallEnv) {
+fn resolve_front(
+    generator: &ObjectRef,
+    value: Value,
+    done: bool,
+    env: &mut crate::context::Context<'_>,
+) {
     if let Some(request) = dequeue_front(generator) {
         settle_resolve(&request.capability, value, done, env);
     }
 }
 
 /// Resolves the front request with an already-built iterator result object.
-fn resolve_front_with_result(generator: &ObjectRef, result: Value, env: &mut CallEnv) {
+fn resolve_front_with_result(
+    generator: &ObjectRef,
+    result: Value,
+    env: &mut crate::context::Context<'_>,
+) {
     if let Some(request) = dequeue_front(generator) {
         promise::resolve_promise_capability(&request.capability, result, env);
     }
 }
 
-fn reject_front(generator: &ObjectRef, reason: Value, env: &mut CallEnv) {
+fn reject_front(generator: &ObjectRef, reason: Value, env: &mut crate::context::Context<'_>) {
     if let Some(request) = dequeue_front(generator) {
         promise::reject_promise_capability(&request.capability, reason, env);
     }
@@ -535,7 +543,12 @@ fn dequeue_front(generator: &ObjectRef) -> Option<AsyncGeneratorRequest> {
 }
 
 /// Settles a capability with an iterator result `{ value, done }`.
-fn settle_resolve(capability: &ObjectRef, value: Value, done: bool, env: &mut CallEnv) {
+fn settle_resolve(
+    capability: &ObjectRef,
+    value: Value,
+    done: bool,
+    env: &mut crate::context::Context<'_>,
+) {
     let result = iterator_result(value, done, env, env.realm().atoms());
     promise::resolve_promise_capability(capability, result, env);
 }
@@ -543,7 +556,11 @@ fn settle_resolve(capability: &ObjectRef, value: Value, done: bool, env: &mut Ca
 /// Schedules an internal `await` (from `Op::Await` in the body): on fulfillment
 /// the body resumes with the value; on rejection it resumes with a throw. The
 /// front request stays in flight.
-fn schedule_internal_await(generator: &ObjectRef, awaited: Value, env: &mut CallEnv) {
+fn schedule_internal_await(
+    generator: &ObjectRef,
+    awaited: Value,
+    env: &mut crate::context::Context<'_>,
+) {
     let on_fulfilled = reaction(
         env.realm(),
         NativeFunction::AsyncGeneratorAwaitFulfilled,
@@ -560,7 +577,11 @@ fn schedule_internal_await(generator: &ObjectRef, awaited: Value, env: &mut Call
 /// Schedules the implicit `await` of a `yield`'s operand. On fulfillment the
 /// front request resolves with `{ value, done: false }` and draining continues;
 /// on rejection the body resumes with a throw at the yield site.
-fn schedule_yield_await(generator: &ObjectRef, value: Value, env: &mut CallEnv) {
+fn schedule_yield_await(
+    generator: &ObjectRef,
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) {
     let on_fulfilled = reaction(
         env.realm(),
         NativeFunction::AsyncGeneratorYieldFulfilled,
@@ -577,7 +598,11 @@ fn schedule_yield_await(generator: &ObjectRef, value: Value, env: &mut CallEnv) 
 /// Schedules the await that precedes resuming a suspended async generator for a
 /// `.return(value)` request. A rejected await is thrown at the suspended `yield`
 /// site so the generator body can catch it.
-fn schedule_return_resume_await(generator: &ObjectRef, value: Value, env: &mut CallEnv) {
+fn schedule_return_resume_await(
+    generator: &ObjectRef,
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) {
     let on_fulfilled = reaction(
         env.realm(),
         NativeFunction::AsyncGeneratorReturnResumeFulfilled,
@@ -594,7 +619,11 @@ fn schedule_return_resume_await(generator: &ObjectRef, value: Value, env: &mut C
 /// Schedules the `AsyncGeneratorResolve(..., done = true)` unwrapping step.
 /// The front request remains queued until the fulfillment/rejection reaction
 /// settles it, preserving request order while `return(value)` awaits `value`.
-fn schedule_return_await(generator: &ObjectRef, value: Value, env: &mut CallEnv) {
+fn schedule_return_await(
+    generator: &ObjectRef,
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) {
     let on_fulfilled = reaction(
         env.realm(),
         NativeFunction::AsyncGeneratorReturnFulfilled,
@@ -615,18 +644,18 @@ fn reaction(
     generator: &ObjectRef,
 ) -> Value {
     let mut function = Function::new_native(None, 1, native, false, realm);
-    function.insert_native_context(ASYNC_GEN.to_owned(), Value::Object(generator.clone()));
+    function.set_native_captures(NativeCaptures::AsyncGenerator(generator.clone()));
     Value::Function(function)
 }
 
 pub(crate) fn async_generator_await_fulfilled(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: crate::native::CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     {
-        let Some(Value::Object(generator)) = info.callee.native_context.get(ASYNC_GEN) else {
+        let NativeCaptures::AsyncGenerator(generator) = info.callee.native_captures() else {
             return Err(RuntimeError {
                 thrown: None,
                 message: "TypeError: missing async generator reaction context".to_owned(),
@@ -640,13 +669,13 @@ pub(crate) fn async_generator_await_fulfilled(
 }
 
 pub(crate) fn async_generator_await_rejected(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: crate::native::CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     {
-        let Some(Value::Object(generator)) = info.callee.native_context.get(ASYNC_GEN) else {
+        let NativeCaptures::AsyncGenerator(generator) = info.callee.native_captures() else {
             return Err(RuntimeError {
                 thrown: None,
                 message: "TypeError: missing async generator reaction context".to_owned(),
@@ -660,13 +689,13 @@ pub(crate) fn async_generator_await_rejected(
 }
 
 pub(crate) fn async_generator_yield_fulfilled(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: crate::native::CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     {
-        let Some(Value::Object(generator)) = info.callee.native_context.get(ASYNC_GEN) else {
+        let NativeCaptures::AsyncGenerator(generator) = info.callee.native_captures() else {
             return Err(RuntimeError {
                 thrown: None,
                 message: "TypeError: missing async generator reaction context".to_owned(),
@@ -683,13 +712,13 @@ pub(crate) fn async_generator_yield_fulfilled(
 }
 
 pub(crate) fn async_generator_yield_rejected(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: crate::native::CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     {
-        let Some(Value::Object(generator)) = info.callee.native_context.get(ASYNC_GEN) else {
+        let NativeCaptures::AsyncGenerator(generator) = info.callee.native_captures() else {
             return Err(RuntimeError {
                 thrown: None,
                 message: "TypeError: missing async generator reaction context".to_owned(),
@@ -703,13 +732,13 @@ pub(crate) fn async_generator_yield_rejected(
 }
 
 pub(crate) fn async_generator_return_resume_fulfilled(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: crate::native::CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     {
-        let Some(Value::Object(generator)) = info.callee.native_context.get(ASYNC_GEN) else {
+        let NativeCaptures::AsyncGenerator(generator) = info.callee.native_captures() else {
             return Err(RuntimeError {
                 thrown: None,
                 message: "TypeError: missing async generator reaction context".to_owned(),
@@ -722,13 +751,13 @@ pub(crate) fn async_generator_return_resume_fulfilled(
 }
 
 pub(crate) fn async_generator_return_resume_rejected(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: crate::native::CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     {
-        let Some(Value::Object(generator)) = info.callee.native_context.get(ASYNC_GEN) else {
+        let NativeCaptures::AsyncGenerator(generator) = info.callee.native_captures() else {
             return Err(RuntimeError {
                 thrown: None,
                 message: "TypeError: missing async generator reaction context".to_owned(),
@@ -741,13 +770,13 @@ pub(crate) fn async_generator_return_resume_rejected(
 }
 
 pub(crate) fn async_generator_return_fulfilled(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: crate::native::CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     {
-        let Some(Value::Object(generator)) = info.callee.native_context.get(ASYNC_GEN) else {
+        let NativeCaptures::AsyncGenerator(generator) = info.callee.native_captures() else {
             return Err(RuntimeError {
                 thrown: None,
                 message: "TypeError: missing async generator reaction context".to_owned(),
@@ -762,13 +791,13 @@ pub(crate) fn async_generator_return_fulfilled(
 }
 
 pub(crate) fn async_generator_return_rejected(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: crate::native::CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
     let value = argument_values.first().cloned().unwrap_or(Value::Undefined);
     {
-        let Some(Value::Object(generator)) = info.callee.native_context.get(ASYNC_GEN) else {
+        let NativeCaptures::AsyncGenerator(generator) = info.callee.native_captures() else {
             return Err(RuntimeError {
                 thrown: None,
                 message: "TypeError: missing async generator reaction context".to_owned(),
@@ -783,7 +812,7 @@ pub(crate) fn async_generator_return_rejected(
 }
 
 pub(crate) fn async_from_sync_iterator_value_fulfilled(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: crate::native::CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -795,7 +824,7 @@ pub(crate) fn async_from_sync_iterator_value_fulfilled(
 }
 
 pub(crate) fn async_from_sync_iterator_value_rejected(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: crate::native::CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -807,7 +836,7 @@ pub(crate) fn async_from_sync_iterator_value_rejected(
 }
 
 pub(crate) fn async_from_sync_iterator_next(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: crate::native::CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -820,7 +849,7 @@ pub(crate) fn async_from_sync_iterator_next(
 }
 
 pub(crate) fn async_from_sync_iterator_return(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: crate::native::CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -833,7 +862,7 @@ pub(crate) fn async_from_sync_iterator_return(
 }
 
 pub(crate) fn async_from_sync_iterator_throw(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: crate::native::CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -845,7 +874,7 @@ pub(crate) fn async_from_sync_iterator_throw(
     ))
 }
 
-fn resume_body(generator: &ObjectRef, resume: Resume, env: &mut CallEnv) {
+fn resume_body(generator: &ObjectRef, resume: Resume, env: &mut crate::context::Context<'_>) {
     // Mark draining so a reaction enqueued during the body run does not start a
     // second drain loop.
     set_draining(generator, true);
@@ -884,7 +913,10 @@ fn resume_body(generator: &ObjectRef, resume: Resume, env: &mut CallEnv) {
 /// intrinsic chain: its `[[Prototype]]` becomes
 /// `%AsyncGeneratorFunction.prototype%` and its own `prototype` property's
 /// `[[Prototype]]` becomes `%AsyncGeneratorPrototype%`.
-pub(crate) fn wire_async_generator_function_intrinsics(function: &Function, env: &CallEnv) {
+pub(crate) fn wire_async_generator_function_intrinsics(
+    function: &Function,
+    env: &crate::context::Context<'_>,
+) {
     if let Some(prototype) = async_generator_function_prototype(env) {
         let _ = function.set_internal_prototype_slot(Some(crate::Prototype::Object(prototype)));
     }
@@ -904,7 +936,7 @@ pub(crate) fn wire_async_generator_function_intrinsics(function: &Function, env:
 fn iterator_result(
     value: Value,
     done: bool,
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
     domain: &crate::property::atom::AtomDomain,
 ) -> Value {
     let object = ObjectRef::with_prototype(HashMap::new(), object_prototype(env), domain);
@@ -916,7 +948,7 @@ fn iterator_result(
     Value::Object(object)
 }
 
-fn not_an_async_generator_value(env: &mut CallEnv) -> Value {
+fn not_an_async_generator_value(env: &mut crate::context::Context<'_>) -> Value {
     // A real TypeError object, not a bare string, so a rejection handler's
     // `e instanceof TypeError` check holds.
     crate::error::runtime_error_to_value(
@@ -935,7 +967,10 @@ fn not_an_async_generator_value(env: &mut CallEnv) -> Value {
 /// GetIterator(obj, async): looks up `Symbol.asyncIterator`; if absent, gets the
 /// sync iterator via `Symbol.iterator` and wraps it in a
 /// CreateAsyncFromSyncIterator object. Returns the async iterator object.
-pub(crate) fn get_async_iterator(value: Value, env: &mut CallEnv) -> Result<Value, RuntimeError> {
+pub(crate) fn get_async_iterator(
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<Value, RuntimeError> {
     if matches!(value, Value::Undefined | Value::Null) {
         return Err(RuntimeError {
             thrown: None,
@@ -977,7 +1012,7 @@ pub(crate) fn get_async_iterator(value: Value, env: &mut CallEnv) -> Result<Valu
 /// `throw` forward to the sync iterator and await each result value.
 pub(crate) fn create_async_from_sync_iterator(
     sync_iterator: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let next = property_value(sync_iterator.clone(), "next", env)?;
     let wrapper =
@@ -988,10 +1023,10 @@ pub(crate) fn create_async_from_sync_iterator(
         ("throw", NativeFunction::AsyncFromSyncIteratorThrow),
     ] {
         let mut method = Function::new_native(Some(name), 1, native, false, env.realm());
-        method.insert_native_context(SYNC_ITERATOR.to_owned(), sync_iterator.clone());
-        if matches!(native, NativeFunction::AsyncFromSyncIteratorNext) {
-            method.insert_native_context(SYNC_ITERATOR_NEXT.to_owned(), next.clone());
-        }
+        method.set_native_captures(NativeCaptures::AsyncFromSync {
+            iterator: sync_iterator.clone(),
+            next: matches!(native, NativeFunction::AsyncFromSyncIteratorNext).then(|| next.clone()),
+        });
         wrapper.define_non_enumerable(name.to_owned(), Value::Function(method));
     }
     Ok(Value::Object(wrapper))
@@ -999,7 +1034,7 @@ pub(crate) fn create_async_from_sync_iterator(
 
 /// Builds a `TypeError` value with the given message, suitable for rejecting a
 /// promise capability (a real error object, not a bare string).
-fn type_error_value(message: &str, env: &mut CallEnv) -> Value {
+fn type_error_value(message: &str, env: &mut crate::context::Context<'_>) -> Value {
     crate::error::runtime_error_to_value(
         RuntimeError {
             thrown: None,
@@ -1014,7 +1049,10 @@ fn type_error_value(message: &str, env: &mut CallEnv) -> Value {
 /// `return` (if any) and discards its value. Returns `Some(reason)` carrying the
 /// rejection value when the `return` lookup or call is abrupt, or when the
 /// `return` result is not an object; `None` when the iterator closed cleanly.
-fn close_sync_iterator(sync_iterator: &Value, env: &mut CallEnv) -> Option<Value> {
+fn close_sync_iterator(
+    sync_iterator: &Value,
+    env: &mut crate::context::Context<'_>,
+) -> Option<Value> {
     let return_method = match property_value(sync_iterator.clone(), "return", env) {
         Ok(value) => value,
         Err(error) => return Some(crate::error::runtime_error_to_value(error, env)),
@@ -1043,15 +1081,21 @@ fn async_from_sync_method(
     function: &Function,
     native: NativeFunction,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Value {
     let argument = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let capability = promise::new_pending_promise(env);
-    let Some(sync_iterator) = function.native_context.get(SYNC_ITERATOR).cloned() else {
+    let NativeCaptures::AsyncFromSync {
+        iterator: sync_iterator,
+        next,
+    } = function.native_captures()
+    else {
         let reason = not_an_async_generator_value(env);
         promise::reject_promise_capability(&capability, reason, env);
         return Value::Object(capability);
     };
+
+    let sync_iterator = sync_iterator.clone();
 
     let method_name = match native {
         NativeFunction::AsyncFromSyncIteratorNext => "next",
@@ -1061,11 +1105,7 @@ fn async_from_sync_method(
     };
 
     let method = if matches!(native, NativeFunction::AsyncFromSyncIteratorNext) {
-        function
-            .native_context
-            .get(SYNC_ITERATOR_NEXT)
-            .cloned()
-            .unwrap_or(Value::Undefined)
+        next.clone().unwrap_or(Value::Undefined)
     } else {
         match property_value(sync_iterator.clone(), method_name, env) {
             Ok(method) => method,
@@ -1213,37 +1253,45 @@ fn value_await_reaction(
     close_sync: Option<&Value>,
 ) -> Value {
     let mut function = Function::new_native(None, 1, native, false, realm);
-    function.insert_native_context(WRAP_PROMISE.to_owned(), Value::Object(capability.clone()));
-    function.insert_native_context(WRAP_DONE.to_owned(), Value::Boolean(done));
-    if let Some(sync_iterator) = close_sync {
-        function.insert_native_context(WRAP_SYNC_ITERATOR.to_owned(), sync_iterator.clone());
-        function.insert_native_context(WRAP_CLOSE_ON_REJECTION.to_owned(), Value::Boolean(true));
-    }
+    function.set_native_captures(NativeCaptures::AsyncFromSyncValue {
+        capability: capability.clone(),
+        done,
+        close_iterator: close_sync.cloned(),
+    });
     Value::Function(function)
 }
 
-fn async_from_sync_value_rejected(function: &Function, reason: Value, env: &mut CallEnv) {
-    let Some(Value::Object(capability)) = function.native_context.get(WRAP_PROMISE) else {
+fn async_from_sync_value_rejected(
+    function: &Function,
+    reason: Value,
+    env: &mut crate::context::Context<'_>,
+) {
+    let NativeCaptures::AsyncFromSyncValue {
+        capability,
+        close_iterator,
+        ..
+    } = function.native_captures()
+    else {
         return;
     };
     let capability = capability.clone();
     // When the awaited value rejects under closeOnRejection, close the sync
     // iterator before rejecting; the original rejection reason is preserved.
-    if matches!(
-        function.native_context.get(WRAP_CLOSE_ON_REJECTION),
-        Some(Value::Boolean(true))
-    ) && let Some(sync_iterator) = function.native_context.get(WRAP_SYNC_ITERATOR).cloned()
-    {
-        let _ = close_sync_iterator(&sync_iterator, env);
+    if let Some(sync_iterator) = close_iterator {
+        let _ = close_sync_iterator(sync_iterator, env);
     }
     promise::reject_promise_capability(&capability, reason, env);
 }
 
-fn async_from_sync_value_fulfilled(function: &Function, value: Value, env: &mut CallEnv) {
-    let (Some(Value::Object(capability)), Some(Value::Boolean(done))) = (
-        function.native_context.get(WRAP_PROMISE),
-        function.native_context.get(WRAP_DONE),
-    ) else {
+fn async_from_sync_value_fulfilled(
+    function: &Function,
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) {
+    let NativeCaptures::AsyncFromSyncValue {
+        capability, done, ..
+    } = function.native_captures()
+    else {
         return;
     };
     let capability = capability.clone();
@@ -1256,8 +1304,9 @@ fn async_from_sync_value_fulfilled(function: &Function, value: Value, env: &mut 
 /// `call.rs`. Mirrors the generator path but builds an async generator object.
 pub(crate) fn call_async_generator_function(
     function: &Function,
-    function_env: CallEnv,
-    env: &mut CallEnv,
+    function_env: crate::context::ActivationContext,
+    inputs: Option<crate::function::CallInputs<'_>>,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let bytecode = function
         .bytecode
@@ -1269,13 +1318,9 @@ pub(crate) fn call_async_generator_function(
             bytecode,
             env: function_env,
             upvalues: function.upvalues.clone(),
-            with_stack: function.with_stack.clone(),
-            immutable_function_name: function
-                .immutable_name_binding
-                .then(|| function.name.clone())
-                .flatten()
-                .or_else(|| function.immutable_env_binding().map(str::to_owned)),
+            with_stack: Vec::new(),
         },
+        inputs,
         env,
     )
 }

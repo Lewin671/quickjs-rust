@@ -1,0 +1,1 @@
+(0,eval)("var out=[];function print(s){out.push(s);}\nfunction t() { var x = 'outer'; function f(a = () => x) { var x = 'inner'; return a(); } return f(); }\ntry { print(t()); } catch (e) { print('throws ' + e.constructor.name); } // NG/spec: outer   candidate/base: throws ReferenceError\nout.join(\"|\");")

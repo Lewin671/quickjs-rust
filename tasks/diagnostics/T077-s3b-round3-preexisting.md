@@ -1,0 +1,142 @@
+# Pre-existing binding findings repaired in round three
+
+Each repair is a separate commit after the required S3b regression/stress fixes.
+The lead confirmed identical baseline behavior; NG/spec are the behavior oracle.
+Final qualification remains pending; no historical exact receipt proves these changes.
+
+## Try/finally function declarations
+
+Parent `d14c284a`. Try/finally lowering opened lexical scopes but omitted their
+declaration-instantiation phase; FunctionDecl statement lowering itself only
+leaves an empty completion. They now run the same predeclaration/hoisted-function
+logic and Annex B blocking as regular blocks, preserving the existing protected
+completion slots and abrupt-flow protocol. Focused tests cover calls before the
+declaration, finally execution, sloppy var propagation and strict isolation.
+Exact lead reproducer is a permanent NG fixture. The focused test failed before
+repair and passes afterward; the staged fast gate supplies broader coverage.
+
+## Captures outside inner block/catch shadows
+
+Parent `62561f95`. Coarse AST function-local names included block/catch names,
+so capture linking suppressed a name even where the compiled references were
+unresolved outside that block. Capture demand now honors unresolved operations
+in the compiled scope stream. NFE self names are passed explicitly as reserved
+creation-scope bindings; they must never capture an enclosing homonym even when
+an inner block also declares that name. Existing indexed routes/cells remain.
+
+Before, reads threw and writes failed to reach the parent. Eight block/const/
+for-let/catch read/write combinations now pass, plus a self-name precedence
+control. The exact four-case lead reproducer is a permanent NG fixture.
+
+## Default-parameter closure versus body declarations
+
+Parent `34fbbc66`. Capture-demand repair exposed the outer cell, but the compiler
+still used one lexical lookup layer for received parameter-scope captures and
+body declarations. `var x` initialization selected the root capture and changed
+it to inner (before: `inner:inner`, required: `outer:outer`). Function-body
+compilation now opens a lookup layer aligned with its existing body descriptor
+and registers own hoisted bindings there. Parameter closures already compiled
+against the root layer keep their received-cell route. No per-call map is added.
+
+Focused parameter suite passes 30 tests, including body var/let/const/function
+homonyms and writes through the parameter closure. Exact lead case is an NG
+fixture; existing block/self-scope controls also pass. The runtime representation
+and ContainsExpression var-holder rule are unchanged.
+
+## Inherited global lookup
+
+Parent `72922bed`. VM bare/typeof fallback and wide global reads checked own
+properties only. They now use HasProperty plus Get with globalThis as receiver,
+including inherited data/getters; lexical/canonical cells still take precedence.
+No inherited getter value is cached. Script, function, named-function and eval
+reads each invoke the getter once, with correct receiver; typeof sees the data.
+
+Because inherited hooks are newly reachable, loop entry/helper preparation now
+requires a pure global read (receiver, canonical lexical, or ordinary own data).
+An inherited/exotic route declines instead of probing/hoisting a getter. A
+100-call numeric-helper test asserts 100 getter calls, preserving the P1 effect
+boundary. Before repair the exact lead case threw ReferenceError; focused scope
+suite and strengthened NG fixture cover both data and getter variants.
+
+## With-reference receivers in tagged/optional calls
+
+Parent `c7f8be93`. Ordinary calls retained the selected with-object receiver,
+but tagged and optional forms compiled the identifier as a bare Value. The
+compiler now shares one object-environment callee-reference lowering across
+all three call forms. Resolve/Get occur once before argument/template effects;
+optional short-circuit drops both receiver and nullish callee, skipping args.
+Direct eval keeps its dedicated protocol.
+
+Focused tests cover tagged/optional/spread calls, escaped with closures,
+nullish short-circuit and RHS deletion of the selected property. The initial
+case failed before repair; permanent NG fixture checks the same routes.
+
+NG fixture note: pinned NG reports `InternalError: inconsistent stack size`
+compiling a with-bound optional call in assignment/statement position. Returning
+the same optional call from a nested function avoids its compiler defect while
+preserving receiver/short-circuit observations. Candidate runtime tests retain
+those valid assignment/statement programs; no behavior was changed toward NG.
+
+## Labeled continue and TDZ on block re-entry
+
+Parent `e194af4e`. Normal-exit ClearLocal instructions were skipped by labeled
+continue, so an unexposed slot retained the previous iteration's initialized
+value (`ReferenceError:1` instead of two ReferenceErrors). Block declaration
+instantiation now clears its private lexicals at entry before references and
+hoisted functions. Try/finally block entries use the same phase. This also
+predeclares block-function locations before initializing any of them.
+
+Clearing on the abrupt jump itself would precede finally reads, so that route
+is deliberately unchanged. Focused tests cover for/while re-entry, escaped
+initialized closures, escaped still-TDZ cells, and finally reading the exiting
+instance. All eight scope-instantiation tests pass. Permanent NG fixture covers
+the minimal re-entry and retained closure variants.
+
+## Parameters shadowing module imports
+
+Parent `003682b6`. General local reads and parameter snapshot reads interpreted
+`from_env` as an import route, but own parameter/var slots also carry that flag.
+A numeric shortcut could read the argument correctly while concatenation/array
+construction instead selected an import homonym. Import fallback now requires
+an actual received-upvalue route; initialized own slots remain authoritative.
+Direct-frame setup also selected imports by name for every local, before its
+positional capture. It now considers imports only as a missing received route's
+fallback, after the actual positional cell. Both setup paths preserve nearer
+cells and import access policy. The expanded before test also exposed rest
+array replacement (value not callable); after both repairs it has fixed output. The old synthetic direct-module test
+incorrectly expected a Function-mode own local to adopt an import by name. It
+now models a received import route and retains its canonical identity assertion;
+an added low-level test proves own/parameter routes and a nearer positional
+capture cannot adopt an import homonym.
+
+Focused module test covers concatenation/array, rest, destructured and captured
+parameter homonyms, alongside unchanged unshadowed import values. The original
+module repro has a portable relative dependency and is a permanent .mjs fixture.
+
+## Object.freeze(mapped arguments)
+
+Parent `30c04716`. Bulk ordinary-object freeze treated internal mapped accessors
+as ordinary accessors, leaving the parameter aliases active. For the existing
+internal Arguments brand, freezing now prevents extension and applies the
+existing writable:false mapped-descriptor transition before bulk freezing.
+That snapshots the current parameter value and severs the mapping; ordinary
+objects keep their bulk path, and sealing keeps aliases. User Symbol.toStringTag
+is separate from the internal brand. No new representation or dependency.
+
+Focused tests cover current-value snapshots, subsequent parameter writes,
+duplicate mappings, Proxy forwarding and seal control. Exact lead f(1) behavior
+is included in the permanent NG fixture. Before: mapped arguments continued
+changing with parameters; after: all discriminators pass.
+
+## Repeated global scripts over an object-property homonym
+
+Parent `ac8a408d`. Global declaration validation inferred absence of a lexical
+from presence of an own global-object property. The records are independent:
+canonical lexical metadata now wins before the legacy object-record fallback.
+A second let/const/class declaration throws SyntaxError before instantiating any
+other declaration; the first lexical value (10) and object property (1) survive.
+
+Focused fixed-oracle tests cover all three redeclarations and atomic rejection.
+The portable .mjs fixture uses the Rust host evalScript or NG's std.evalScript
+via a conditional dynamic import; both execute actual separate global Scripts,
+not indirect eval's temporary lexical environment.

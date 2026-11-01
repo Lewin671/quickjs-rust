@@ -3,9 +3,12 @@ use std::collections::HashMap;
 use crate::{Function, NativeFunction, ObjectRef, Property, Value};
 
 use super::NUMBER_DATA_PROPERTY;
-use crate::CallEnv;
 
-pub(crate) fn install_number(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
+pub(crate) fn install_number(
+    env: &mut crate::context::Context<'_>,
+    global_this: &Value,
+    object_prototype: ObjectRef,
+) {
     let number_prototype =
         ObjectRef::with_prototype(HashMap::new(), Some(object_prototype), env.realm().atoms());
     env.realm()

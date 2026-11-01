@@ -1,4 +1,3 @@
-use crate::CallEnv;
 use crate::{
     ObjectRef, PreferredType, RuntimeError, Value, number, symbol, to_primitive_with_hint,
 };
@@ -20,7 +19,7 @@ impl PropertyKey {
 
 pub(crate) fn to_property_key_value(
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<PropertyKey, RuntimeError> {
     let value = match try_to_property_key_without_coercion(value) {
         Ok(key) => return Ok(key),

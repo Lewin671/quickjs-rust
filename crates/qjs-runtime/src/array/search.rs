@@ -2,12 +2,11 @@ use crate::{RuntimeError, Value, has_property, property_value};
 
 use super::array_like::array_like_length;
 use super::indexing::{array_at_index, array_search_end_index, array_search_start_index};
-use crate::CallEnv;
 
 pub(crate) fn native_array_prototype_at(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let source = array_like_length(this_value, "Array.prototype.at", env)?;
     let Some(index) = array_at_index(
@@ -24,7 +23,7 @@ pub(crate) fn native_array_prototype_at(
 pub(crate) fn native_array_prototype_includes(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let source = array_like_length(this_value, "Array.prototype.includes", env)?;
     if source.length == 0 {
@@ -49,7 +48,7 @@ pub(crate) fn native_array_prototype_includes(
 pub(crate) fn native_array_prototype_index_of(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if let Some(result) = fast_dense_array_index_of(&this_value, argument_values, env) {
         return Ok(result);
@@ -80,7 +79,7 @@ pub(crate) fn native_array_prototype_index_of(
 pub(crate) fn fast_dense_array_index_of(
     this_value: &Value,
     argument_values: &[Value],
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
 ) -> Option<Value> {
     let Value::Array(array) = this_value else {
         return None;
@@ -114,7 +113,7 @@ pub(crate) fn fast_dense_array_index_of(
 pub(crate) fn native_array_prototype_last_index_of(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let source = array_like_length(this_value, "Array.prototype.lastIndexOf", env)?;
     if source.length == 0 {

@@ -30,9 +30,9 @@ source text -> qjs-lexer (tokens with spans) -> qjs-parser (qjs-ast)
 - `qjs-runtime`: compiles the AST to bytecode and executes it. It never
   evaluates AST nodes, and re-parses (for `eval`, `Function`) only through
   the parser's public API. `value` holds values, objects and property
-  descriptors; `function` holds function objects, the call path and
-  `CallEnv`; `bytecode` holds the compiler, the IR and every executor; the
-  remaining modules are builtins grouped by standard object.
+  descriptors; `function` owns function identity, calls and typed native captures.
+  `context` owns creation/activation metadata, lexical owners and borrowed services;
+  `bytecode` holds the compiler, IR and executors. Other modules are builtins.
 - `qjs-cli`: thin command-line wrapper; no engine semantics.
 
 `third_party/quickjs-ng` (behavioural oracle and reference) and
@@ -51,8 +51,8 @@ at a time. Everything below is an optional faster route to the same
 semantics. Admission precedes observable work; declined paths use the interpreter.
 
 **Native entries.** `native/entry.rs` binds each operation at installation. `CallInfo`
-borrows callee/receiver and records construct mode; CallEnv supplies lazy realm/
-new.target services until S3b. Host/callback and compact/wide entries borrow slices.
+borrows callee/receiver and records construct mode; Context/NativeSite borrow
+services, caller state and target. Host/callback and tier entries borrow slices.
 Generic VM calls/construct detach their operand owner through return/throw,
 restoring it before exception handling. Fixed-arity JS admission keeps its order.
 Retained values/forwarding lists own references. S3d owns stack policy; S3a adds no limit. No Executor/RefCell borrow crosses callbacks.
@@ -71,10 +71,10 @@ in order:
    2. the this-property leaf, a closed-form evaluation of a body that only
       combines own data properties of its receiver or arguments
       (`bytecode/vm_this_property_leaf.rs`);
-   3. a compact tier in the caller's own environment, when that environment
-      equals the one the callee's frame would get (`try_run_in_caller_env`,
-      `bytecode/compact_fn/activation.rs`): the numeric compact tier, then
-      the wide tier;
+   3. a callee-owned compact activation: numeric plan/compact, then wide
+      (`bytecode/compact_fn/activation.rs`); each frame owns its activation
+      (a released one rebound when identical, `compact_fn/activation_stack.rs`)
+      and borrows runtime services, without caller-context substitution;
    4. a slot-seeded frame (`eval_direct_call_bytecode`, `bytecode/vm.rs`).
       It first offers the body to the compact tiers standalone: the numeric
       compact tier, which tries its `f64` plan
@@ -135,7 +135,7 @@ share recyclable IDs; live leases prevent reuse. Domain indices are weak.
 **Creation inputs.** Realm-aware constructors receive stable intrinsic prototypes;
 low-level builders receive explicit prototype/domain inputs, including null.
 Realm roots own PropertyOwner outside the domain; layouts retain the domain.
-Native functions share empty native state per domain and copy it on mutation.
+Native closures use typed payloads; plain natives have none (`function/native_captures.rs`).
 
 **Per-site caches.** `bytecode/named_property_cache.rs` caches named property
 reads and writes per instruction site, keyed by receiver layout.
@@ -146,9 +146,9 @@ The [object contract](design/core-rebuild-objects.md) owns these invariants.
 
 ## State
 
-**Bindings.** A local lives in a frame slot; a captured binding lives in one
-shared cell; every realm binding has one cell in the realm. No per-call
-name-keyed snapshot exists. See
+**Bindings.** Capture/eval exposure moves a private slot into one shared cell;
+canonical realm/module cells retain identity. Init/Assign/Read check typed state;
+object-cache invalidation is distinct from lexical TDZ. No name/value snapshot. See
 [design/env-model-rewrite.md](design/env-model-rewrite.md).
 
 **Suspended frames.** A generator or async body owns its whole frame while

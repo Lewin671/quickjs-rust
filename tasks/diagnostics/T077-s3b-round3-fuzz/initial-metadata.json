@@ -1,0 +1,10 @@
+{
+  "runtime_revision": "f6f5b66e",
+  "tool_revision": "e7a6c0e4",
+  "base": "3cc12c6f",
+  "request_sha256": "bf5bc771b422ac06944bb6834182644f6054276bb0ad22e1bc75fcd1e8668cb4",
+  "cases_sha256": "c6736456e19467b1b6778ff186419984880fd27d07dcae7ed020b3608e345d0f",
+  "mode_disagreements": 0,
+  "panics_crashes_timeouts": 0,
+  "completed": 6000
+}

@@ -1,10 +1,10 @@
 //! Operation entries for objects; bound once when a native is created.
 
 use super::CallInfo;
-use crate::{CallEnv, RuntimeError, Value, object};
+use crate::{RuntimeError, Value, object};
 
 pub(super) fn object(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -18,7 +18,7 @@ pub(super) fn object(
 }
 
 pub(super) fn object_assign(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -26,7 +26,7 @@ pub(super) fn object_assign(
 }
 
 pub(super) fn object_create(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -34,7 +34,7 @@ pub(super) fn object_create(
 }
 
 pub(super) fn object_define_properties(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -42,7 +42,7 @@ pub(super) fn object_define_properties(
 }
 
 pub(super) fn object_define_property(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -50,7 +50,7 @@ pub(super) fn object_define_property(
 }
 
 pub(super) fn object_get_own_property_descriptor(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -58,7 +58,7 @@ pub(super) fn object_get_own_property_descriptor(
 }
 
 pub(super) fn object_get_own_property_descriptors(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -66,7 +66,7 @@ pub(super) fn object_get_own_property_descriptors(
 }
 
 pub(super) fn object_get_prototype_of(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -74,7 +74,7 @@ pub(super) fn object_get_prototype_of(
 }
 
 pub(super) fn object_get_own_property_names(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -82,7 +82,7 @@ pub(super) fn object_get_own_property_names(
 }
 
 pub(super) fn object_get_own_property_symbols(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -90,7 +90,7 @@ pub(super) fn object_get_own_property_symbols(
 }
 
 pub(super) fn object_from_entries(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -98,7 +98,7 @@ pub(super) fn object_from_entries(
 }
 
 pub(super) fn object_group_by(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -106,7 +106,7 @@ pub(super) fn object_group_by(
 }
 
 pub(super) fn object_freeze(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -114,7 +114,7 @@ pub(super) fn object_freeze(
 }
 
 pub(super) fn object_has_own(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -122,7 +122,7 @@ pub(super) fn object_has_own(
 }
 
 pub(super) fn object_is(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -130,7 +130,7 @@ pub(super) fn object_is(
 }
 
 pub(super) fn object_is_extensible(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -138,7 +138,7 @@ pub(super) fn object_is_extensible(
 }
 
 pub(super) fn object_is_frozen(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -146,7 +146,7 @@ pub(super) fn object_is_frozen(
 }
 
 pub(super) fn object_is_sealed(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -154,7 +154,7 @@ pub(super) fn object_is_sealed(
 }
 
 pub(super) fn object_prevent_extensions(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -162,7 +162,7 @@ pub(super) fn object_prevent_extensions(
 }
 
 pub(super) fn object_seal(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -170,7 +170,7 @@ pub(super) fn object_seal(
 }
 
 pub(super) fn object_set_prototype_of(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -178,7 +178,7 @@ pub(super) fn object_set_prototype_of(
 }
 
 pub(super) fn object_entries(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -186,7 +186,7 @@ pub(super) fn object_entries(
 }
 
 pub(super) fn object_keys(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -194,7 +194,7 @@ pub(super) fn object_keys(
 }
 
 pub(super) fn object_values(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -202,7 +202,7 @@ pub(super) fn object_values(
 }
 
 pub(super) fn object_prototype_has_own_property(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -210,7 +210,7 @@ pub(super) fn object_prototype_has_own_property(
 }
 
 pub(super) fn object_prototype_is_prototype_of(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -218,7 +218,7 @@ pub(super) fn object_prototype_is_prototype_of(
 }
 
 pub(super) fn object_prototype_property_is_enumerable(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -230,7 +230,7 @@ pub(super) fn object_prototype_property_is_enumerable(
 }
 
 pub(super) fn object_prototype_to_string(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -238,7 +238,7 @@ pub(super) fn object_prototype_to_string(
 }
 
 pub(super) fn object_prototype_to_locale_string(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -246,7 +246,7 @@ pub(super) fn object_prototype_to_locale_string(
 }
 
 pub(super) fn object_prototype_value_of(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -254,7 +254,7 @@ pub(super) fn object_prototype_value_of(
 }
 
 pub(super) fn object_prototype_get_proto(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -262,7 +262,7 @@ pub(super) fn object_prototype_get_proto(
 }
 
 pub(super) fn object_prototype_set_proto(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -270,7 +270,7 @@ pub(super) fn object_prototype_set_proto(
 }
 
 pub(super) fn object_prototype_define_getter(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -278,7 +278,7 @@ pub(super) fn object_prototype_define_getter(
 }
 
 pub(super) fn object_prototype_define_setter(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -286,7 +286,7 @@ pub(super) fn object_prototype_define_setter(
 }
 
 pub(super) fn object_prototype_lookup_getter(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -294,7 +294,7 @@ pub(super) fn object_prototype_lookup_getter(
 }
 
 pub(super) fn object_prototype_lookup_setter(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {

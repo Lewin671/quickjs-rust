@@ -1,0 +1,51 @@
+{
+ "job": "20261101T140707Z-t077-s3b-final3",
+ "base": "3cc12c6f8d93ffd6eae91d1bd44efe74134ae195",
+ "candidate": "8abd4c69b1c6aadbfdd551696211d1d52b6c4520",
+ "runtime_source": "0148b2eb",
+ "verdict": "likely loss",
+ "counts": {
+  "attempts": 430,
+  "heavy_samples": 0,
+  "invalid": 0,
+  "valid": 430
+ },
+ "budget_met": true,
+ "candidate_binary_sha256": "a02658e5e8a8d23f5da0197fcf29266d82da35f0ba511d09d4461c8c4a71b09d",
+ "base_binary_sha256": "3ad34749a288e585b2d20aae59b3255279c662484ae04cc3c01015cdb701dc80",
+ "lanes_wall_instructions": {
+  "broad": {
+   "cases": 25,
+   "wall": 1.0165,
+   "instructions": 1.0327
+  },
+  "development": {
+   "cases": 10,
+   "wall": 1.0342,
+   "instructions": 1.019
+  },
+  "external": {
+   "cases": 45,
+   "wall": 1.0255,
+   "instructions": 1.0299
+  },
+  "sentinel": {
+   "cases": 6,
+   "wall": 0.991,
+   "instructions": 1.0321
+  }
+ },
+ "all_cases": {
+  "cases": 86,
+  "wall": 1.0214,
+  "instructions": 1.0296
+ },
+ "instructions_vs_689efca2_job_20261101T123235Z": {
+  "all": 1.003,
+  "broad": 1.0015,
+  "development": 1.0074,
+  "external": 1.0033,
+  "sentinel": 1.0
+ },
+ "note": "Lane and all-case values are unweighted geomeans of triage.md case ratios; diagnostic triage only. The 689efca2 comparison divides per-case instruction ratios of the two jobs (same base binary); it includes the fix and the regenerated order."
+}

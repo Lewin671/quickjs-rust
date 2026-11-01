@@ -42,6 +42,7 @@ pub(super) struct Compiler {
     pub(super) locals: Vec<Local>,
     pub(super) local_slots: NameMap<String, usize>,
     pub(super) lexical_scopes: Vec<NameMap<String, usize>>,
+    pub(super) scope_plan: crate::binding::ScopePlanBuilder,
     pub(super) code: Vec<Op>,
     loop_stack: Vec<LoopContext>,
     pending_labels: Vec<String>,
@@ -49,6 +50,11 @@ pub(super) struct Compiler {
     pub(super) next_template_site: usize,
     pub(super) strict: bool,
     pub(super) global_scope: bool,
+    pub(super) arguments_owner: bool,
+    pub(super) arguments_body_copy: Option<(usize, usize)>,
+    pub(super) references: Vec<super::reference_plan::ReferenceDraft>,
+    body_var_split: bool,
+    parameter_copies: Vec<(usize, usize)>,
     /// Direct-eval source can introduce/delete function-environment `var` and
     /// Annex B bindings dynamically. These declarations use the explicit
     /// name-to-cell deopt map; ordinary lexical captures remain slot-indexed.
@@ -142,6 +148,7 @@ impl Default for Compiler {
             locals: Vec::new(),
             local_slots: NameMap::default(),
             lexical_scopes: vec![NameMap::default()],
+            scope_plan: crate::binding::ScopePlanBuilder::default(),
             code: Vec::new(),
             loop_stack: Vec::new(),
             pending_labels: Vec::new(),
@@ -149,6 +156,11 @@ impl Default for Compiler {
             next_template_site: 0,
             strict: false,
             global_scope: true,
+            arguments_owner: true,
+            arguments_body_copy: None,
+            references: Vec::new(),
+            body_var_split: false,
+            parameter_copies: Vec::new(),
             direct_eval_source: false,
             global_hoisted: NameSet::default(),
             annex_b_blocked_function_names: Vec::new(),
@@ -180,6 +192,7 @@ pub(super) fn compile_direct_eval_script(
         global_scope: false,
         strict,
         direct_eval_source: true,
+        arguments_owner: false,
         ..Compiler::default()
     };
     let mut bytecode = compiler.compile_eval_into(script)?;
@@ -196,6 +209,7 @@ pub(super) fn compile_module(script: &Script) -> Result<Bytecode, RuntimeError> 
     let mut compiler = Compiler {
         strict: true,
         global_scope: false,
+        arguments_owner: false,
         ..Compiler::default()
     };
     compiler.compile_into_with_hoists(script, false)
@@ -205,6 +219,7 @@ pub(super) fn compile_module_function_hoists(script: &Script) -> Result<Bytecode
     let mut compiler = Compiler {
         strict: true,
         global_scope: false,
+        arguments_owner: false,
         ..Compiler::default()
     };
     compiler.source = script.source.clone();
@@ -216,21 +231,8 @@ pub(super) fn compile_module_function_hoists(script: &Script) -> Result<Bytecode
         compiler.compile_hoisted_function_decls(&script.body)
     })?;
     compiler.code.push(Op::Return);
-    Ok(Bytecode::with_scope_global_lexical_names_and_strict(
-        std::mem::take(&mut compiler.constants),
-        std::mem::take(&mut compiler.locals),
-        std::mem::take(&mut compiler.code),
-        false,
-        blocked,
-        compiler.strict,
-    ))
-}
-
-pub(super) fn compile_function_body(
-    params: &FunctionParams,
-    body: &[Stmt],
-) -> Result<Bytecode, RuntimeError> {
-    compile_function_body_with_strict(params, body, false)
+    compiler.scope_plan.scopes[0].kind = crate::binding::ScopeKind::Module;
+    Ok(Bytecode::from_compiler(compiler, None, blocked))
 }
 
 pub(super) fn compile_function_body_with_strict(
@@ -243,19 +245,6 @@ pub(super) fn compile_function_body_with_strict(
         ..Compiler::default()
     }
     .compile_function(params, body)
-}
-
-/// Compiles a function body, carrying generator/async-ness on the resulting
-/// function value (`yield` is parser-gated and lowers to `Op::Yield`).
-pub(super) fn compile_function_body_with_strict_generator(
-    params: &FunctionParams,
-    body: &[Stmt],
-    parent_strict: bool,
-    is_generator: bool,
-    is_async: bool,
-) -> Result<Bytecode, RuntimeError> {
-    Compiler::function_compiler(parent_strict, is_generator && is_async)
-        .compile_function(params, body)
 }
 
 impl Compiler {
@@ -298,6 +287,13 @@ impl Compiler {
         script: &Script,
         instantiate_hoisted_functions: bool,
     ) -> Result<Bytecode, RuntimeError> {
+        self.scope_plan.scopes[0].kind = if self.direct_eval_source {
+            crate::binding::ScopeKind::Eval
+        } else if self.global_scope {
+            crate::binding::ScopeKind::Script
+        } else {
+            crate::binding::ScopeKind::Module
+        };
         self.source = script.source.clone();
         self.source_is_wtf16 = script.source_is_wtf16;
         self.strict = self.strict || is_strict_function_body(&script.body);
@@ -313,13 +309,10 @@ impl Compiler {
             Ok(())
         })?;
         self.code.push(Op::Return);
-        Ok(Bytecode::with_scope_global_lexical_names_and_strict(
-            std::mem::take(&mut self.constants),
-            std::mem::take(&mut self.locals),
-            std::mem::take(&mut self.code),
-            self.global_scope,
+        Ok(Bytecode::from_compiler(
+            std::mem::take(self),
+            None,
             global_lexical_names,
-            self.strict,
         ))
     }
 
@@ -333,6 +326,7 @@ impl Compiler {
         body: &[Stmt],
     ) -> Result<Bytecode, RuntimeError> {
         self.global_scope = false;
+        self.scope_plan.scopes[0].kind = crate::binding::ScopeKind::Parameters;
         self.tracks_completion_values = false;
         self.strict = self.strict || is_strict_function_body(body);
         let mut direct_parameter_slots = Vec::with_capacity(params.positional.len());
@@ -346,17 +340,57 @@ impl Compiler {
         }
         let non_simple_params = !params.is_simple();
         if non_simple_params {
+            for name in params.names() {
+                self.parameter_slot(&name);
+            }
+        }
+        if non_simple_params {
             self.snapshot_non_simple_parameter_arguments(params)?;
         }
         self.compile_parameter_bindings(params, non_simple_params)?;
         // Mark the end of parameter instantiation: generators run the prologue
         // synchronously at the call and suspend here; others skip past it.
         self.emit(Op::FunctionPrologueEnd);
+        let parameter_expressions = super::compiler_params::contains_expressions(params);
+        self.scope_plan.enter_function_body(parameter_expressions);
+        // Parameter-created closures retain the enclosing/parameter scope.
+        // Body declarations get their own lookup layer, so a body var/let
+        // cannot reuse or outrank a captured outer cell during initialization.
+        self.lexical_scopes.push(NameMap::default());
+        self.body_var_split = parameter_expressions;
         let param_blocked = function_param_names(params);
         self.with_annex_b_blocked_function_names(&param_blocked, |compiler| {
             compiler.collect_hoisted_locals(body, false);
             Ok(())
         })?;
+        let body_bindings = self
+            .local_slots
+            .iter()
+            .filter(|&(_, &slot)| {
+                self.locals[slot].hoisted && !self.locals[slot].compiler_temporary
+            })
+            .map(|(name, &slot)| (name.clone(), slot))
+            .collect::<Vec<_>>();
+        self.lexical_scopes
+            .last_mut()
+            .expect("body scope")
+            .extend(body_bindings);
+        if parameter_expressions
+            && self.arguments_owner
+            && !params.names().iter().any(|name| name == "arguments")
+            && let Some(body) = self.local_slots.get("arguments").copied()
+            && self.locals[body].hoisted
+            && !self.locals[body].hoisted_function
+        {
+            let source = self.ensure_implicit_arguments();
+            self.arguments_body_copy = Some((source, body));
+            self.parameter_copies
+                .retain(|&(from, to)| from != source || to != body);
+        }
+        for (parameter, body) in std::mem::take(&mut self.parameter_copies) {
+            self.emit(Op::LoadLocal(parameter));
+            self.emit(Op::StoreLocal(body));
+        }
         let blocked = function_body_annex_b_blocked_names(params, body);
         self.with_annex_b_blocked_function_names(&blocked, |compiler| {
             compiler.predeclare_current_scope_lexicals(body);
@@ -376,14 +410,21 @@ impl Compiler {
             }
             Ok(())
         })?;
+        let argument_demand = self.arguments_demand();
+        if self.arguments_owner
+            && !params.names().iter().any(|name| name == "arguments")
+            && self.scope_plan.implicit_arguments.is_none()
+            && argument_demand
+        {
+            self.ensure_implicit_arguments();
+        }
+        self.wire_arguments_slot();
         self.emit_load_undefined();
         self.code.push(Op::Return);
-        Ok(Bytecode::new_function(
-            self.constants,
-            self.locals,
-            self.code,
-            direct_parameter_slots,
-            params,
+        Ok(Bytecode::from_compiler(
+            self,
+            Some((direct_parameter_slots, params)),
+            Vec::new(),
         ))
     }
 
@@ -533,6 +574,31 @@ impl Compiler {
         if hoisted && self.global_scope && !compiler_temporary {
             self.global_hoisted.insert(name.to_owned());
         }
+        // An unresolved reference in a parameter expression is not a body
+        // declaration. Keep its fallback slot separate from a later own var.
+        if hoisted
+            && self.body_var_split
+            && !compiler_temporary
+            && self
+                .local_slots
+                .get(name)
+                .is_some_and(|&slot| self.locals[slot].sloppy_global_fallback)
+        {
+            self.local_slots.remove(name);
+        }
+        let parameter_copy = self.local_slots.get(name).copied().filter(|&slot| {
+            hoisted
+                && !compiler_temporary
+                && self.body_var_split
+                && (self.locals[slot].parameter
+                    || self
+                        .scope_plan
+                        .implicit_arguments
+                        .is_some_and(|implicit| implicit.0 == slot))
+        });
+        if parameter_copy.is_some() {
+            self.local_slots.remove(name);
+        }
         if let Some(slot) = self.local_slots.get(name) {
             if hoisted {
                 self.locals[*slot].hoisted = true;
@@ -543,6 +609,9 @@ impl Compiler {
             return *slot;
         }
         let slot = self.locals.len();
+        if !compiler_temporary && name != "this" && !name.starts_with('\0') {
+            self.scope_plan.declare(name, slot, false);
+        }
         self.locals.push(Local {
             name: name.to_owned(),
             compiler_temporary,
@@ -555,6 +624,9 @@ impl Compiler {
             sloppy_global_fallback: false,
         });
         self.local_slots.insert(name.to_owned(), slot);
+        if let Some(parameter) = parameter_copy {
+            self.parameter_copies.push((parameter, slot));
+        }
         slot
     }
 
@@ -566,13 +638,30 @@ impl Compiler {
         self.local_slot_with_kind(name, hoisted, true)
     }
 
-    /// Materializes an own `this`/`arguments` slot so a nested arrow can
+    /// Materializes an own `arguments` slot so a nested arrow can
     /// capture it. The declaring function receives the value from call setup,
     /// not from its parent's indexed-upvalue vector; the arrow's corresponding
     /// captured slot is independently marked `from_env` when it is recompiled.
     pub(super) fn own_call_frame_slot(&mut self, name: &str) -> usize {
+        if name == "arguments"
+            && let Some(slot) = self.resolve_local_slot(name)
+        {
+            return slot;
+        }
         let slot = self.local_slot(name, false);
         self.locals[slot].from_env = false;
+        if name == "arguments" {
+            if let Some(index) = self
+                .scope_plan
+                .declaration_by_slot
+                .get(slot)
+                .copied()
+                .flatten()
+            {
+                self.scope_plan.declarations[index].2 = crate::binding::ScopeId(0);
+            }
+            self.scope_plan.implicit_arguments = Some(crate::binding::LocalSlot(slot));
+        }
         slot
     }
 
@@ -629,6 +718,16 @@ impl Compiler {
     }
 
     pub(super) fn emit(&mut self, op: Op) -> usize {
+        self.scope_plan.record_pc(self.code.len());
+        if matches!(
+            op,
+            Op::NewFunction { .. }
+                | Op::NewClass { .. }
+                | Op::CallDirectEval { .. }
+                | Op::CallDirectEvalSpread { .. }
+        ) {
+            self.scope_plan.exposure_site(self.code.len());
+        }
         self.code.push(op);
         self.code.len() - 1
     }
@@ -1023,6 +1122,7 @@ impl Compiler {
                 ..
             } => self.compile_try(block, handler.as_ref(), finalizer.as_deref()),
             Stmt::FunctionDecl { .. } => {
+                self.emit_annex_b_function_copy(stmt);
                 self.emit_load_undefined();
                 Ok(())
             }
@@ -1030,15 +1130,13 @@ impl Compiler {
                 // Class declarations create a lexical (`let`-like) binding.
                 let slot = self.declare_lexical_slot(name, true);
                 self.emit(Op::ClearLocal(slot));
-                self.with_lexical_scope(|compiler| {
+                self.with_scope_kind(crate::binding::ScopeKind::ClassName, |compiler| {
                     let storage_name =
                         format!("\0class_decl_inner:{}:{}", name, compiler.locals.len());
                     let inner_slot =
                         compiler.declare_lexical_slot_with_storage_name(name, &storage_name, false);
                     compiler.emit(Op::ClearLocal(inner_slot));
-                    compiler.compile_class(Some(name), body)?;
-                    compiler.emit(Op::Dup);
-                    compiler.emit(Op::StoreLocal(inner_slot));
+                    compiler.compile_bound_class(name, inner_slot, body)?;
                     Ok(())
                 })?;
                 self.emit(Op::StoreLocal(slot));

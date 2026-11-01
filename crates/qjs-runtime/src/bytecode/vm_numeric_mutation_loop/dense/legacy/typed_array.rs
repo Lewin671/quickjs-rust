@@ -824,7 +824,7 @@ impl TypedProgram {
 
 fn receiver_objects(
     plan: &LegacyDynamicDensePlan,
-    vm: &Vm<'_>,
+    vm: &Vm<'_, '_>,
 ) -> Result<Option<Vec<ObjectRef>>, ()> {
     let mut objects = Vec::with_capacity(plan.receiver_sources.len());
     let mut saw_typed_array = false;
@@ -870,7 +870,7 @@ fn typed_limit(
 /// the current invocation so the backedge does not repeat failed leases.
 pub(super) fn try_run(
     plan: &LegacyDynamicDensePlan,
-    vm: &mut Vm<'_>,
+    vm: &mut Vm<'_, '_>,
     exit: usize,
 ) -> Option<DenseNumericMutationLoopRun> {
     record_typed_array_dense_attempt();

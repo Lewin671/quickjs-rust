@@ -1,4 +1,3 @@
-use crate::CallEnv;
 use crate::{
     ObjectRef, PropertyKey, RuntimeError, Value, call_function, is_truthy, object, property_value,
     property_value_key, string_prototype, symbol, to_length_with_env,
@@ -12,7 +11,7 @@ pub(crate) struct ArrayLikeLength {
 pub(crate) fn array_like_length(
     value: Value,
     context: &str,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<ArrayLikeLength, RuntimeError> {
     let receiver = array_like_receiver(value, env);
     let length = match receiver.clone() {
@@ -36,7 +35,7 @@ pub(crate) fn array_like_length(
 pub(crate) fn array_like_values_with_env(
     value: Value,
     context: &str,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Vec<Value>, RuntimeError> {
     match value {
         Value::Array(array) => Ok(array.to_vec()),
@@ -75,7 +74,7 @@ pub(crate) fn array_like_values_with_env(
 pub(crate) fn iterable_values_with_env(
     value: Value,
     context: &str,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Vec<Value>, RuntimeError> {
     let mut values = Vec::new();
     for_each_iterable_value_with_env(value, context, env, |value, _| {
@@ -89,7 +88,7 @@ pub(crate) fn iterable_values_from_method_with_env(
     value: Value,
     iterator_method: Value,
     context: &str,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Vec<Value>, RuntimeError> {
     let mut values = Vec::new();
     for_each_iterable_value_from_method_with_env(
@@ -108,11 +107,11 @@ pub(crate) fn iterable_values_from_method_with_env(
 pub(crate) fn for_each_iterable_value_with_env<F>(
     value: Value,
     context: &str,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     visit: F,
 ) -> Result<(), RuntimeError>
 where
-    F: FnMut(Value, &mut CallEnv) -> Result<(), RuntimeError>,
+    F: FnMut(Value, &mut crate::context::Context<'_>) -> Result<(), RuntimeError>,
 {
     let Some(iterator_symbol) = symbol::iterator_symbol(env) else {
         return Err(RuntimeError {
@@ -129,11 +128,11 @@ fn for_each_iterable_value_from_method_with_env<F>(
     value: Value,
     iterator_method: Value,
     context: &str,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     mut visit: F,
 ) -> Result<(), RuntimeError>
 where
-    F: FnMut(Value, &mut CallEnv) -> Result<(), RuntimeError>,
+    F: FnMut(Value, &mut crate::context::Context<'_>) -> Result<(), RuntimeError>,
 {
     if !matches!(iterator_method, Value::Function(_)) {
         return Err(RuntimeError {
@@ -181,7 +180,7 @@ where
 pub(crate) fn array_like_values_from_receiver(
     receiver: Value,
     length: usize,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Vec<Value>, RuntimeError> {
     match receiver {
         Value::Object(object) => object_array_like_values(object, length, env),
@@ -208,7 +207,7 @@ pub(crate) fn array_like_values_from_receiver(
 fn object_array_like_values(
     object: ObjectRef,
     length: usize,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Vec<Value>, RuntimeError> {
     let receiver = Value::Object(object.clone());
     let mut values = Vec::with_capacity(length);
@@ -225,7 +224,7 @@ fn object_array_like_values(
     Ok(values)
 }
 
-pub(super) fn array_like_receiver(value: Value, env: &CallEnv) -> Value {
+pub(super) fn array_like_receiver(value: Value, env: &crate::context::Context<'_>) -> Value {
     match value {
         Value::Boolean(_) | Value::BigInt(_) | Value::Number(_) => {
             object::boxed_primitive(value.clone(), env).unwrap_or(value)
@@ -273,7 +272,7 @@ fn is_object_like(value: &Value) -> bool {
 fn iterator_close_on_throw(
     iterator: &Value,
     error: RuntimeError,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> RuntimeError {
     if let Ok(return_method) = property_value(iterator.clone(), "return", env)
         && !matches!(return_method, Value::Null | Value::Undefined)

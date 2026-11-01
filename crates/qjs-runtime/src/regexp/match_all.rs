@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use crate::CallEnv;
 use crate::{
     Function, JsString, NativeFunction, ObjectRef, Property, PropertyKey, RuntimeError, Value,
     call_function, construct_function, property_value, reflect, symbol,
@@ -13,7 +12,10 @@ const REGEXP_STRING_ITERATOR_GLOBAL: &str = "\0regexp_string_iterator_global";
 const REGEXP_STRING_ITERATOR_UNICODE: &str = "\0regexp_string_iterator_unicode";
 const REGEXP_STRING_ITERATOR_DONE: &str = "\0regexp_string_iterator_done";
 
-pub(crate) fn install_regexp_prototype_match_all(env: &CallEnv, prototype: &ObjectRef) {
+pub(crate) fn install_regexp_prototype_match_all(
+    env: &crate::context::Context<'_>,
+    prototype: &ObjectRef,
+) {
     if let Some(symbol) = symbol::match_all_symbol(env) {
         prototype.define_symbol_property(
             symbol,
@@ -31,7 +33,7 @@ pub(crate) fn install_regexp_prototype_match_all(env: &CallEnv, prototype: &Obje
 pub(crate) fn native_regexp_prototype_match_all(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if !is_object_value(&this_value) {
         return Err(RuntimeError {
@@ -90,7 +92,7 @@ pub(crate) fn native_regexp_prototype_match_all(
 
 pub(crate) fn native_regexp_string_iterator_next(
     this_value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let Value::Object(iterator) = this_value else {
         return Err(RuntimeError {
@@ -132,7 +134,11 @@ pub(crate) fn native_regexp_string_iterator_next(
     Ok(iterator_result(match_result, false, env.realm().atoms()))
 }
 
-fn regexp_exec(regexp: Value, input: &JsString, env: &mut CallEnv) -> Result<Value, RuntimeError> {
+fn regexp_exec(
+    regexp: Value,
+    input: &JsString,
+    env: &mut crate::context::Context<'_>,
+) -> Result<Value, RuntimeError> {
     let exec = property_value(regexp.clone(), "exec", env)?;
     if !matches!(exec, Value::Function(_)) {
         return super::native_regexp_prototype_exec(regexp, &[Value::String(input.clone())], env);
@@ -153,11 +159,18 @@ fn ensure_exec_result_object(value: Value) -> Result<Value, RuntimeError> {
     }
 }
 
-fn match_result_value(value: Value, env: &mut CallEnv) -> Result<JsString, RuntimeError> {
+fn match_result_value(
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<JsString, RuntimeError> {
     to_js_string_value_with_env(property_value(value, "0", env)?, env)
 }
 
-fn set_last_index(receiver: Value, value: Value, env: &mut CallEnv) -> Result<(), RuntimeError> {
+fn set_last_index(
+    receiver: Value,
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<(), RuntimeError> {
     if reflect::ordinary_set(
         receiver.clone(),
         &PropertyKey::String("lastIndex".to_owned()),

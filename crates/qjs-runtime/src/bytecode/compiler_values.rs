@@ -317,6 +317,33 @@ impl Compiler {
         Ok(())
     }
 
+    /// Preserve GetThisValue for an identifier selected through an object
+    /// environment. Resolution and Get happen once, before argument effects.
+    /// Leaves [receiver, callee], for ordinary/optional/tagged call forms.
+    pub(super) fn compile_with_callee_reference(&mut self, callee: &Expr) -> bool {
+        let Expr::Identifier { name, .. } = callee else {
+            return false;
+        };
+        let slot = self.resolve_local_slot(name);
+        if !self.identifier_needs_with_resolution(slot) {
+            return false;
+        }
+        let object_slot = self.temp_local("with_call_object");
+        self.emit(Op::ResolveIdentWith {
+            name: name.clone(),
+            slot,
+            object_slot,
+        });
+        self.emit(Op::LoadLocal(object_slot));
+        self.emit(Op::LoadResolvedIdentWith {
+            name: name.clone(),
+            slot,
+            object_slot,
+            is_strict: self.strict,
+        });
+        true
+    }
+
     pub(super) fn compile_call(
         &mut self,
         callee: &Expr,
@@ -428,43 +455,23 @@ impl Compiler {
             return Ok(());
         }
 
-        // A bare-identifier call resolved through a `with` scope uses the with
-        // binding object as the `this` value when the name is found on it (and
-        // undefined otherwise), per GetThisValue of an object-environment
-        // reference. `eval` keeps its dedicated direct-eval path.
-        if let Expr::Identifier { name, .. } = callee
-            && name != "eval"
+        // Direct eval retains its dedicated calling protocol.
+        if !matches!(callee, Expr::Identifier { name, .. } if name == "eval")
+            && self.compile_with_callee_reference(callee)
         {
-            let slot = self.resolve_local_slot(name);
-            if self.identifier_needs_with_resolution(slot) {
-                let object_slot = self.temp_local("with_call_object");
-                self.emit(Op::ResolveIdentWith {
-                    name: name.clone(),
-                    slot,
-                    object_slot,
-                });
-                // Receiver (with object or undefined), then the resolved callee.
-                self.emit(Op::LoadLocal(object_slot));
-                self.emit(Op::LoadResolvedIdentWith {
-                    name: name.clone(),
-                    slot,
-                    object_slot,
-                    is_strict: self.strict,
-                });
-                if has_spread {
-                    self.compile_argument_array(arguments)?;
-                    self.emit(Op::CallResolvedSpread);
-                    return Ok(());
-                }
-                for argument in arguments {
-                    let CallArgument::Expr(argument) = argument else {
-                        unreachable!("spread arguments are handled above");
-                    };
-                    self.compile_expr(argument)?;
-                }
-                self.emit(Op::CallResolved(arguments.len()));
+            if has_spread {
+                self.compile_argument_array(arguments)?;
+                self.emit(Op::CallResolvedSpread);
                 return Ok(());
             }
+            for argument in arguments {
+                let CallArgument::Expr(argument) = argument else {
+                    unreachable!("spread arguments are handled above");
+                };
+                self.compile_expr(argument)?;
+            }
+            self.emit(Op::CallResolved(arguments.len()));
+            return Ok(());
         }
 
         let direct_eval = matches!(callee, Expr::Identifier { name, .. } if name == "eval");
@@ -610,11 +617,12 @@ impl Compiler {
             *is_generator,
             *is_async,
             &local_names,
+            true,
+            None,
         )?;
         self.emit(Op::NewFunction {
             name: Some(function_name.to_owned()),
             has_name_binding: false,
-            immutable_name_binding: false,
             params: Rc::new(params.clone()),
             local_names: Rc::new(local_names),
             lexical_captures,
@@ -642,6 +650,33 @@ impl Compiler {
         Ok(())
     }
 
+    pub(super) fn emit_annex_b_function_copy(&mut self, stmt: &Stmt) {
+        let Stmt::FunctionDecl {
+            name,
+            is_generator: false,
+            is_async: false,
+            ..
+        } = stmt
+        else {
+            return;
+        };
+        let scope = *self.scope_plan.active.last().expect("declaration scope");
+        if self.strict
+            || self.scope_plan.scopes[scope.0].kind != crate::binding::ScopeKind::Block
+            || !self.annex_b_function_name_blocked(name)
+            || self.annex_b_function_name_blocked_by_outer_scope(name)
+            || self.annex_b_arguments_function_name_blocked(name)
+        {
+            return;
+        }
+        let lexical = self
+            .resolve_local_slot(name)
+            .expect("instantiated block function");
+        let variable = self.local_slot(name, true);
+        self.emit(Op::LoadLocal(lexical));
+        self.emit_store_var_binding(variable, name, VarKind::Var);
+    }
+
     fn compile_block_scoped_function_decl(
         &mut self,
         name: &String,
@@ -660,11 +695,12 @@ impl Compiler {
             is_generator,
             is_async,
             &local_names,
+            true,
+            None,
         )?;
         self.emit(Op::NewFunction {
             name: Some(name.to_owned()),
             has_name_binding: false,
-            immutable_name_binding: false,
             params: Rc::new(params.clone()),
             local_names: Rc::new(local_names),
             lexical_captures,
@@ -679,17 +715,10 @@ impl Compiler {
             // toString falls back to the [native code] form.
             source_text: None,
         });
-        self.emit(Op::Dup);
+        // BlockDeclarationInstantiation initializes only the lexical binding.
+        // Annex B's outer-var copy belongs to evaluation of the declaration
+        // statement, which may never be reached after an abrupt completion.
         self.emit(Op::StoreLocal(lexical_slot));
-        // Annex B B.3.3 hoists a block-scoped function declaration into the
-        // enclosing var scope only in sloppy mode; strict code keeps it purely
-        // block-scoped (lexical).
-        if self.strict || self.annex_b_function_name_blocked_by_outer_scope(name) {
-            self.emit(Op::Pop);
-        } else {
-            let var_slot = self.local_slot(name, true);
-            self.emit_store_var_binding(var_slot, name, VarKind::Var);
-        }
         self.emit_load_undefined();
         Ok(())
     }

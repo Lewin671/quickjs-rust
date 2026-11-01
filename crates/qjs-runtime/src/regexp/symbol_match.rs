@@ -1,11 +1,13 @@
-use crate::CallEnv;
 use crate::{
     ArrayRef, Function, JsString, NativeFunction, ObjectRef, Property, PropertyKey, RuntimeError,
     Value, call_function, property_value, reflect, symbol, to_js_string_value_with_env,
     to_js_string_with_env, to_length_with_env,
 };
 
-pub(crate) fn install_regexp_prototype_match(env: &CallEnv, prototype: &ObjectRef) {
+pub(crate) fn install_regexp_prototype_match(
+    env: &crate::context::Context<'_>,
+    prototype: &ObjectRef,
+) {
     if let Some(symbol) = symbol::match_symbol(env) {
         prototype.define_symbol_property(
             symbol,
@@ -23,7 +25,7 @@ pub(crate) fn install_regexp_prototype_match(env: &CallEnv, prototype: &ObjectRe
 pub(crate) fn native_regexp_prototype_match(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if !is_object_value(&this_value) {
         return Err(RuntimeError {
@@ -54,7 +56,7 @@ fn global_match(
     regexp: Value,
     input: &JsString,
     unicode: bool,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let mut matches = Vec::new();
     loop {
@@ -79,7 +81,11 @@ fn global_match(
     }
 }
 
-fn regexp_exec(regexp: Value, input: &JsString, env: &mut CallEnv) -> Result<Value, RuntimeError> {
+fn regexp_exec(
+    regexp: Value,
+    input: &JsString,
+    env: &mut crate::context::Context<'_>,
+) -> Result<Value, RuntimeError> {
     let exec = property_value(regexp.clone(), "exec", env)?;
     if !matches!(exec, Value::Function(_)) {
         return Err(RuntimeError {
@@ -98,7 +104,11 @@ fn regexp_exec(regexp: Value, input: &JsString, env: &mut CallEnv) -> Result<Val
     }
 }
 
-fn set_last_index(receiver: Value, value: Value, env: &mut CallEnv) -> Result<(), RuntimeError> {
+fn set_last_index(
+    receiver: Value,
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<(), RuntimeError> {
     if reflect::ordinary_set(
         receiver.clone(),
         &PropertyKey::String("lastIndex".to_owned()),

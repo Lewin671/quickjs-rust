@@ -8,7 +8,6 @@
 
 use std::collections::HashMap;
 
-use crate::CallEnv;
 use crate::{
     NativeFunction, ObjectRef, Property, PropertyKey, RuntimeError, Value, call_function,
     object_prototype, property_value, property_value_key, symbol,
@@ -20,7 +19,7 @@ const WRAP_NEXT: &str = "\0wrap_for_valid_iterator_next";
 /// `Iterator.from(O)`.
 pub(super) fn native_iterator_from(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let object = argument_values.first().cloned().unwrap_or(Value::Undefined);
 
@@ -46,7 +45,10 @@ pub(super) fn native_iterator_from(
 
 /// GetIteratorFlattenable for `Iterator.from`: a string primitive is iterated;
 /// any other primitive is a TypeError; objects go through GetIterator(sync).
-fn iterator_flattenable(value: Value, env: &mut CallEnv) -> Result<Value, RuntimeError> {
+fn iterator_flattenable(
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<Value, RuntimeError> {
     match &value {
         Value::String(_) => crate::bytecode::sync_iterator_for_value(value, env),
         Value::Object(object) if symbol::is_symbol_primitive(object) => Err(RuntimeError {
@@ -108,7 +110,7 @@ fn is_object_value(value: &Value) -> bool {
 /// chain looking for `%Iterator.prototype%`.
 fn iterator_inherits_iterator_prototype(
     iterator: &Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<bool, RuntimeError> {
     let Some(target) = super::iterator_prototype(env) else {
         return Ok(false);
@@ -130,7 +132,10 @@ fn iterator_inherits_iterator_prototype(
 /// `%WrapForValidIteratorPrototype%`, installed eagerly under
 /// [`super::WRAP_PROTOTYPE_BINDING`]. It inherits `%Iterator.prototype%` and
 /// forwards `next`/`return` to the wrapped iterator record.
-pub(super) fn build_wrap_prototype(env: &CallEnv, iterator_prototype: &ObjectRef) -> ObjectRef {
+pub(super) fn build_wrap_prototype(
+    env: &crate::context::Context<'_>,
+    iterator_prototype: &ObjectRef,
+) -> ObjectRef {
     let _ = env;
     let prototype = ObjectRef::with_prototype(
         HashMap::new(),
@@ -160,7 +165,7 @@ pub(super) fn build_wrap_prototype(env: &CallEnv, iterator_prototype: &ObjectRef
     prototype
 }
 
-fn wrap_prototype(env: &CallEnv) -> Option<ObjectRef> {
+fn wrap_prototype(env: &crate::context::Context<'_>) -> Option<ObjectRef> {
     match env.get(super::WRAP_PROTOTYPE_BINDING) {
         Some(Value::Object(prototype)) => Some(prototype.clone()),
         _ => None,
@@ -171,7 +176,7 @@ fn wrap_prototype(env: &CallEnv) -> Option<ObjectRef> {
 /// `next` method with no arguments.
 pub(super) fn native_wrap_next(
     this_value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let Value::Object(wrapper) = &this_value else {
         return Err(not_a_wrapper());
@@ -189,7 +194,7 @@ pub(super) fn native_wrap_next(
 /// `return` method if present, otherwise returns a done result object.
 pub(super) fn native_wrap_return(
     this_value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let Value::Object(wrapper) = &this_value else {
         return Err(not_a_wrapper());
@@ -210,7 +215,7 @@ pub(super) fn native_wrap_return(
     call_function(return_method, iterator, Vec::new(), env, false)
 }
 
-fn done_result(env: &CallEnv) -> Value {
+fn done_result(env: &crate::context::Context<'_>) -> Value {
     let object =
         ObjectRef::with_prototype(HashMap::new(), object_prototype(env), env.realm().atoms());
     object.define_property("value".to_owned(), Property::enumerable(Value::Undefined));

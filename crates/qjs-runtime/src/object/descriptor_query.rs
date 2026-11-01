@@ -9,11 +9,10 @@ use super::{
     descriptor_record::property_descriptor_object,
     enumeration::{own_property_names, own_property_symbols},
 };
-use crate::CallEnv;
 
 pub(crate) fn native_object_get_own_property_descriptor(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     if matches!(target, Value::Null | Value::Undefined) {
@@ -48,7 +47,7 @@ pub(crate) fn native_object_get_own_property_descriptor(
 
 pub(crate) fn native_object_get_own_property_descriptors(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     if matches!(target, Value::Null | Value::Undefined) {

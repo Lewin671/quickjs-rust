@@ -3,26 +3,21 @@
 //! A call takes one of three routes: a guarded native fast path
 //! (`try_fast_global_native_call`), the direct-leaf path
 //! (`function::call_direct_leaf_function`), or the general
-//! `function::call_function` with a `CallEnv` built by `vm_call_env.rs`.
+//! `function::call_function` with a borrowed Context from `vm_context.rs`.
 //! The direct-leaf path hands the callee no caller bindings, so only a
 //! callee passing `is_direct_leaf_function` may take it.
-
-use std::collections::HashMap;
 
 #[cfg(test)]
 use std::cell::Cell;
 
 use crate::{
-    CallEnv, Function, NativeFunction, RuntimeError, Value,
+    NativeFunction, RuntimeError, Value,
     function::{call_direct_leaf_function, is_direct_leaf_function},
     to_int32_number,
 };
 
 use super::util::stack_underflow;
 use super::vm::Vm;
-use super::vm_call_env::{VmCallEnv, VmCallEnvOrigin};
-
-const DYNAMIC_FUNCTION_REALM_GLOBAL: &str = "__quickjsRustDynamicFunctionRealm";
 
 #[cfg(test)]
 thread_local! {
@@ -39,17 +34,7 @@ pub(super) fn guarded_math_unary_hits() -> usize {
     GUARDED_MATH_UNARY_HITS.with(Cell::get)
 }
 
-fn direct_eval_selects_name(eval_bytecode: &super::Bytecode, name: &str) -> bool {
-    // `this` has a dedicated VM path in some bytecode shapes, so keep it even
-    // if it is not represented as an ordinary LoadGlobal name.
-    name == "this"
-        || eval_bytecode
-            .global_names()
-            .iter()
-            .any(|candidate| candidate == name)
-}
-
-impl Vm<'_> {
+impl Vm<'_, '_> {
     pub(super) fn require_callable(&self) -> Result<(), RuntimeError> {
         let callee = self.stack.last().ok_or_else(stack_underflow)?;
         if matches!(callee, Value::Function(_))
@@ -155,137 +140,13 @@ impl Vm<'_> {
         self.call_stack_arguments(argc, false, true, is_strict)
     }
 
-    /// Rebuilds only the caller bindings a proven reusable direct-eval
-    /// blueprint can name.  A cached declaration-free eval has already paid
-    /// its parse/compile cost, but the ordinary direct-eval call path still
-    /// exports every live local and dynamic cell before executing a source
-    /// such as `Y()`.  The immutable bytecode's global-name list is the
-    /// complete set of dynamic lookups for this restricted shape, so retaining
-    /// that whole caller view is unnecessary.
-    ///
-    /// Cache misses and anything that can extend the dynamic scope retain
-    /// `frame_call_env`: declarations need eval-instantiation conflict state,
-    /// while nested eval and `with` can discover names after this outer
-    /// bytecode was compiled.  Parameter initializers are kept conservative
-    /// for their distinct eval environment as well.
-    ///
-    /// The flag is true when the eval writes and deletes no binding: nothing
-    /// in the returned environment then differs from the caller's frame after
-    /// it runs, and the write-back can be skipped.
-    fn cached_direct_eval_call_env(
-        &self,
-        source: &crate::JsString,
-        direct_eval_strict: bool,
-    ) -> Option<(CallEnv, bool)> {
-        if self.bytecode.contains_with()
-            || self.in_parameter_prologue()
-            || !self.with_stack().is_empty()
-        {
-            return None;
-        }
-
-        // Match `native_global_eval`'s cache key exactly without first
-        // materializing the current VM's slot-indexed locals.  The base
-        // environment preserves method/derived-constructor markers; refresh
-        // private names from the current home object just as `frame_call_env`
-        // does before direct eval runs.
-        let mut parse_env = self.env.fork_current_frame_values();
-        parse_env.insert(
-            crate::DIRECT_EVAL_STRICT_BINDING.to_owned(),
-            Value::Boolean(direct_eval_strict),
-        );
-        parse_env.set_private_environment(self.current_private_environment());
-        let parse_context = crate::global::direct_eval_parse_context(&parse_env);
-        let bytecode = self
-            .env
-            .cached_direct_eval_bytecode(source, &parse_context)?;
-        if !super::direct_eval_bytecode_is_cacheable(&bytecode)
-            || bytecode.contains_direct_eval()
-            || bytecode.contains_with()
-        {
-            return None;
-        }
-
-        Some((
-            self.selected_direct_eval_call_env(&bytecode),
-            !bytecode.writes_bindings(),
-        ))
-    }
-
-    /// Builds the ordinary direct-eval base context, then overlays only
-    /// bytecode-selected outer names in the same lexical order as
-    /// `frame_call_env`.  The base keeps call metadata such as `new.target`,
-    /// arguments, home-object state, and module routing; it deliberately
-    /// leaves the caller's full dynamic map behind.
-    fn selected_direct_eval_call_env(&self, eval_bytecode: &super::Bytecode) -> CallEnv {
-        let mut env = self.attach_host(self.env.fork_current_frame_values());
-        for index in 0..self.locals.len() {
-            if self.bytecode.local_is_compiler_temporary(index)
-                || self.bytecode.local_is_sloppy_global_fallback(index)
-                || (self.bytecode.is_global_scope()
-                    && self.bytecode.local_is_body_hoist_only(index)
-                    && !self.bytecode.local_is_compiler_temporary(index))
-            {
-                continue;
-            }
-            let name = &self.bytecode.locals[index].name;
-            if name == "this" && env.derived_this_cell().is_some() {
-                continue;
-            }
-            if !direct_eval_selects_name(eval_bytecode, name) {
-                continue;
-            }
-            if let Some(value) = self.local_slot_value(index) {
-                env.insert(name.clone(), value);
-            }
-        }
-        for (index, upvalue) in self.local_upvalues.iter().enumerate() {
-            let Some(upvalue) = upvalue else { continue };
-            if self.bytecode.local_is_compiler_temporary(index)
-                || self.bytecode.local_is_sloppy_global_fallback(index)
-                || (self.bytecode.is_global_scope()
-                    && self.bytecode.local_is_body_hoist_only(index)
-                    && !self.bytecode.local_is_compiler_temporary(index))
-            {
-                continue;
-            }
-            let name = &self.bytecode.locals[index].name;
-            if name == "this" && env.derived_this_cell().is_some() {
-                continue;
-            }
-            if direct_eval_selects_name(eval_bytecode, name)
-                && (self.locals.get(index).is_some_and(Option::is_some)
-                    || self.bytecode.locals[index].is_received_upvalue())
-            {
-                env.insert_frame_cell(name.clone(), upvalue.clone());
-            }
-        }
-
-        // A previous, declaration-bearing eval can introduce a dynamic `var`
-        // that this cached source later reads.  Retain that one live cell when
-        // selected, without carrying the entire caller deopt map into every
-        // cache hit.  A frame binding (including a local that shadows it)
-        // remains authoritative.
-        if let Some(bindings) = self.env.deopt_bindings() {
-            for name in eval_bytecode.global_names() {
-                if !env.has_frame_binding(name)
-                    && let Some(upvalue) = bindings.cell(name)
-                {
-                    env.insert_frame_cell(name.clone(), upvalue);
-                }
-            }
-        }
-        env.set_private_environment(self.current_private_environment());
-        env
-    }
-
     fn call_callee(
         &mut self,
         callee: Value,
         this_value: Value,
         arguments: Vec<Value>,
     ) -> Result<(), RuntimeError> {
-        self.call_callee_with_marker(callee, this_value, arguments, false, false)
+        self.call_callee_with_eval_site(callee, this_value, arguments, false, false)
     }
 
     fn call_callee_with_direct_eval(
@@ -295,10 +156,10 @@ impl Vm<'_> {
         arguments: Vec<Value>,
         is_strict: bool,
     ) -> Result<(), RuntimeError> {
-        self.call_callee_with_marker(callee, this_value, arguments, true, is_strict)
+        self.call_callee_with_eval_site(callee, this_value, arguments, true, is_strict)
     }
 
-    fn call_callee_with_marker(
+    fn call_callee_with_eval_site(
         &mut self,
         callee: Value,
         this_value: Value,
@@ -336,7 +197,7 @@ impl Vm<'_> {
             // frame is built only by the arms that need one instead of once
             // per native call.
             if let Some(result) =
-                try_fast_global_native_call(&callee, &this_value, arguments, &|| self.realm_env())
+                try_fast_global_native_call(&callee, &this_value, arguments, &mut self.context())
             {
                 return result;
             }
@@ -353,155 +214,42 @@ impl Vm<'_> {
             Value::Function(function)
                 if function.native == Some(NativeFunction::FunctionPrototypeApply)
         ) && let Some(result) =
-            crate::function::apply_dense_native_fast_path(&this_value, arguments, &self.realm_env())
+            crate::function::apply_dense_native_fast_path(&this_value, arguments, &self.context())
         {
             return result;
         }
         if !direct_eval && is_direct_leaf_function(&callee) {
-            return call_direct_leaf_function(
-                callee,
-                this_value,
-                arguments,
-                &self.env,
-                self.module_host.clone(),
-                #[cfg(feature = "agents")]
-                self.agent_context.clone(),
-            );
+            return call_direct_leaf_function(callee, this_value, arguments, &mut self.context());
         }
         let effective_direct_eval = direct_eval
-            && matches!(&callee, Value::Function(function) if function.native == Some(NativeFunction::Eval));
-        let in_parameter_scope = effective_direct_eval && self.in_parameter_prologue();
-        // Native functions do not inherit their caller's lexical environment.
-        // Any user callbacks they invoke already carry their own upvalue cells,
-        // while realm writes are shared through the realm itself. Only a direct
-        // eval call needs the active frame's dynamic-name view.
-        let frame_independent_native = !effective_direct_eval
-            && matches!(&callee, Value::Function(function) if function.native.is_some());
-        let mut read_only_eval = false;
-        let mut env = if effective_direct_eval {
-            let mut env = match arguments.first() {
-                Some(Value::String(source)) => self
-                    .cached_direct_eval_call_env(source, direct_eval_strict)
-                    .map(|(env, read_only)| {
-                        read_only_eval = read_only;
-                        VmCallEnv {
-                            env,
-                            origin: VmCallEnvOrigin::DirectEval,
-                        }
-                    })
-                    .unwrap_or_else(|| self.call_env(&callee)),
-                _ => self.call_env(&callee),
-            };
-            // Whatever environment a direct eval ends up with, it is about to
-            // carry the markers, so its provenance is DirectEval.
-            env.origin = VmCallEnvOrigin::DirectEval;
-            env
-        } else if frame_independent_native {
-            VmCallEnv {
-                env: self.realm_env(),
-                origin: VmCallEnvOrigin::RealmOnly,
-            }
-        } else {
-            self.call_env(&callee)
-        };
-        let marker_free = env.origin.is_marker_free();
+            && matches!(&callee, Value::Function(function) if function.native == Some(NativeFunction::Eval)
+                && std::rc::Rc::ptr_eq(function.creation_realm(), self.env.realm()));
         if effective_direct_eval {
-            env.env
-                .insert(crate::DIRECT_EVAL_BINDING.to_owned(), Value::Boolean(true));
-            env.env.insert(
-                crate::DIRECT_EVAL_STRICT_BINDING.to_owned(),
-                Value::Boolean(direct_eval_strict),
+            let scope = self.prepare_scope_cursor();
+            let private = self.current_private_environment();
+            let site = crate::context::DirectEvalSite {
+                strict: direct_eval_strict,
+                in_parameters: self.in_parameter_prologue(),
+                scope: scope.as_ref(),
+                private: private.as_ref(),
+            };
+            let Value::Function(function) = &callee else {
+                unreachable!("direct eval function");
+            };
+            return crate::native::call_native_function(
+                function.native_entry.expect("eval entry"),
+                crate::native::CallInfo {
+                    callee: function,
+                    this_value: &this_value,
+                    is_construct: false,
+                },
+                arguments,
+                None,
+                Some(&site),
+                &mut self.context(),
             );
-            if in_parameter_scope {
-                env.env.insert(
-                    crate::DIRECT_EVAL_IN_PARAMETER_SCOPE_BINDING.to_owned(),
-                    Value::Boolean(true),
-                );
-            }
-            env.env
-                .set_direct_eval_with_stack(self.with_stack().to_vec());
-        } else if !marker_free {
-            // A freshly built frame cannot carry a marker: `CallEnv::remove`
-            // reaches only frame and deopt bindings, and both start empty.
-            crate::diagnostics::count!(call_env_marker_scrubs);
-            env.env.remove(crate::DIRECT_EVAL_BINDING);
-            env.env.remove(crate::DIRECT_EVAL_STRICT_BINDING);
-            env.env
-                .remove(crate::DIRECT_EVAL_IN_PARAMETER_SCOPE_BINDING);
         }
-        let restore_dynamic_realm_after_call = !matches!(&callee, Value::Function(function) if function.native == Some(NativeFunction::Eval));
-        let dynamic_realm_snapshot = restore_dynamic_realm_after_call
-            .then(|| self.marked_dynamic_realm_snapshot())
-            .flatten();
-        let result =
-            crate::function::call_function_slice(&callee, this_value, arguments, &mut env.env);
-        env.env.remove(crate::DIRECT_EVAL_BINDING);
-        env.env.remove(crate::DIRECT_EVAL_STRICT_BINDING);
-        env.env
-            .remove(crate::DIRECT_EVAL_IN_PARAMETER_SCOPE_BINDING);
-        env.env.set_direct_eval_with_stack(Vec::new());
-        if read_only_eval {
-            // The environment holds the caller's own values and cells, none
-            // written: writing it back would store each value where it came
-            // from. A realm write the eval made (through a function it
-            // called) still reaches the realm-backed slots.
-            self.refresh_realm_backed_locals_from_realm();
-        } else {
-            self.apply_call_env(env);
-        }
-        if let Some(snapshot) = dynamic_realm_snapshot {
-            self.restore_marked_dynamic_realm(snapshot);
-        }
-        result
-    }
-
-    fn marked_dynamic_realm_snapshot(&self) -> Option<HashMap<String, Value>> {
-        // The realm caches this marker, and the frame layer is checked first,
-        // so an unmarked frame answers without the full name-resolution chain
-        // that `get` walks. Almost every call is unmarked.
-        self.env.dynamic_function_realm_global()?;
-        let Some(Value::Object(global)) = self.env.get(DYNAMIC_FUNCTION_REALM_GLOBAL) else {
-            return None;
-        };
-        let Some(Value::Object(global_this)) = self.env.get(crate::GLOBAL_THIS_BINDING) else {
-            return None;
-        };
-        if !global.ptr_eq(&global_this) {
-            return None;
-        }
-        let mut snapshot = HashMap::new();
-        snapshot.insert(
-            DYNAMIC_FUNCTION_REALM_GLOBAL.to_owned(),
-            Value::Object(global.clone()),
-        );
-        snapshot.insert(
-            crate::GLOBAL_THIS_BINDING.to_owned(),
-            Value::Object(global.clone()),
-        );
-        snapshot.insert("globalThis".to_owned(), Value::Object(global.clone()));
-        snapshot.insert("this".to_owned(), Value::Object(global.clone()));
-        for name in global.own_property_names() {
-            if name.starts_with('\0') {
-                continue;
-            }
-            if let Some(property) = global.own_property(&name) {
-                snapshot.insert(name, property.value);
-            }
-        }
-        Some(snapshot)
-    }
-
-    fn restore_marked_dynamic_realm(&mut self, snapshot: HashMap<String, Value>) {
-        if let Some(Value::Object(global)) = snapshot.get(DYNAMIC_FUNCTION_REALM_GLOBAL) {
-            for name in global.own_property_names() {
-                if !snapshot.contains_key(&name) {
-                    self.env.remove(&name);
-                }
-            }
-        }
-        for (name, value) in snapshot {
-            self.env.insert(name, value);
-        }
+        crate::function::call_function_slice(&callee, this_value, arguments, &mut self.context())
     }
 
     pub(super) fn call_spread(&mut self) -> Result<(), RuntimeError> {
@@ -623,15 +371,7 @@ impl Vm<'_> {
         this_value: Value,
         arguments: &[Value],
     ) -> Result<(), RuntimeError> {
-        let result = call_direct_leaf_function(
-            callee,
-            this_value,
-            arguments,
-            &self.env,
-            self.module_host.clone(),
-            #[cfg(feature = "agents")]
-            self.agent_context.clone(),
-        );
+        let result = call_direct_leaf_function(callee, this_value, arguments, &mut self.context());
         if let Some(value) = self.handle_call_result(result)? {
             self.stack.push(value);
         }
@@ -639,49 +379,23 @@ impl Vm<'_> {
     }
 }
 
-pub(super) fn user_bytecode_function(value: &Value) -> Option<&Function> {
-    let Value::Function(function) = value else {
-        return None;
-    };
-    if let Some(bound) = &function.bound {
-        return user_bytecode_function(&bound.target);
-    }
-    if function.native.is_none() && function.bytecode.is_some() {
-        Some(function)
-    } else {
-        None
-    }
-}
-
-pub(super) fn native_error_message(message: &str) -> (&'static str, String) {
-    for name in [
-        "EvalError",
-        "RangeError",
-        "ReferenceError",
-        "SyntaxError",
-        "TypeError",
-        "URIError",
-    ] {
-        if let Some(message) = message
-            .strip_prefix(name)
-            .and_then(|rest| rest.strip_prefix(": "))
-        {
-            return (name, message.to_owned());
-        }
-    }
-    ("TypeError", message.to_owned())
-}
-
 pub(super) fn try_fast_global_native_call(
     callee: &Value,
     this_value: &Value,
     arguments: &[Value],
-    realm_env: &dyn Fn() -> CallEnv,
+    context: &mut crate::context::Context<'_>,
 ) -> Option<Result<Value, RuntimeError>> {
     let Value::Function(function) = callee else {
         return None;
     };
     let native = function.native?;
+    let info = crate::native::CallInfo {
+        callee: function,
+        this_value,
+        is_construct: false,
+    };
+    let mut site = context.with_native(&info, None, None);
+    let context = &mut site;
     let result = match native {
         NativeFunction::DecodeUri
         | NativeFunction::DecodeUriComponent
@@ -769,9 +483,7 @@ pub(super) fn try_fast_global_native_call(
         NativeFunction::MathPow => Ok(Value::Number(fast_primitive_math_pow(arguments)?)),
         NativeFunction::MathRandom if arguments.is_empty() => crate::math::native_math_random(),
         NativeFunction::ArrayPrototypeIndexOf => Ok(crate::array::fast_dense_array_index_of(
-            this_value,
-            arguments,
-            &realm_env(),
+            this_value, arguments, context,
         )?),
         NativeFunction::Eval => {
             let Some(Value::String(source)) = arguments.first() else {
@@ -780,7 +492,7 @@ pub(super) fn try_fast_global_native_call(
             if crate::global::eval_source_is_only_comments_and_whitespace(source) {
                 return Some(Ok(Value::Undefined));
             }
-            match crate::global::try_eval_regexp_literal_source(source, &realm_env()) {
+            match crate::global::try_eval_regexp_literal_source(source, context) {
                 Ok(Some(value)) => Ok(value),
                 Ok(None) => return None,
                 Err(error) => Err(error),
@@ -847,13 +559,13 @@ pub(super) fn try_fast_global_native_call(
             {
                 return None;
             }
-            let mut env = realm_env();
-            crate::date::native_date_prototype_set_time(this_value.clone(), arguments, &mut env)
+            let env = &mut *context;
+            crate::date::native_date_prototype_set_time(this_value.clone(), arguments, env)
         }
         NativeFunction::StringPrototypeSlice
         | NativeFunction::StringPrototypeSubstr
         | NativeFunction::StringPrototypeSubstring => {
-            fast_string_sequence_native(native, this_value, arguments, realm_env)?
+            fast_string_sequence_native(native, this_value, arguments, context)?
         }
         NativeFunction::StringPrototypeCharAt => {
             let Value::String(text) = this_value else {
@@ -891,8 +603,8 @@ pub(super) fn try_fast_global_native_call(
             {
                 return None;
             }
-            let mut env = realm_env();
-            crate::string::native_string_prototype_concat(this_value.clone(), arguments, &mut env)
+            let env = &mut *context;
+            crate::string::native_string_prototype_concat(this_value.clone(), arguments, env)
         }
         NativeFunction::RegExpPrototypeTest => {
             if !matches!(this_value, Value::Object(_))
@@ -900,15 +612,15 @@ pub(super) fn try_fast_global_native_call(
             {
                 return None;
             }
-            let mut env = realm_env();
-            crate::regexp::native_regexp_prototype_test(this_value.clone(), arguments, &mut env)
+            let env = &mut *context;
+            crate::regexp::native_regexp_prototype_test(this_value.clone(), arguments, env)
         }
         NativeFunction::Test262AssertSameValue => {
             crate::global::native_test262_assert_same_value(arguments)
         }
         _ => return None,
     };
-    Some(result)
+    Some(result.map_err(|error| crate::error::capture_error_origin(error, context)))
 }
 
 fn fast_primitive_unary_math(native: NativeFunction, arguments: &[Value]) -> Option<f64> {
@@ -980,7 +692,7 @@ fn fast_string_sequence_native(
     native: NativeFunction,
     this_value: &Value,
     arguments: &[Value],
-    realm_env: &dyn Fn() -> CallEnv,
+    context: &mut crate::context::Context<'_>,
 ) -> Option<Result<Value, RuntimeError>> {
     if !matches!(this_value, Value::String(_)) {
         return None;
@@ -991,20 +703,16 @@ fn fast_string_sequence_native(
     {
         return None;
     }
-    let mut env = realm_env();
+    let env = &mut *context;
     let result = match native {
         NativeFunction::StringPrototypeSlice => {
-            crate::string::native_string_prototype_slice(this_value.clone(), arguments, &mut env)
+            crate::string::native_string_prototype_slice(this_value.clone(), arguments, env)
         }
         NativeFunction::StringPrototypeSubstr => {
-            crate::string::native_string_prototype_substr(this_value.clone(), arguments, &mut env)
+            crate::string::native_string_prototype_substr(this_value.clone(), arguments, env)
         }
         NativeFunction::StringPrototypeSubstring => {
-            crate::string::native_string_prototype_substring(
-                this_value.clone(),
-                arguments,
-                &mut env,
-            )
+            crate::string::native_string_prototype_substring(this_value.clone(), arguments, env)
         }
         _ => unreachable!("string sequence native fast path only accepts sequence natives"),
     };

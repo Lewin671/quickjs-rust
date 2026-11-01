@@ -1,0 +1,15 @@
+{
+  "completed": 6000,
+  "requested": 6000,
+  "counts": {
+    "MATCH": 3155,
+    "PRE": 579,
+    "FIXED": 2570,
+    "CHANGED": 396,
+    "REGR": 33
+  },
+  "stable_inputs": true,
+  "no_new_regressions_or_mode_failures": false,
+  "all_engines_agree": false,
+  "finished_unix": 1793505854.6885078
+}

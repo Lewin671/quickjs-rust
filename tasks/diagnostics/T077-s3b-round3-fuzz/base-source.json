@@ -1,0 +1,8 @@
+{
+  "revision": "3cc12c6f8d93ffd6eae91d1bd44efe74134ae195",
+  "archive_sha256": "609598ab760bc097126a69f29cd79a98a73be717681a0cceb501f0dc046d2900",
+  "checked_build_input_files": 596,
+  "source_matches_archive": true,
+  "binary_sha256": "1193f7e66fff70aafaec4c682cc268c18ee28bf1bdfa01fb3ff60fc095c59ad4",
+  "build_recipe": "cargo build --release -p qjs-cli; default workspace profile/config, isolated target/s3b-round3-base-source; prior build log retained"
+}

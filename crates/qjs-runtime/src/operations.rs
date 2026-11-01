@@ -4,7 +4,6 @@ use num_bigint::{BigInt, Sign};
 use num_traits::{ToPrimitive, Zero};
 use qjs_ast::{BinaryOp, UnaryOp};
 
-use crate::CallEnv;
 use crate::{
     PreferredType, PropertyKey, RuntimeError, Value, call_function, error, has_property_key,
     is_truthy, property_value, string, symbol, to_int32_number, to_js_string_with_env,
@@ -15,7 +14,7 @@ use crate::{
 pub(crate) fn eval_unary(
     op: UnaryOp,
     argument: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     match op {
         UnaryOp::Not => Ok(Value::Boolean(!is_truthy(&argument))),
@@ -45,7 +44,7 @@ pub(crate) fn eval_binary(
     left: Value,
     op: BinaryOp,
     right: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if op == BinaryOp::In {
         return eval_in(left, right, env);
@@ -196,7 +195,10 @@ pub(crate) fn number_exponentiate(base: f64, exponent: f64) -> f64 {
     base.powf(exponent)
 }
 
-fn to_numeric_with_env(value: Value, env: &mut CallEnv) -> Result<Value, RuntimeError> {
+fn to_numeric_with_env(
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<Value, RuntimeError> {
     let primitive = match value {
         Value::Object(_)
         | Value::Function(_)
@@ -299,7 +301,7 @@ fn eval_relational(
     left: Value,
     op: BinaryOp,
     right: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let left = to_primitive_with_env(left, env)?;
     let right = to_primitive_with_env(right, env)?;
@@ -390,7 +392,11 @@ pub(crate) fn eval_binary_without_env(left: &Value, op: BinaryOp, right: &Value)
     }))
 }
 
-fn abstract_eq(left: &Value, right: &Value, env: &mut CallEnv) -> Result<bool, RuntimeError> {
+fn abstract_eq(
+    left: &Value,
+    right: &Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<bool, RuntimeError> {
     match (left, right) {
         (Value::Null, Value::Undefined) | (Value::Undefined, Value::Null) => Ok(true),
         (left, Value::Null | Value::Undefined) if crate::html_dda::is_html_dda(left) => Ok(true),
@@ -454,7 +460,7 @@ fn eval_bigint_mixed_relational(
     left: Value,
     op: BinaryOp,
     right: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let left = bigint_relational_operand(left, env)?;
     let right = bigint_relational_operand(right, env)?;
@@ -473,7 +479,7 @@ fn eval_bigint_mixed_relational(
 
 fn bigint_relational_operand(
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<BigIntComparable, RuntimeError> {
     Ok(match value {
         Value::BigInt(value) => BigIntComparable::BigInt(value),
@@ -586,7 +592,11 @@ fn bigint_division_by_zero_error() -> RuntimeError {
     }
 }
 
-fn eval_instanceof(left: Value, right: Value, env: &mut CallEnv) -> Result<Value, RuntimeError> {
+fn eval_instanceof(
+    left: Value,
+    right: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<Value, RuntimeError> {
     if matches!(
         &right,
         Value::Function(function) if function.native.is_some_and(error::is_native_error)
@@ -636,7 +646,7 @@ fn eval_instanceof(left: Value, right: Value, env: &mut CallEnv) -> Result<Value
 pub(crate) fn ordinary_has_instance(
     left: Value,
     right: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<bool, RuntimeError> {
     let Value::Function(constructor) = right else {
         return Err(RuntimeError {
@@ -678,7 +688,10 @@ pub(crate) fn ordinary_has_instance(
 
 /// A value's `[[GetPrototypeOf]]` as a JavaScript value (object or null),
 /// dispatching a Proxy's `getPrototypeOf` trap.
-fn value_get_prototype_of(value: Value, env: &mut CallEnv) -> Result<Value, RuntimeError> {
+fn value_get_prototype_of(
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<Value, RuntimeError> {
     match value {
         Value::Proxy(proxy) => crate::proxy::proxy_get_prototype_of(proxy, env),
         other => Ok(value_prototype_slot(other, env)
@@ -699,7 +712,11 @@ fn instanceof_prototype_is_object(value: &Value) -> bool {
     }
 }
 
-fn eval_in(left: Value, right: Value, env: &mut CallEnv) -> Result<Value, RuntimeError> {
+fn eval_in(
+    left: Value,
+    right: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<Value, RuntimeError> {
     // `in` requires an object right operand (checked before HasProperty), and
     // must propagate an abrupt completion from a Proxy `has` trap verbatim
     // rather than masking it as a "not an object" error.

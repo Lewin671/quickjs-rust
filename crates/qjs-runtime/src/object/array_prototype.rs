@@ -2,13 +2,13 @@
 //! Its indices remain in NamedStore; length/index algorithms run before named
 //! storage. No borrow crosses length coercion or another observable operation.
 use super::{PropertyDescriptor, descriptor_record::resolve_property_definition};
-use crate::{CallEnv, ObjectRef, RuntimeError, Value};
+use crate::{ObjectRef, RuntimeError, Value};
 
 pub(crate) fn define_array_prototype_property(
     object: &ObjectRef,
     key: &str,
     mut descriptor: PropertyDescriptor,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<bool, RuntimeError> {
     if key == "length" {
         let new_len = descriptor
@@ -87,7 +87,7 @@ pub(crate) fn define_array_prototype_property(
 pub(crate) fn set_array_prototype_length(
     object: &ObjectRef,
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<bool, RuntimeError> {
     if !object
         .own_property("length")

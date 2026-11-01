@@ -1,0 +1,366 @@
+{
+ "source": "8abd4c69b1c6aadbfdd551696211d1d52b6c4520",
+ "runtime_source": "0148b2eb",
+ "seeds": "0-1999 per profile",
+ "jobs": 6,
+ "command": "python3 -m tools.binding_fuzz.run --binary target/final3-default/release/qjs --verify-binary target/final3-verify/release/qjs --base-binary target/s3b-round3-base-build/release/qjs --ng third_party/quickjs-ng/build/qjs --base-revision 3cc12c6f --output-dir target/binding-fuzz-final3 --start 0 --count 2000 --jobs 6",
+ "binaries": {
+  "binary": {
+   "path": "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/target/final3-default/release/qjs",
+   "sha256": "2ff1cddad8e2d5f8676cd9937c397429afbf27f200a7f835651573b798eb46bd"
+  },
+  "verify_binary": {
+   "path": "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/target/final3-verify/release/qjs",
+   "sha256": "757cba0bc8764c583ce4acaca145ec00884df4c305686989a93fe035b80bdabe"
+  },
+  "base_binary": {
+   "path": "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/target/s3b-round3-base-build/release/qjs",
+   "sha256": "1193f7e66fff70aafaec4c682cc268c18ee28bf1bdfa01fb3ff60fc095c59ad4"
+  },
+  "ng": {
+   "path": "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/third_party/quickjs-ng/build/qjs",
+   "sha256": "4997edb9a3ce76f7458c2f32a6230456f49e4d5d49f725ec1d1f9f274032d49f"
+  }
+ },
+ "runner_summary": {
+  "completed": 8000,
+  "requested": 8000,
+  "counts": {
+   "MATCH": 3726,
+   "PRE": 535,
+   "FIXED": 4015,
+   "CHANGED": 434,
+   "REGR": 66
+  },
+  "stable_inputs": true,
+  "no_new_regressions_or_mode_failures": false,
+  "all_engines_agree": false,
+  "finished_unix": 1793542547.371918
+ },
+ "profiles": {
+  "binding": {
+   "programs": 2000,
+   "MATCH": 602,
+   "FIXED": 1280,
+   "PRE": 258,
+   "CHANGED": 203,
+   "REGR": 13
+  },
+  "binding-simple": {
+   "programs": 2000,
+   "MATCH": 597,
+   "FIXED": 1290,
+   "PRE": 277,
+   "CHANGED": 192,
+   "REGR": 18
+  },
+  "receiver": {
+   "programs": 2000,
+   "MATCH": 2000,
+   "FIXED": 0,
+   "PRE": 0,
+   "CHANGED": 0,
+   "REGR": 0
+  },
+  "global-store": {
+   "programs": 2000,
+   "MATCH": 527,
+   "FIXED": 1445,
+   "PRE": 0,
+   "CHANGED": 39,
+   "REGR": 35
+  }
+ },
+ "reference": "tasks/diagnostics/T077-s3b-final-differential (7b3ed258 qualification of e1405670)",
+ "tag_identical_programs_three_original_profiles": 6000,
+ "new_regr": [],
+ "mode_disagreements": 0,
+ "triaged_programs": 742,
+ "triaged_programs_identical": 742,
+ "triaged_observations": 1734,
+ "untriaged_pre_changed_regr_programs": [],
+ "global_store": {
+  "programs": 2000,
+  "shared_observations": 134,
+  "new_observations": [
+   {
+    "seed": 119,
+    "kind": "CHANGED",
+    "observation": "final"
+   },
+   {
+    "seed": 271,
+    "kind": "CHANGED",
+    "observation": "it0"
+   },
+   {
+    "seed": 407,
+    "kind": "CHANGED",
+    "observation": "it12"
+   },
+   {
+    "seed": 793,
+    "kind": "CHANGED",
+    "observation": "end"
+   },
+   {
+    "seed": 793,
+    "kind": "CHANGED",
+    "observation": "final"
+   },
+   {
+    "seed": 793,
+    "kind": "CHANGED",
+    "observation": "it0"
+   },
+   {
+    "seed": 793,
+    "kind": "CHANGED",
+    "observation": "it10"
+   },
+   {
+    "seed": 793,
+    "kind": "CHANGED",
+    "observation": "it2"
+   },
+   {
+    "seed": 793,
+    "kind": "CHANGED",
+    "observation": "it4"
+   },
+   {
+    "seed": 793,
+    "kind": "CHANGED",
+    "observation": "it6"
+   },
+   {
+    "seed": 793,
+    "kind": "CHANGED",
+    "observation": "it8"
+   },
+   {
+    "seed": 869,
+    "kind": "REGR",
+    "observation": "end"
+   },
+   {
+    "seed": 869,
+    "kind": "CHANGED",
+    "observation": "final"
+   },
+   {
+    "seed": 869,
+    "kind": "REGR",
+    "observation": "it0"
+   },
+   {
+    "seed": 869,
+    "kind": "CHANGED",
+    "observation": "it1"
+   },
+   {
+    "seed": 869,
+    "kind": "CHANGED",
+    "observation": "it2"
+   },
+   {
+    "seed": 950,
+    "kind": "REGR",
+    "observation": "it0"
+   },
+   {
+    "seed": 1013,
+    "kind": "CHANGED",
+    "observation": "it6"
+   },
+   {
+    "seed": 1153,
+    "kind": "REGR",
+    "observation": "end"
+   },
+   {
+    "seed": 1153,
+    "kind": "REGR",
+    "observation": "final"
+   },
+   {
+    "seed": 1153,
+    "kind": "REGR",
+    "observation": "it0"
+   },
+   {
+    "seed": 1153,
+    "kind": "REGR",
+    "observation": "it10"
+   },
+   {
+    "seed": 1153,
+    "kind": "REGR",
+    "observation": "it2"
+   },
+   {
+    "seed": 1153,
+    "kind": "REGR",
+    "observation": "it4"
+   },
+   {
+    "seed": 1153,
+    "kind": "REGR",
+    "observation": "it6"
+   },
+   {
+    "seed": 1153,
+    "kind": "REGR",
+    "observation": "it8"
+   },
+   {
+    "seed": 1292,
+    "kind": "CHANGED",
+    "observation": "it0"
+   },
+   {
+    "seed": 1334,
+    "kind": "CHANGED",
+    "observation": "final"
+   },
+   {
+    "seed": 1452,
+    "kind": "CHANGED",
+    "observation": "end"
+   },
+   {
+    "seed": 1452,
+    "kind": "CHANGED",
+    "observation": "final"
+   },
+   {
+    "seed": 1452,
+    "kind": "CHANGED",
+    "observation": "it0"
+   },
+   {
+    "seed": 1452,
+    "kind": "CHANGED",
+    "observation": "it100"
+   },
+   {
+    "seed": 1452,
+    "kind": "CHANGED",
+    "observation": "it20"
+   },
+   {
+    "seed": 1452,
+    "kind": "CHANGED",
+    "observation": "it40"
+   },
+   {
+    "seed": 1452,
+    "kind": "CHANGED",
+    "observation": "it60"
+   },
+   {
+    "seed": 1452,
+    "kind": "CHANGED",
+    "observation": "it80"
+   },
+   {
+    "seed": 1670,
+    "kind": "CHANGED",
+    "observation": "it30"
+   },
+   {
+    "seed": 1829,
+    "kind": "CHANGED",
+    "observation": "end"
+   },
+   {
+    "seed": 1829,
+    "kind": "CHANGED",
+    "observation": "final"
+   },
+   {
+    "seed": 1829,
+    "kind": "CHANGED",
+    "observation": "it0"
+   },
+   {
+    "seed": 1829,
+    "kind": "CHANGED",
+    "observation": "it12"
+   },
+   {
+    "seed": 1829,
+    "kind": "CHANGED",
+    "observation": "it18"
+   },
+   {
+    "seed": 1829,
+    "kind": "CHANGED",
+    "observation": "it24"
+   },
+   {
+    "seed": 1829,
+    "kind": "CHANGED",
+    "observation": "it30"
+   },
+   {
+    "seed": 1829,
+    "kind": "CHANGED",
+    "observation": "it36"
+   },
+   {
+    "seed": 1829,
+    "kind": "CHANGED",
+    "observation": "it6"
+   },
+   {
+    "seed": 1904,
+    "kind": "CHANGED",
+    "observation": "it36"
+   }
+  ],
+  "ref7b_profile": {
+   "FIXED": 1317,
+   "MATCH": 511,
+   "CHANGED": 419,
+   "PRE": 38,
+   "REGR": 68
+  },
+  "reference_run": "e1405670 runtime rebuilt from git archive (target/ref7b-release, target/ref7b-verify), same runner, profile global-store, seeds 0-1999",
+  "reference_binaries": {
+   "binary": {
+    "path": "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/target/ref7b-release/release/qjs",
+    "sha256": "fb39e4bc4c96c3ae35c769364a571073c4d4a1066f10fe014ec27d62be6c8eb7"
+   },
+   "verify_binary": {
+    "path": "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/target/ref7b-verify/release/qjs",
+    "sha256": "b2f5b43eb3270c9a758f052e32a4c5cc1d29216fb42a5a3cfb5607e511827d6f"
+   },
+   "base_binary": {
+    "path": "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/target/s3b-round3-base-build/release/qjs",
+    "sha256": "1193f7e66fff70aafaec4c682cc268c18ee28bf1bdfa01fb3ff60fc095c59ad4"
+   },
+   "ng": {
+    "path": "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/third_party/quickjs-ng/build/qjs",
+    "sha256": "4997edb9a3ce76f7458c2f32a6230456f49e4d5d49f725ec1d1f9f274032d49f"
+   }
+  },
+  "reference_summary": {
+   "completed": 2000,
+   "requested": 2000,
+   "counts": {
+    "FIXED": 1317,
+    "MATCH": 511,
+    "CHANGED": 419,
+    "PRE": 38,
+    "REGR": 68
+   },
+   "stable_inputs": true,
+   "no_new_regressions_or_mode_failures": false,
+   "all_engines_agree": false,
+   "finished_unix": 1793542604.133687
+  }
+ },
+ "raw_cases_sha256": "b00a7e9834f84ced7803afd49bc1533ae6c443a9f41e8c554e69909d5be29510",
+ "reference_raw_cases_sha256": "3dbcc192c312faa2437b562ce58860586f1feaa6955ad794876a77bb0626a65a"
+}

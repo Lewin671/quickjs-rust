@@ -1,4 +1,3 @@
-use crate::CallEnv;
 use crate::{
     RuntimeError, Value,
     date::{
@@ -14,7 +13,7 @@ use crate::{
 pub(crate) fn native_date_prototype_set_time(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let object = date_object(this_value)?;
     let time = to_number_with_env(
@@ -29,7 +28,7 @@ pub(crate) fn native_date_prototype_set_time(
 pub(crate) fn native_date_prototype_set_year(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let object = date_object(this_value)?;
     let millis = date_value_from_object(&object)?;
@@ -63,7 +62,7 @@ pub(crate) fn native_date_prototype_set_year(
 pub(crate) fn native_date_prototype_set_utc_full_year(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let object = date_object(this_value)?;
     let millis = date_value_from_object(&object)?;
@@ -88,7 +87,7 @@ pub(crate) fn native_date_prototype_set_utc_full_year(
 pub(crate) fn native_date_prototype_set_utc_date(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let object = date_object(this_value)?;
     let millis = date_value_from_object(&object)?;
@@ -117,7 +116,7 @@ pub(crate) fn native_date_prototype_set_utc_date(
 pub(crate) fn native_date_prototype_set_utc_hours(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     set_utc_time_fields(this_value, argument_values, 0, env)
 }
@@ -125,7 +124,7 @@ pub(crate) fn native_date_prototype_set_utc_hours(
 pub(crate) fn native_date_prototype_set_utc_milliseconds(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     set_utc_time_fields(this_value, argument_values, 3, env)
 }
@@ -133,7 +132,7 @@ pub(crate) fn native_date_prototype_set_utc_milliseconds(
 pub(crate) fn native_date_prototype_set_utc_minutes(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     set_utc_time_fields(this_value, argument_values, 1, env)
 }
@@ -141,7 +140,7 @@ pub(crate) fn native_date_prototype_set_utc_minutes(
 pub(crate) fn native_date_prototype_set_utc_month(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let object = date_object(this_value)?;
     let millis = date_value_from_object(&object)?;
@@ -171,7 +170,7 @@ pub(crate) fn native_date_prototype_set_utc_month(
 pub(crate) fn native_date_prototype_set_utc_seconds(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     set_utc_time_fields(this_value, argument_values, 2, env)
 }
@@ -180,7 +179,7 @@ fn set_utc_time_fields(
     this_value: Value,
     argument_values: &[Value],
     first_field: usize,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let object = date_object(this_value)?;
     let millis = date_value_from_object(&object)?;
@@ -222,7 +221,7 @@ fn optional_number(
     argument_values: &[Value],
     index: usize,
     default: f64,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<f64, RuntimeError> {
     argument_values
         .get(index)

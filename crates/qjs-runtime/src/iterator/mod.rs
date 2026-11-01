@@ -21,7 +21,6 @@ pub(crate) use zip::ZipState;
 
 use std::collections::HashMap;
 
-use crate::CallEnv;
 use crate::native::CallInfo;
 use crate::{Function, NativeFunction, ObjectRef, Property, RuntimeError, Value, symbol};
 
@@ -85,7 +84,7 @@ impl BuiltinIteratorKind {
 /// Returns the shared `[[Prototype]]` for a built-in iterator instance of the
 /// given kind, so iterator-creation sites can inherit the helpers.
 pub(crate) fn builtin_iterator_prototype(
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
     kind: BuiltinIteratorKind,
 ) -> Option<ObjectRef> {
     match env.get(kind.binding()) {
@@ -95,7 +94,7 @@ pub(crate) fn builtin_iterator_prototype(
 }
 
 /// Returns `%Iterator.prototype%` from the current environment.
-pub(crate) fn iterator_prototype(env: &CallEnv) -> Option<ObjectRef> {
+pub(crate) fn iterator_prototype(env: &crate::context::Context<'_>) -> Option<ObjectRef> {
     match env.get(ITERATOR_PROTOTYPE_BINDING) {
         Some(Value::Object(object)) => Some(object.clone()),
         _ => None,
@@ -103,7 +102,7 @@ pub(crate) fn iterator_prototype(env: &CallEnv) -> Option<ObjectRef> {
 }
 
 /// Returns `%IteratorHelperPrototype%` from the current environment.
-fn iterator_helper_prototype(env: &CallEnv) -> Option<ObjectRef> {
+fn iterator_helper_prototype(env: &crate::context::Context<'_>) -> Option<ObjectRef> {
     match env.get(ITERATOR_HELPER_PROTOTYPE_BINDING) {
         Some(Value::Object(object)) => Some(object.clone()),
         _ => None,
@@ -113,7 +112,7 @@ fn iterator_helper_prototype(env: &CallEnv) -> Option<ObjectRef> {
 /// Installs `%Iterator.prototype%`, `%IteratorHelperPrototype%`, and the
 /// `Iterator` global constructor.
 pub(crate) fn install_iterator(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     global_this: &Value,
     object_prototype: ObjectRef,
 ) {
@@ -382,7 +381,7 @@ pub(crate) fn install_iterator(
 }
 
 pub(crate) fn iterator(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -390,7 +389,7 @@ pub(crate) fn iterator(
 }
 
 pub(crate) fn iterator_from(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -398,7 +397,7 @@ pub(crate) fn iterator_from(
 }
 
 pub(crate) fn iterator_concat(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -406,7 +405,7 @@ pub(crate) fn iterator_concat(
 }
 
 pub(crate) fn iterator_zip(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -414,7 +413,7 @@ pub(crate) fn iterator_zip(
 }
 
 pub(crate) fn iterator_zip_keyed(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -422,7 +421,7 @@ pub(crate) fn iterator_zip_keyed(
 }
 
 pub(crate) fn iterator_prototype_to_string_tag_get(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -430,7 +429,7 @@ pub(crate) fn iterator_prototype_to_string_tag_get(
 }
 
 pub(crate) fn iterator_prototype_to_string_tag_set(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -439,7 +438,7 @@ pub(crate) fn iterator_prototype_to_string_tag_set(
 }
 
 pub(crate) fn iterator_prototype_constructor_get(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -450,7 +449,7 @@ pub(crate) fn iterator_prototype_constructor_get(
 }
 
 pub(crate) fn iterator_prototype_constructor_set(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -463,7 +462,7 @@ pub(crate) fn iterator_prototype_constructor_set(
 }
 
 pub(crate) fn iterator_prototype_dispose(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -471,7 +470,7 @@ pub(crate) fn iterator_prototype_dispose(
 }
 
 pub(crate) fn iterator_prototype_map(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -484,7 +483,7 @@ pub(crate) fn iterator_prototype_map(
 }
 
 pub(crate) fn iterator_prototype_filter(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -497,7 +496,7 @@ pub(crate) fn iterator_prototype_filter(
 }
 
 pub(crate) fn iterator_prototype_take(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -510,7 +509,7 @@ pub(crate) fn iterator_prototype_take(
 }
 
 pub(crate) fn iterator_prototype_drop(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -523,7 +522,7 @@ pub(crate) fn iterator_prototype_drop(
 }
 
 pub(crate) fn iterator_prototype_flat_map(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -536,7 +535,7 @@ pub(crate) fn iterator_prototype_flat_map(
 }
 
 pub(crate) fn iterator_helper_prototype_next(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -544,7 +543,7 @@ pub(crate) fn iterator_helper_prototype_next(
 }
 
 pub(crate) fn iterator_helper_prototype_return(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -552,7 +551,7 @@ pub(crate) fn iterator_helper_prototype_return(
 }
 
 pub(crate) fn wrap_for_valid_iterator_prototype_next(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -560,7 +559,7 @@ pub(crate) fn wrap_for_valid_iterator_prototype_next(
 }
 
 pub(crate) fn wrap_for_valid_iterator_prototype_return(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -568,7 +567,7 @@ pub(crate) fn wrap_for_valid_iterator_prototype_return(
 }
 
 pub(crate) fn iterator_prototype_reduce(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -581,7 +580,7 @@ pub(crate) fn iterator_prototype_reduce(
 }
 
 pub(crate) fn iterator_prototype_to_array(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -594,7 +593,7 @@ pub(crate) fn iterator_prototype_to_array(
 }
 
 pub(crate) fn iterator_prototype_for_each(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -607,7 +606,7 @@ pub(crate) fn iterator_prototype_for_each(
 }
 
 pub(crate) fn iterator_prototype_some(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -620,7 +619,7 @@ pub(crate) fn iterator_prototype_some(
 }
 
 pub(crate) fn iterator_prototype_every(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -633,7 +632,7 @@ pub(crate) fn iterator_prototype_every(
 }
 
 pub(crate) fn iterator_prototype_find(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -645,7 +644,10 @@ pub(crate) fn iterator_prototype_find(
     )
 }
 
-fn native_iterator_dispose(this_value: Value, env: &mut CallEnv) -> Result<Value, RuntimeError> {
+fn native_iterator_dispose(
+    this_value: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<Value, RuntimeError> {
     let return_method = crate::property_value(this_value.clone(), "return", env)?;
     if !matches!(return_method, Value::Undefined | Value::Null) {
         if !matches!(return_method, Value::Function(_)) {
@@ -663,14 +665,17 @@ fn native_iterator_dispose(this_value: Value, env: &mut CallEnv) -> Result<Value
 /// without `new` or with `new.target` equal to `Iterator` itself. A subclass
 /// constructor (different `new.target`) receives its ordinary `this` object,
 /// already created with the correct prototype, so it is returned unchanged.
-fn native_iterator_constructor(is_construct: bool, env: &CallEnv) -> Result<Value, RuntimeError> {
+fn native_iterator_constructor(
+    is_construct: bool,
+    env: &crate::context::Context<'_>,
+) -> Result<Value, RuntimeError> {
     if !is_construct {
         return Err(RuntimeError {
             thrown: None,
             message: "TypeError: Iterator is not directly constructable".to_owned(),
         });
     }
-    let new_target = env.get(crate::NEW_TARGET_BINDING);
+    let new_target = env.construct_target();
     let directly = match (new_target, env.get("Iterator")) {
         (Some(Value::Function(target)), Some(Value::Function(iterator))) => {
             target.ptr_eq(&iterator)
@@ -705,7 +710,7 @@ fn setter_ignoring_prototype(
     this_value: Value,
     key: Option<SetterKey>,
     argument_values: &[Value],
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let Value::Object(receiver) = &this_value else {
         return Err(RuntimeError {

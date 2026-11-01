@@ -1,9 +1,12 @@
-use crate::CallEnv;
 use std::collections::HashMap;
 
 use crate::{Function, NativeFunction, ObjectRef, Value, symbol};
 
-pub(crate) fn install_json(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
+pub(crate) fn install_json(
+    env: &mut crate::context::Context<'_>,
+    global_this: &Value,
+    object_prototype: ObjectRef,
+) {
     let json_object =
         ObjectRef::with_prototype(HashMap::new(), Some(object_prototype), env.realm().atoms());
     json_object.set_to_string_tag("JSON");

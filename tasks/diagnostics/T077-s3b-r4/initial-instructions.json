@@ -1,0 +1,473 @@
+{
+  "request": {
+    "base_revision": "3cc12c6f",
+    "candidate_revision": "7b3ed258",
+    "binaries": {
+      "base": {
+        "path": "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/target/s3b-round3-base-build/release/qjs",
+        "sha256": "1193f7e66fff70aafaec4c682cc268c18ee28bf1bdfa01fb3ff60fc095c59ad4"
+      },
+      "candidate": {
+        "path": "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/target/s3b-r2-default/release/qjs",
+        "sha256": "81b0360f4c30e6689f838d0dd19419a1a103b792bd17f6457ff0a24738accbd6"
+      }
+    },
+    "reproducers": {
+      "bitand-global.js": "1c60a141a077db799c3ae9d486be9021d40ba0c0d1a14fe3d8d9941847af5c68",
+      "bitand-var.js": "16bd9ef3996a89e480849ac3a94b3b567b0fd712200e8c10d264dd14d34f1a13",
+      "call-global-var-write.js": "d5c62dcdae5d6f0faedd64ce1dc617f7aeb2709d983b09500c29d3c0d2fab01e",
+      "call-implicit-global-write.js": "47ca6ee7780fe87822aff6079a5e0abe5cf241ac8516176c0f64155304097303",
+      "call-no-global.js": "d3147183135df572cfc839b06418f0a2f78af1a657a9a6f65e6030bf20efb0c1",
+      "closed-form-call.js": "6029fa06e03e6f45015fe072a339f089956c25f93c8e859763ecadc586c9bf3d",
+      "eval-closure.js": "63bace5cb8c1cd5ae6bcbd55492afbb4d9b776587a8797fbdcf08b7f356b336e",
+      "eval-parent-closure.js": "cc526ea53a57684845c3b954e6556453c69fb5a47256cf657ec96e86f3c26bfd",
+      "partial-global.js": "5aca3e2a153856e3a392eb783826ce3935c37182a549a9dea98c36875c2529cb",
+      "partial-local.js": "672b9bfa54a5f0d46a1c63f97d1599a250b27bd02391d540657bdd7c6a7c4591",
+      "upw0.js": "8e8aaacf30b87cb9797191a4b94f00604c6087b3efd006943b460380865269ee",
+      "upw1.js": "09a9e69252a06da6220a65d8ad29a21635d7f07f838ca5028ce5d48f8433783a",
+      "upw2.js": "9cbbf91ed5aec741b2fe78c1debfeee563952245e11fc13192479f5291abed60",
+      "upw4.js": "1cc548a130f1c263a95d734a2e8b6427429e314785f3b366b30cc185b8ad49fa",
+      "validate-like.js": "62addfb12c624ef3c2bd1569a76dfe6723c2fce834a0af2da307d0be4ad0c969",
+      "vm-ops-local.js": "4488278c2aa0dc11ef4107649dda1f93f73f5c25833ae1bb10b11d56299747e4",
+      "vm-ops-plain.js": "25f5b9965cea6119ea9a6ade7d5fe65b2a34567470d34528241fbc225c99a6f1",
+      "vm-ops.js": "b94813df912ff50f2d1eb6daa818283509753998af0fcf8c3d62e12f4c3c2f56"
+    },
+    "repeats": 3,
+    "metric": "/usr/bin/time -l instructions retired only; wall/cycles/RSS not used",
+    "producer_sha256": "b00da7544c57f35196a8f94afe611ec96df1b92c58379ce2e018ad9c9caf382f"
+  },
+  "cases": [
+    {
+      "case": "bitand-global",
+      "modes": {
+        "base": {
+          "instructions": [
+            152721847,
+            145646340,
+            145665895
+          ],
+          "median": 145665895,
+          "stdout": "undefined\n"
+        },
+        "candidate": {
+          "instructions": [
+            5749783350,
+            5742963508,
+            5743179485
+          ],
+          "median": 5743179485,
+          "stdout": "undefined\n"
+        }
+      },
+      "ratio": 39.427070317317586
+    },
+    {
+      "case": "bitand-var",
+      "modes": {
+        "base": {
+          "instructions": [
+            145638040,
+            145645005,
+            145642960
+          ],
+          "median": 145642960,
+          "stdout": "undefined\n"
+        },
+        "candidate": {
+          "instructions": [
+            148941931,
+            148634658,
+            148666083
+          ],
+          "median": 148666083,
+          "stdout": "undefined\n"
+        }
+      },
+      "ratio": 1.0207570829376167
+    },
+    {
+      "case": "call-global-var-write",
+      "modes": {
+        "base": {
+          "instructions": [
+            5042910306,
+            5042449401,
+            5042479091
+          ],
+          "median": 5042479091,
+          "stdout": "undefined\n"
+        },
+        "candidate": {
+          "instructions": [
+            7920264395,
+            7920030582,
+            7920300619
+          ],
+          "median": 7920264395,
+          "stdout": "undefined\n"
+        }
+      },
+      "ratio": 1.5707084257694546
+    },
+    {
+      "case": "call-implicit-global-write",
+      "modes": {
+        "base": {
+          "instructions": [
+            5062896767,
+            5062336824,
+            5061628531
+          ],
+          "median": 5062336824,
+          "stdout": "undefined\n"
+        },
+        "candidate": {
+          "instructions": [
+            16098579733,
+            16098857268,
+            16098706234
+          ],
+          "median": 16098706234,
+          "stdout": "undefined\n"
+        }
+      },
+      "ratio": 3.180093856591633
+    },
+    {
+      "case": "call-no-global",
+      "modes": {
+        "base": {
+          "instructions": [
+            914027854,
+            913964444,
+            914117752
+          ],
+          "median": 914027854,
+          "stdout": "undefined\n"
+        },
+        "candidate": {
+          "instructions": [
+            1099026934,
+            1098987340,
+            1098974649
+          ],
+          "median": 1098987340,
+          "stdout": "undefined\n"
+        }
+      },
+      "ratio": 1.202356509367383
+    },
+    {
+      "case": "closed-form-call",
+      "modes": {
+        "base": {
+          "instructions": [
+            1003303813,
+            1003183229,
+            1003208650
+          ],
+          "median": 1003208650,
+          "stdout": "undefined\n"
+        },
+        "candidate": {
+          "instructions": [
+            1193269422,
+            1193195830,
+            1193197398
+          ],
+          "median": 1193197398,
+          "stdout": "undefined\n"
+        }
+      },
+      "ratio": 1.1893810903644022
+    },
+    {
+      "case": "eval-closure",
+      "modes": {
+        "base": {
+          "instructions": [
+            2835487285,
+            2835388289,
+            2835562195
+          ],
+          "median": 2835487285,
+          "stdout": "undefined\n"
+        },
+        "candidate": {
+          "instructions": [
+            4343324722,
+            4343145231,
+            4342959865
+          ],
+          "median": 4343145231,
+          "stdout": "undefined\n"
+        }
+      },
+      "ratio": 1.53171035327002
+    },
+    {
+      "case": "eval-parent-closure",
+      "modes": {
+        "base": {
+          "instructions": [
+            1495097506,
+            1495137462,
+            1495265630
+          ],
+          "median": 1495137462,
+          "stdout": "undefined\n"
+        },
+        "candidate": {
+          "instructions": [
+            4452417031,
+            4451914922,
+            4451853688
+          ],
+          "median": 4451914922,
+          "stdout": "undefined\n"
+        }
+      },
+      "ratio": 2.9775957295891766
+    },
+    {
+      "case": "partial-global",
+      "modes": {
+        "base": {
+          "instructions": [
+            116277062,
+            116236808,
+            116376371
+          ],
+          "median": 116277062,
+          "stdout": "undefined\n"
+        },
+        "candidate": {
+          "instructions": [
+            2919956177,
+            2919985336,
+            2919949994
+          ],
+          "median": 2919956177,
+          "stdout": "undefined\n"
+        }
+      },
+      "ratio": 25.112056727061095
+    },
+    {
+      "case": "partial-local",
+      "modes": {
+        "base": {
+          "instructions": [
+            112940324,
+            112870994,
+            112881659
+          ],
+          "median": 112881659,
+          "stdout": "undefined\n"
+        },
+        "candidate": {
+          "instructions": [
+            118078990,
+            118097394,
+            118085707
+          ],
+          "median": 118085707,
+          "stdout": "undefined\n"
+        }
+      },
+      "ratio": 1.0461018029510003
+    },
+    {
+      "case": "upw0",
+      "modes": {
+        "base": {
+          "instructions": [
+            892173455,
+            892106521,
+            892123947
+          ],
+          "median": 892123947,
+          "stdout": "0\n"
+        },
+        "candidate": {
+          "instructions": [
+            1373168309,
+            1373164412,
+            1373152656
+          ],
+          "median": 1373164412,
+          "stdout": "0\n"
+        }
+      },
+      "ratio": 1.5392081073685158
+    },
+    {
+      "case": "upw1",
+      "modes": {
+        "base": {
+          "instructions": [
+            1179191049,
+            1179167882,
+            1179208147
+          ],
+          "median": 1179191049,
+          "stdout": "500000500000\n"
+        },
+        "candidate": {
+          "instructions": [
+            1783205651,
+            1783684916,
+            1783576409
+          ],
+          "median": 1783576409,
+          "stdout": "500000500000\n"
+        }
+      },
+      "ratio": 1.5125423573326326
+    },
+    {
+      "case": "upw2",
+      "modes": {
+        "base": {
+          "instructions": [
+            1449235070,
+            1449196268,
+            1449525074
+          ],
+          "median": 1449235070,
+          "stdout": "1000001000000\n"
+        },
+        "candidate": {
+          "instructions": [
+            2175303437,
+            2175273520,
+            2175287269
+          ],
+          "median": 2175287269,
+          "stdout": "1000001000000\n"
+        }
+      },
+      "ratio": 1.500989945682173
+    },
+    {
+      "case": "upw4",
+      "modes": {
+        "base": {
+          "instructions": [
+            1989310514,
+            1989287868,
+            1989263890
+          ],
+          "median": 1989287868,
+          "stdout": "2000002000000\n"
+        },
+        "candidate": {
+          "instructions": [
+            2959395098,
+            2959390375,
+            2959364851
+          ],
+          "median": 2959390375,
+          "stdout": "2000002000000\n"
+        }
+      },
+      "ratio": 1.4876632098376623
+    },
+    {
+      "case": "validate-like",
+      "modes": {
+        "base": {
+          "instructions": [
+            1162694252,
+            1162461669,
+            1162462251
+          ],
+          "median": 1162462251,
+          "stdout": "undefined\n"
+        },
+        "candidate": {
+          "instructions": [
+            2342811074,
+            2342804768,
+            2342808613
+          ],
+          "median": 2342808613,
+          "stdout": "undefined\n"
+        }
+      },
+      "ratio": 2.0153846810807106
+    },
+    {
+      "case": "vm-ops-local",
+      "modes": {
+        "base": {
+          "instructions": [
+            3738194819,
+            3738202284,
+            3738187114
+          ],
+          "median": 3738194819,
+          "stdout": "undefined\n"
+        },
+        "candidate": {
+          "instructions": [
+            4932324450,
+            4932789532,
+            4932791180
+          ],
+          "median": 4932789532,
+          "stdout": "undefined\n"
+        }
+      },
+      "ratio": 1.319564594902404
+    },
+    {
+      "case": "vm-ops-plain",
+      "modes": {
+        "base": {
+          "instructions": [
+            1439107359,
+            1439075313,
+            1439017443
+          ],
+          "median": 1439075313,
+          "stdout": "undefined\n"
+        },
+        "candidate": {
+          "instructions": [
+            1565000719,
+            1565002422,
+            1564979843
+          ],
+          "median": 1565000719,
+          "stdout": "undefined\n"
+        }
+      },
+      "ratio": 1.08750438900761
+    },
+    {
+      "case": "vm-ops",
+      "modes": {
+        "base": {
+          "instructions": [
+            7213460285,
+            7213441307,
+            7213488586
+          ],
+          "median": 7213460285,
+          "stdout": "undefined\n"
+        },
+        "candidate": {
+          "instructions": [
+            8670592894,
+            8670593165,
+            8670582634
+          ],
+          "median": 8670592894,
+          "stdout": "undefined\n"
+        }
+      },
+      "ratio": 1.2020018897213627
+    }
+  ]
+}

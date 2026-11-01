@@ -343,7 +343,7 @@ impl NestedDensePlan {
 
     #[cold]
     #[inline(never)]
-    pub(in super::super) fn try_run(&self, vm: &mut Vm<'_>) -> NestedDensePlanRun {
+    pub(in super::super) fn try_run(&self, vm: &mut Vm<'_, '_>) -> NestedDensePlanRun {
         if vm.direct_eval_with_stack {
             return NestedDensePlanRun::Suppress;
         }
@@ -666,7 +666,7 @@ impl NestedDensePlan {
             .count()
     }
 
-    fn publish_bank(&self, vm: &mut Vm<'_>, bank: LocalBank) {
+    fn publish_bank(&self, vm: &mut Vm<'_, '_>, bank: LocalBank) {
         for (local, slot) in self.local_slots.iter().copied().enumerate() {
             vm.locals[slot] = Some(if bank.valid[local] {
                 Value::Number(bank.values[local])

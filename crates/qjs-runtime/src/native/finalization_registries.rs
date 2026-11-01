@@ -1,10 +1,10 @@
 //! Operation entries for finalization registries; bound once when a native is created.
 
 use super::CallInfo;
-use crate::{CallEnv, RuntimeError, Value, finalization_registry};
+use crate::{RuntimeError, Value, finalization_registry};
 
 pub(super) fn finalization_registry(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -17,7 +17,7 @@ pub(super) fn finalization_registry(
 }
 
 pub(super) fn finalization_registry_prototype_register(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -29,7 +29,7 @@ pub(super) fn finalization_registry_prototype_register(
 }
 
 pub(super) fn finalization_registry_prototype_unregister(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {

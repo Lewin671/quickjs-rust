@@ -51,10 +51,16 @@ impl Function {
             ) << 3)
     }
     pub(super) fn initialize_named(&self) {
-        if self.realm.is_none() && self.native_context.0.is_none() {
+        if self.realm().is_none() {
             return;
         }
-        let prototype = self.realm.as_ref().and_then(|r| r.function_prototype());
+        let prototype = self.creation.as_ref().and_then(|creation| {
+            creation
+                .intrinsics
+                .function
+                .clone()
+                .or_else(|| creation.realm.function_prototype())
+        });
         *self.named.borrow_mut() = crate::value::layout::NamedStorage::new(
             self.property_domain(),
             prototype,
@@ -133,7 +139,13 @@ impl Function {
         self.refresh_named_flavor();
         let prototype = ObjectRef::with_prototype(
             HashMap::new(),
-            object_prototype(&self.creation_env()),
+            self.creation.as_ref().and_then(|creation| {
+                creation
+                    .intrinsics
+                    .object
+                    .clone()
+                    .or_else(|| creation.realm.object_prototype())
+            }),
             self.property_domain(),
         );
         prototype.define_non_enumerable("constructor".to_owned(), Value::Function(self.clone()));
@@ -210,10 +222,7 @@ impl Function {
     fn refresh_dynamic_function_realm_override(&self, key: &str) {
         if key == DYNAMIC_FUNCTION_REALM_GLOBAL {
             self.has_dynamic_function_realm_override
-                .set(self.with_named(|s| {
-                    s.and_then(|s| s.get_text(key))
-                        .is_some_and(|p| matches!(p.value, Value::Object(_)))
-                }));
+                .set(self.with_named(|s| s.and_then(|s| s.get_text(key)).is_some()));
         }
     }
     pub(crate) fn own_property(&self, key: &str) -> Option<Property> {

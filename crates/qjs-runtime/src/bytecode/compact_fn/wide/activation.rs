@@ -1,7 +1,7 @@
 //! The wide tier's VM-free activation and frame driver.
 //!
 //! This is the numeric tier's driver (`compact_fn::activation`) with three
-//! additions: every frame carries its seeded `this`, a resolved call takes
+//! additions: every frame owns its canonical call owner, a resolved call takes
 //! its receiver from the register below the callee, and the dispatch loop
 //! answers the named-property operations through the shared cached fast
 //! paths in `compact_fn::property`. The numeric driver is deliberately not
@@ -17,28 +17,29 @@ use crate::bytecode::compact_fn::property;
 use crate::bytecode::ir::Bytecode;
 use crate::bytecode::typed_loop::LoopFrame;
 use crate::bytecode::vm::{ResumeFrom, Resumed};
-use crate::function::{CallEnv, Function, Upvalue};
+use crate::function::{BindingCell, Function};
 use crate::{RuntimeError, Value};
 
+mod entry;
 mod exits;
+
+#[cfg(test)]
+#[path = "activation/owner_tests.rs"]
+mod owner_tests;
 
 use exits::{EXIT_ARGC, ExitOutcome, RootExit, exit_to_interpreter};
 
 /// Everything an admitted body needs to run.
-struct WideActivation<'a> {
+struct WideActivation<'a, 's> {
     bytecode: &'a Bytecode,
-    /// The environment this body runs in, borrowed: `shares_caller_environment`
-    /// proves it equals what `direct_leaf_function_env` would build.
-    env: &'a CallEnv,
+    /// Services and this callee's actual typed activation, borrowed per segment.
+    env: &'a mut crate::context::Context<'s>,
     upvalue_owner: Option<&'a Function>,
     upvalue_slots: u128,
-    /// The seeded `this`, mirroring `Vm.direct_this`. A body that reads `this`
-    /// is admitted only when this is present.
-    this_value: Option<&'a Value>,
 }
 
-impl WideActivation<'_> {
-    fn upvalue_cell(&self, slot: usize) -> Option<&Upvalue> {
+impl WideActivation<'_, '_> {
+    fn upvalue_cell(&self, slot: usize) -> Option<&BindingCell> {
         let owner = self.upvalue_owner?;
         let bit = (slot < u128::BITS as usize).then(|| 1_u128 << slot)?;
         (self.upvalue_slots & bit != 0).then_some(())?;
@@ -79,7 +80,7 @@ impl WideActivation<'_> {
     /// the interpreter's `Binary` would run, on copies, since the operands
     /// may be locals.
     #[inline(never)]
-    fn compare(&self, left: &Value, op: BinaryOp, right: &Value) -> Result<bool, RuntimeError> {
+    fn compare(&mut self, left: &Value, op: BinaryOp, right: &Value) -> Result<bool, RuntimeError> {
         if matches!(op, BinaryOp::StrictEq | BinaryOp::StrictNe)
             && let Some(equal) = crate::bytecode::vm_ops::fast_strict_eq(left, right)
         {
@@ -110,7 +111,12 @@ impl WideActivation<'_> {
     }
 
     #[inline(never)]
-    fn eval_binary(&self, left: Value, op: BinaryOp, right: Value) -> Result<Value, RuntimeError> {
+    fn eval_binary(
+        &mut self,
+        left: Value,
+        op: BinaryOp,
+        right: Value,
+    ) -> Result<Value, RuntimeError> {
         if let Some(value) = crate::operations::eval_binary_without_env(&left, op, &right) {
             return Ok(value);
         }
@@ -122,8 +128,8 @@ impl WideActivation<'_> {
         } else {
             (left, right)
         };
-        let mut env = self.env.empty_frame();
-        crate::operations::eval_binary(left, op, right, &mut env)
+        let env = &mut *self.env;
+        crate::operations::eval_binary(left, op, right, env)
     }
 }
 
@@ -142,12 +148,15 @@ fn not_coercible() -> RuntimeError {
 /// interpreter's `ToPropertyKeyForAccess` converts it.
 #[cold]
 #[inline(never)]
-fn to_property_key(register: &mut Value, env: &CallEnv) -> Result<(), RuntimeError> {
+fn to_property_key(
+    register: &mut Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<(), RuntimeError> {
     let value = std::mem::replace(register, Value::Undefined);
-    let mut env = env.empty_frame();
+    let env = &mut *env;
     let key = match crate::property::try_to_property_key_without_coercion(value) {
         Ok(key) => key,
-        Err(value) => crate::to_property_key_value(value, &mut env)?,
+        Err(value) => crate::to_property_key_value(value, env)?,
     };
     *register = key.into_value();
     Ok(())
@@ -228,33 +237,6 @@ fn admit<'a>(
     })
 }
 
-/// Whether an environment can host an admitted body at all.
-fn environment_is_slot_only(env: &CallEnv) -> bool {
-    env.supplies_no_named_binding()
-        && !env.has_module_imports()
-        && env.deopt_bindings().is_none()
-        && !env.has_dynamic_function_realm_global()
-}
-
-/// Whether `direct_leaf_function_env` would build, for this callee, an
-/// environment equal field for field to the one its caller holds, as far as
-/// the caller decides: the module host. The function's own part is in its
-/// fixed facts.
-///
-/// A body that reads `this` does not break the proof here: the driver seeds
-/// `this` from the call site's receiver instead of a frame binding, exactly
-/// as the slot-seeded frame does, so it never touches the shared environment.
-/// Only a lexical-`this` arrow inherits `this` from its enclosing environment
-/// and cannot be seeded from a receiver.
-fn shares_caller_environment(function: &Function, env: &CallEnv) -> bool {
-    let host_agrees = match (&function.module_host, env.module_host_ref()) {
-        (None, _) => true,
-        (Some(callee), Some(caller)) => std::rc::Rc::ptr_eq(callee, caller),
-        (Some(_), None) => false,
-    };
-    host_agrees && !function.has_dynamic_function_realm_override.get()
-}
-
 /// `Function::wide_inline_facts`: computed, and eligible to run on this
 /// driver as far as the function's fixed facts decide; then the facts it is
 /// entered with, the register count in the high half.
@@ -300,12 +282,12 @@ fn compute_fixed_inline_facts(callee: &Value, function: &Function, bytecode: &By
     let shape_admitted = if class {
         crate::function::is_direct_construct_class(function)
     } else {
-        crate::function::is_direct_leaf_function(callee)
+        crate::function::is_direct_leaf_shape(callee)
     };
     if !shape_admitted
         || inherits_lexical_this
         || function.has_dynamic_function_realm
-        || !function.module_imports.is_empty()
+        || function.has_module_imports()
     {
         return FACTS_KNOWN;
     }
@@ -357,7 +339,6 @@ fn compute_fixed_inline_facts(callee: &Value, function: &Function, bytecode: &By
 /// One suspended wide activation.
 struct WideFrame {
     callee: Value,
-    this_value: Option<Value>,
     base: usize,
     len: usize,
     resume_pc: usize,
@@ -371,6 +352,8 @@ struct WideFrame {
 struct FrameStorage {
     registers: Vec<Value>,
     frames: Vec<WideFrame>,
+    /// Suspended caller activations, one per frame, and released ones above.
+    activations: crate::bytecode::compact_fn::activation_stack::ActivationStack,
 }
 
 thread_local! {
@@ -471,7 +454,8 @@ fn try_numeric_call(callee: &Value, arguments: &[Value]) -> Option<Value> {
     )
 }
 
-/// What the driver needs to enter an admitted callee in its own window.
+/// What the driver needs to enter an admitted callee in its own window. The
+/// callee's activation is built only once a numeric plan has not answered.
 struct InlineCallee {
     register_count: usize,
     requires_this: bool,
@@ -483,20 +467,25 @@ struct InlineCallee {
 }
 
 /// Proves a callee may run on this driver, in a window of its register stack.
-fn inline_callee(callee: &Value, env: &CallEnv) -> Option<InlineCallee> {
-    let (inline, class) = inline_entry(callee, env)?;
+fn inline_callee(callee: &Value) -> Option<InlineCallee> {
+    let (inline, class) = inline_entry(callee)?;
     (!class).then_some(inline)
 }
 
 /// `inline_callee` for any admitted body, with whether it is a class
-/// constructor, which only `new` may enter.
-fn inline_entry(callee: &Value, env: &CallEnv) -> Option<(InlineCallee, bool)> {
+/// constructor, which only `new` may enter. Inlined into the driver's call
+/// and construct sites, which it runs on every call.
+#[inline(always)]
+fn inline_entry(callee: &Value) -> Option<(InlineCallee, bool)> {
     let Value::Function(function) = callee else {
         return None;
     };
     let bytecode = function.bytecode.as_ref()?;
     let facts = fixed_inline_facts(callee, function, bytecode);
-    if facts & FACTS_ELIGIBLE == 0 || !shares_caller_environment(function, env) {
+    if facts & FACTS_ELIGIBLE == 0
+        || function.has_dynamic_function_realm_override.get()
+        || !crate::function::lexical_scope_admits_entry(function)
+    {
         return None;
     }
     if !super::program_for(bytecode)?.admit_activation() {
@@ -520,7 +509,7 @@ fn inline_entry(callee: &Value, env: &CallEnv) -> Option<(InlineCallee, bool)> {
 #[inline(never)]
 fn inline_constructor(
     callee: &Value,
-    env: &CallEnv,
+    _env: &mut crate::context::Context<'_>,
 ) -> Option<(InlineCallee, crate::ObjectRef, bool)> {
     let Value::Function(function) = callee else {
         return None;
@@ -528,49 +517,60 @@ fn inline_constructor(
     if function.native.is_some() || function.bound.is_some() || !function.constructable {
         return None;
     }
-    let (inline, class) = inline_entry(callee, env)?;
-    let receiver = function.wide_instance_receiver(env.realm().atoms())?;
+    let (inline, class) = inline_entry(callee)?;
+    let receiver = function.wide_instance_receiver(function.creation_context().realm.atoms())?;
     Some((inline, receiver, class))
 }
 
-/// Enters `new callee(...)` as a frame of this driver when
-/// `inline_constructor` admits it, returning `Ok(None)`; otherwise hands the
-/// callee back for the general construct path. Out of line, so the driver
-/// loop's own code is the same whether or not a body constructs.
+/// Admits `new callee(...)` as a frame of this driver (`inline_constructor`),
+/// running a base class's instance field initializers in the caller's
+/// context; `Ok(None)` hands the callee back for the general construct path.
+/// Out of line, so the driver loop's own code is the same whether or not a
+/// body constructs.
+#[inline(never)]
+fn admit_constructor(
+    callee: &Value,
+    env: &mut crate::context::Context<'_>,
+    depth: usize,
+) -> Result<Option<(InlineCallee, crate::ObjectRef)>, RuntimeError> {
+    let Some((inline, receiver, class)) = inline_constructor(callee, env) else {
+        return Ok(None);
+    };
+    if depth >= MAX_FRAMES {
+        return Err(call_stack_exhausted());
+    }
+    // A base class installs its instance fields before its body runs.
+    if class && let Value::Function(function) = callee {
+        crate::function::initialize_direct_instance_fields(
+            &function.instance_elements(),
+            &receiver,
+            env,
+        )?;
+    }
+    Ok(Some((inline, receiver)))
+}
+
+/// Enters an admitted constructor (`admit_constructor`) as a frame of this
+/// driver, with its fresh receiver as `this`.
 #[inline(never)]
 #[allow(clippy::too_many_arguments)]
-fn enter_constructor(
+fn push_constructor_frame(
     callee: Value,
+    inline: InlineCallee,
+    receiver: crate::ObjectRef,
     root_bytecode: &Bytecode,
-    env: &CallEnv,
+    runtime: &mut crate::context::RuntimeServices,
     registers: &mut Vec<Value>,
     frames: &mut Vec<WideFrame>,
+    activations: &mut crate::bytecode::compact_fn::activation_stack::ActivationStack,
     current_callee: &mut Value,
-    current_this: &mut Option<Value>,
     current_base: &mut usize,
     current_len: &mut usize,
     argument_index: usize,
     argc: u8,
     dst: u16,
     resume_pc: usize,
-) -> Result<Option<Value>, RuntimeError> {
-    let Some((inline, receiver, class)) = inline_constructor(&callee, env) else {
-        return Ok(Some(callee));
-    };
-    if frames.len() >= MAX_FRAMES {
-        return Err(call_stack_exhausted());
-    }
-    // A base class installs its instance fields before its body runs.
-    if class && let Value::Function(function) = &callee {
-        crate::function::initialize_direct_instance_fields(
-            &function.instance_elements(),
-            &receiver,
-            env,
-            env.module_host().as_ref(),
-            #[cfg(feature = "agents")]
-            env.agent_context().as_ref(),
-        )?;
-    }
+) {
     crate::diagnostics::count!(ordinary_call_attempts);
     crate::diagnostics::count!(compact_direct_calls);
     let callee_base = *current_base + *current_len;
@@ -596,21 +596,28 @@ fn enter_constructor(
             &mut registers[callee_base..callee_base + callee_len],
         );
     }
+    let Value::Function(function) = &callee else {
+        unreachable!("admitted indexed constructor")
+    };
+    crate::function::bind_indexed_call_owner(
+        function,
+        activations.callee_slot(frames.len(), function, runtime),
+        Value::Object(receiver),
+        Some(callee.clone()),
+    );
     frames.push(WideFrame {
         callee: std::mem::replace(current_callee, callee),
-        this_value: current_this.replace(Value::Object(receiver)),
         base: std::mem::replace(current_base, callee_base),
         len: std::mem::replace(current_len, callee_len),
         resume_pc,
         dst,
         constructs: true,
     });
-    Ok(None)
 }
 
 /// A constructor's result: the returned value when it is an object, else
 /// the receiver, as the general construct path decides.
-fn constructed(value: Value, receiver: Option<Value>) -> Value {
+fn constructed(value: Value, activation: &crate::context::ActivationContext) -> Value {
     match value {
         Value::Array(_)
         | Value::Function(_)
@@ -620,7 +627,7 @@ fn constructed(value: Value, receiver: Option<Value>) -> Value {
         | Value::Proxy(_) => value,
         other => {
             release(other);
-            receiver.unwrap_or(Value::Undefined)
+            activation.receiver_seed().unwrap_or(Value::Undefined)
         }
     }
 }
@@ -643,28 +650,31 @@ fn thrown(slot: &mut Value) -> RuntimeError {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run(
     bytecode: &Bytecode,
-    env: &CallEnv,
+    activation: &mut crate::context::ActivationContext,
+    runtime: &mut crate::context::RuntimeServices,
     entry: WideEntry<'_>,
     parameter_slots: &[usize],
     arguments: &[Value],
-    this_value: Option<Value>,
     root: RootExit<'_>,
 ) -> Result<Value, RuntimeError> {
     crate::diagnostics::count!(compact_standalone_activations);
     let mut storage = FRAME_STORAGE.with(|cell| cell.take());
     let result = run_frames(
         bytecode,
-        env,
+        runtime,
+        activation,
         entry,
         parameter_slots,
         arguments,
-        this_value,
         root,
         &mut storage,
     );
     storage.frames.clear();
+    // No callee activation outlives its run except as a released one.
+    storage.activations.finish(runtime, result.is_ok());
     if storage.registers.len() > MAX_POOLED_REGISTERS {
         storage.registers.truncate(MAX_POOLED_REGISTERS);
         storage.registers.shrink_to_fit();
@@ -673,8 +683,10 @@ fn run(
     result
 }
 
-/// The frame-stack driver. Exactly one activation is "current", and its
-/// fields are loop locals; a call pushes it and a return pops. Inlined into
+/// The frame-stack driver. Exactly one frame is "current", and its fields are
+/// loop locals; a call pushes it and a return pops. The root body runs in
+/// `root_activation`, every inline callee in its own slot of `activations`;
+/// `env` borrows the current one and is rebuilt only when the depth changes. Inlined into
 /// `run`, as it always was before exits enlarged it: the split changed the
 /// dispatch loop's register allocation (docs/performance-knowledge.md,
 /// "Codegen").
@@ -682,27 +694,53 @@ fn run(
 #[allow(clippy::too_many_arguments)]
 fn run_frames(
     root_bytecode: &Bytecode,
-    env: &CallEnv,
+    runtime: &mut crate::context::RuntimeServices,
+    root_activation: &mut crate::context::ActivationContext,
     entry: WideEntry<'_>,
     parameter_slots: &[usize],
     arguments: &[Value],
-    root_this: Option<Value>,
     root: RootExit<'_>,
     storage: &mut FrameStorage,
 ) -> Result<Value, RuntimeError> {
     let registers = &mut storage.registers;
     let frames = &mut storage.frames;
+    let activations = &mut storage.activations;
     debug_assert!(frames.is_empty(), "a root activation starts its own stack");
+    activations.begin(runtime);
 
     let mut current_callee = Value::Undefined;
     // The root body's upvalue owner; a callee entered on this driver owns
     // its own upvalues, and its read-only slots are its bytecode's.
     let root_owner = entry.upvalue_owner;
     let root_slots = entry.upvalue_slots;
-    let mut current_this = root_this;
     let mut current_base = 0_usize;
     let mut current_len = entry.program.register_count;
     let mut pc = 0_usize;
+    // The services and the current frame's activation. Entry and return
+    // need the stack itself, so they end this borrow and rebind it.
+    let mut env = crate::context::Context {
+        runtime: &mut *runtime,
+        activation: &mut *root_activation,
+        native: None,
+    };
+    macro_rules! rebind_env {
+        () => {
+            env = crate::context::Context {
+                runtime: &mut *runtime,
+                activation: activations.current(&mut *root_activation, frames.len()),
+                native: None,
+            }
+        };
+    }
+    // Terminal error: attribute it to the current frame, then release
+    // every window. The root activation is never displaced.
+    macro_rules! fail {
+        ($error:expr) => {{
+            let error = crate::error::capture_error_origin($error, &env);
+            unwind(registers, frames, current_base + current_len);
+            return Err(error);
+        }};
+    }
 
     reserve_registers(registers, current_len);
     for (index, &slot) in parameter_slots.iter().enumerate() {
@@ -730,12 +768,11 @@ fn run_frames(
                 ),
                 _ => (root_owner.as_ref(), root_slots),
             };
-            let activation = WideActivation {
+            let mut activation = WideActivation {
                 bytecode,
-                env,
+                env: &mut env,
                 upvalue_owner,
                 upvalue_slots,
-                this_value: current_this.as_ref(),
             };
             let ops = &program.ops[..];
             let window = &mut registers[current_base..current_base + current_len];
@@ -765,14 +802,14 @@ fn run_frames(
                         let Some(cell) = activation.upvalue_cell(slot as usize) else {
                             break Err(execute::uninitialized_local());
                         };
-                        let value = cell.get();
-                        let value = if value.is_uninitialized_lexical_marker() {
-                            match activation.uninitialized_upvalue(slot as usize) {
+                        // One state borrow; a dead-zone cell takes the
+                        // interpreter's diagnostic.
+                        let value = match cell.value_if_initialized() {
+                            Some(value) => value,
+                            None => match activation.uninitialized_upvalue(slot as usize) {
                                 Ok(value) => value,
                                 Err(error) => break Err(error),
-                            }
-                        } else {
-                            value
+                            },
                         };
                         execute::store(&mut window[dst as usize], value);
                     }
@@ -780,21 +817,15 @@ fn run_frames(
                         let Some(cell) = activation.upvalue_cell(slot as usize) else {
                             break Err(execute::uninitialized_local());
                         };
-                        if cell.with_value(Value::is_uninitialized_lexical_marker) {
-                            match activation.uninitialized_upvalue(slot as usize) {
-                                Ok(_) => {}
-                                Err(error) => break Err(error),
-                            }
+                        let value = std::mem::replace(&mut window[src as usize], Value::Undefined);
+                        if let Err(error) = cell.assign(value, activation.env.caller().strict) {
+                            break Err(error);
                         }
-                        cell.set(std::mem::replace(
-                            &mut window[src as usize],
-                            Value::Undefined,
-                        ));
                     }
                     WideOp::LoadThis { dst } => {
                         // Admission required a seeded receiver, so this never
                         // fabricates one.
-                        let Some(value) = activation.this_value else {
+                        let Some(value) = activation.env.caller().initialized_receiver() else {
                             break Err(execute::uninitialized_local());
                         };
                         execute::store(&mut window[dst as usize], value.clone());
@@ -802,7 +833,7 @@ fn run_frames(
                     WideOp::GetPropThis { dst, index } => {
                         let (Some(site), Some(receiver)) = (
                             program.named_reads.get(index as usize),
-                            activation.this_value,
+                            activation.env.caller().initialized_receiver(),
                         ) else {
                             break Err(execute::uninitialized_local());
                         };
@@ -812,7 +843,13 @@ fn run_frames(
                             execute::store(&mut window[dst as usize], value);
                             continue;
                         }
-                        match property::get_prop_named(receiver, &site.key, &site.cache, env) {
+                        let receiver = receiver.clone();
+                        match property::get_prop_named(
+                            &receiver,
+                            &site.key,
+                            &site.cache,
+                            activation.env,
+                        ) {
                             Ok(value) => execute::store(&mut window[dst as usize], value),
                             Err(error) => break Err(error),
                         }
@@ -835,7 +872,7 @@ fn run_frames(
                             &window[obj as usize],
                             &site.key,
                             &site.cache,
-                            env,
+                            activation.env,
                         ) {
                             Ok(value) => execute::store(&mut window[dst as usize], value),
                             Err(error) => break Err(error),
@@ -851,7 +888,7 @@ fn run_frames(
                             &window[obj as usize],
                             site.cache.as_ref(),
                             &assigned,
-                            env,
+                            activation.env,
                         ) {
                             execute::store(&mut window[obj as usize], assigned);
                             continue;
@@ -862,7 +899,7 @@ fn run_frames(
                             site.cache.as_ref(),
                             site.is_strict,
                             assigned,
-                            env,
+                            activation.env,
                             Some(&site.creation),
                         ) {
                             // The assigned value stays in the object's
@@ -874,7 +911,7 @@ fn run_frames(
                     WideOp::SetPropThis { dst, value, index } => {
                         let (Some(site), Some(receiver)) = (
                             program.named_writes.get(index as usize),
-                            activation.this_value,
+                            activation.env.caller().initialized_receiver(),
                         ) else {
                             break Err(execute::uninitialized_local());
                         };
@@ -884,18 +921,19 @@ fn run_frames(
                             receiver,
                             site.cache.as_ref(),
                             &assigned,
-                            env,
+                            activation.env,
                         ) {
                             execute::store(&mut window[dst as usize], assigned);
                             continue;
                         }
+                        let receiver = receiver.clone();
                         match property::set_prop_named(
-                            receiver,
+                            &receiver,
                             &site.key,
                             site.cache.as_ref(),
                             site.is_strict,
                             assigned,
-                            env,
+                            activation.env,
                             Some(&site.creation),
                         ) {
                             Ok(value) => execute::store(&mut window[dst as usize], value),
@@ -963,7 +1001,8 @@ fn run_frames(
                             _ => false,
                         };
                         if !is_key
-                            && let Err(error) = to_property_key(&mut window[dst as usize], env)
+                            && let Err(error) =
+                                to_property_key(&mut window[dst as usize], activation.env)
                         {
                             break Err(error);
                         }
@@ -989,7 +1028,7 @@ fn run_frames(
                     }
                     WideOp::Unary { dst, op, src } => {
                         let value = std::mem::replace(&mut window[src as usize], Value::Undefined);
-                        match eval_unary(op, value, env) {
+                        match eval_unary(op, value, activation.env) {
                             Ok(value) => execute::store(&mut window[dst as usize], value),
                             Err(error) => break Err(error),
                         }
@@ -1003,7 +1042,7 @@ fn run_frames(
                         if !matches!(window[dst as usize], Value::Number(_)) {
                             let value =
                                 std::mem::replace(&mut window[dst as usize], Value::Undefined);
-                            match to_numeric(value, env) {
+                            match to_numeric(value, activation.env) {
                                 Ok(value) => execute::store(&mut window[dst as usize], value),
                                 Err(error) => break Err(error),
                             }
@@ -1018,7 +1057,7 @@ fn run_frames(
                         } else {
                             let value =
                                 std::mem::replace(&mut window[dst as usize], Value::Undefined);
-                            match update(op, value, env) {
+                            match update(op, value, activation.env) {
                                 Ok(value) => execute::store(&mut window[dst as usize], value),
                                 Err(error) => break Err(error),
                             }
@@ -1046,9 +1085,17 @@ fn run_frames(
                         let key = take_operand(window, key, dst, program.local_registers);
                         // A forwarded local receiver is read, not consumed.
                         let result = if obj != dst && obj < program.local_registers {
-                            property::get_prop_element_of(&window[obj as usize], key, env)
+                            property::get_prop_element_of(
+                                &window[obj as usize],
+                                key,
+                                activation.env,
+                            )
                         } else {
-                            property::get_prop_element(&mut window[obj as usize], key, env)
+                            property::get_prop_element(
+                                &mut window[obj as usize],
+                                key,
+                                activation.env,
+                            )
                         };
                         match result {
                             Ok(value) => execute::store(&mut window[dst as usize], value),
@@ -1063,7 +1110,8 @@ fn run_frames(
                             execute::store(&mut window[dst as usize], value);
                             continue;
                         }
-                        match property::get_prop_index(&window[obj as usize], index, env) {
+                        match property::get_prop_index(&window[obj as usize], index, activation.env)
+                        {
                             Ok(value) => execute::store(&mut window[dst as usize], value),
                             Err(error) => break Err(error),
                         }
@@ -1073,7 +1121,7 @@ fn run_frames(
                             break Err(execute::constant_out_of_bounds());
                         };
                         let site = &program.global_reads[index as usize];
-                        match property::load_global_cached(name, site, env) {
+                        match property::load_global_cached(name, site, activation.env) {
                             Ok(value) => execute::store(&mut window[dst as usize], value),
                             Err(error) => break Err(error),
                         }
@@ -1089,7 +1137,7 @@ fn run_frames(
                             .collect();
                         execute::store(
                             &mut window[dst as usize],
-                            Value::Array(crate::ArrayRef::new(env.realm(), values)),
+                            Value::Array(crate::ArrayRef::new(activation.env.realm(), values)),
                         );
                     }
                     WideOp::ClearLocal { slot } => {
@@ -1148,6 +1196,16 @@ fn run_frames(
                     // driver's action type and its match stay exactly as they
                     // were: growing either re-rolls this loop's register
                     // allocation (docs/performance-knowledge.md, "Codegen").
+                    WideOp::ReferenceCheck { event } => {
+                        let references = &activation.bytecode.binding_plan.references;
+                        if !references
+                            .event_starts_elidable(event as usize, activation.env.activation)
+                            && let Err(error) =
+                                references.select_checked_starts(event as usize, activation.env)
+                        {
+                            break Err(error);
+                        }
+                    }
                     WideOp::Exit { ip, depth } => {
                         break Ok(Action::Call {
                             dst: depth,
@@ -1174,25 +1232,18 @@ fn run_frames(
                     depth,
                     pc,
                     &mut registers[current_base..current_base + current_len],
-                    env,
-                    current_this.clone(),
+                    &mut env,
                 ) {
                     ExitOutcome::Continue { pc: resume } => {
                         pc = resume;
                         continue;
                     }
                     ExitOutcome::Finished(Ok(value)) => Action::Return(value),
-                    ExitOutcome::Finished(Err(error)) => {
-                        unwind(registers, frames, current_base + current_len);
-                        return Err(error);
-                    }
+                    ExitOutcome::Finished(Err(error)) => fail!(error),
                 }
             }
             Ok(action) => action,
-            Err(error) => {
-                unwind(registers, frames, current_base + current_len);
-                return Err(error);
-            }
+            Err(error) => fail!(error),
         };
         if let Action::New {
             dst,
@@ -1205,57 +1256,57 @@ fn run_frames(
             let callee = std::mem::replace(&mut registers[callee_index], Value::Undefined);
             // An admitted ordinary constructor runs on this driver like a
             // call, with a fresh receiver as `this`.
-            let callee = match enter_constructor(
-                callee,
-                root_bytecode,
-                env,
-                registers,
-                frames,
-                &mut current_callee,
-                &mut current_this,
-                &mut current_base,
-                &mut current_len,
-                callee_index + 1,
-                argc,
-                dst,
-                resume_pc,
-            ) {
-                Ok(None) => {
+            match admit_constructor(&callee, &mut env, frames.len()) {
+                Ok(Some((inline, receiver))) => {
+                    push_constructor_frame(
+                        callee,
+                        inline,
+                        receiver,
+                        root_bytecode,
+                        runtime,
+                        registers,
+                        frames,
+                        activations,
+                        &mut current_callee,
+                        &mut current_base,
+                        &mut current_len,
+                        callee_index + 1,
+                        argc,
+                        dst,
+                        resume_pc,
+                    );
+                    rebind_env!();
                     pc = 0;
                     continue;
                 }
-                Ok(Some(callee)) => callee,
-                Err(error) => {
-                    unwind(registers, frames, current_base + current_len);
-                    return Err(error);
-                }
-            };
+                Ok(None) => {}
+                Err(error) => fail!(error),
+            }
             let arguments = &registers[callee_index + 1..callee_index + 1 + argc as usize];
-            match construct_from_activation(env, callee, arguments) {
+            match construct_from_activation(&mut env, callee, arguments) {
                 Ok(value) => {
                     execute::store(&mut registers[current_base + dst as usize], value);
                     pc = resume_pc;
                     continue;
                 }
-                Err(error) => {
-                    unwind(registers, frames, current_base + current_len);
-                    return Err(error);
-                }
+                Err(error) => fail!(error),
             }
         }
         let (dst, base, argc, resume_pc, resolved) = match action {
             Action::Return(value) => {
                 clear_window(&mut registers[current_base..current_base + current_len]);
-                let Some(caller) = frames.pop() else {
+                let Some(caller) = frames.last() else {
                     return Ok(value);
                 };
                 let value = if caller.constructs {
-                    constructed(value, current_this.take())
+                    constructed(value, env.activation)
                 } else {
                     value
                 };
+                let caller = frames.pop().expect("a returning callee has a caller");
+                activations.release(frames.len());
+                rebind_env!();
                 current_callee = caller.callee;
-                current_this = caller.this_value;
                 current_base = caller.base;
                 current_len = caller.len;
                 pc = caller.resume_pc;
@@ -1280,8 +1331,8 @@ fn run_frames(
         // Both call forms pop the callee register (and a resolved call its
         // receiver register) and push the result at `dst`, so taking the
         // values out costs no reference count.
-        let callee = std::mem::replace(&mut registers[callee_index], Value::Undefined);
-        let receiver = if resolved {
+        let mut callee = std::mem::replace(&mut registers[callee_index], Value::Undefined);
+        let mut receiver = if resolved {
             Some(std::mem::replace(
                 &mut registers[callee_index - 1],
                 Value::Undefined,
@@ -1292,92 +1343,30 @@ fn run_frames(
         let argument_index = callee_index + 1;
         let argument_count = argc as usize;
 
-        if let Some(inline) = inline_callee(&callee, env) {
-            // A numeric body runs its whole call tree on `f64` registers,
-            // leaving the arguments where they are: they are numbers.
-            if inline.numeric
-                && let Some(value) = try_numeric_call(
-                    &callee,
-                    &registers[argument_index..argument_index + argument_count],
-                )
-            {
-                if let Some(receiver) = receiver {
-                    release(receiver);
-                }
-                execute::store(&mut registers[current_base + dst as usize], value);
-                pc = resume_pc;
-                continue;
-            }
-            if frames.len() >= MAX_FRAMES {
-                unwind(registers, frames, current_base + current_len);
-                return Err(call_stack_exhausted());
-            }
-            crate::diagnostics::count!(ordinary_call_attempts);
-            crate::diagnostics::count!(compact_direct_calls);
-            let callee_base = current_base + current_len;
-            let callee_len = inline.register_count;
-            reserve_registers(registers, callee_base + callee_len);
-            {
-                let parameter_slots = callee_parameter_slots(&callee);
-                let (caller_side, callee_side) = registers.split_at_mut(callee_base);
-                for index in 0..argument_count {
-                    let value = std::mem::replace(
-                        &mut caller_side[argument_index + index],
-                        Value::Undefined,
-                    );
-                    match parameter_slots.get(index) {
-                        // The window was cleared when it was last returned
-                        // from, so the register holds a primitive to forget.
-                        Some(&slot) if slot < callee_len => {
-                            release(std::mem::replace(&mut callee_side[slot], value));
-                        }
-                        _ => release(value),
-                    }
-                }
-            }
-            // A callee that reads `this` receives the same coercion the
-            // general path applies: the resolved receiver, or `undefined`
-            // for a plain call.
-            let callee_this = if inline.requires_this {
-                // An object receiver is `this` unchanged, strict or not;
-                // only a primitive (a symbol is an object here) or a missing
-                // receiver takes the coercion.
-                Some(match receiver {
-                    Some(this @ (Value::Array(_) | Value::Function(_))) => this,
-                    Some(Value::Object(object)) if !crate::symbol::is_symbol_primitive(&object) => {
-                        Value::Object(object)
-                    }
-                    receiver => {
-                        crate::function::function_call_this(receiver, env, inline.is_strict)
-                    }
-                })
-            } else {
-                if let Some(receiver) = receiver {
-                    release(receiver);
-                }
-                None
-            };
-            if inline.has_lexical_slots
-                && let Some(program) = super::program_for(running_bytecode(&callee, root_bytecode))
-            {
-                seed_lexical_markers(
-                    program,
-                    &mut registers[callee_base..callee_base + callee_len],
-                );
-            }
-            frames.push(WideFrame {
-                callee: std::mem::replace(&mut current_callee, callee),
-                this_value: std::mem::replace(&mut current_this, callee_this),
-                base: current_base,
-                len: current_len,
-                resume_pc,
+        if let Some(inline) = inline_callee(&callee) {
+            let entered = entry::enter_call(
+                inline,
+                &mut callee,
+                &mut receiver,
+                root_bytecode,
+                runtime,
+                registers,
+                frames,
+                activations,
+                &mut current_callee,
+                &mut current_base,
+                &mut current_len,
+                &mut pc,
+                argument_index,
+                argument_count,
                 dst,
-                constructs: false,
-            });
-            current_base = callee_base;
-            current_len = callee_len;
-            pc = 0;
-            continue;
+                resume_pc,
+            );
+            rebind_env!();
+            match entered {
+                Ok(()) => continue,
+                Err(error) => fail!(error),
+            }
         }
 
         let outcome = {
@@ -1389,16 +1378,15 @@ fn run_frames(
                 ),
                 _ => (root_owner.as_ref(), root_slots),
             };
-            let activation = WideActivation {
+            let mut activation = WideActivation {
                 bytecode,
-                env,
+                env: &mut env,
                 upvalue_owner,
                 upvalue_slots,
-                this_value: current_this.as_ref(),
             };
             let arguments = &registers[argument_index..argument_index + argument_count];
             call_from_activation(
-                &activation,
+                &mut activation,
                 callee,
                 receiver.unwrap_or(Value::Undefined),
                 arguments,
@@ -1409,10 +1397,7 @@ fn run_frames(
                 execute::store(&mut registers[current_base + dst as usize], value);
                 pc = resume_pc;
             }
-            Err(error) => {
-                unwind(registers, frames, current_base + current_len);
-                return Err(error);
-            }
+            Err(error) => fail!(error),
         }
     }
 }
@@ -1436,7 +1421,11 @@ fn loose_equality_without_conversion(left: &Value, right: &Value) -> Option<bool
 /// coerce nothing, a number answers inline, everything else runs the general
 /// operator in an empty realm frame like the tier's binary path.
 #[inline(never)]
-fn eval_unary(op: UnaryOp, value: Value, env: &CallEnv) -> Result<Value, RuntimeError> {
+fn eval_unary(
+    op: UnaryOp,
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<Value, RuntimeError> {
     match op {
         UnaryOp::Not => return Ok(Value::Boolean(!crate::is_truthy(&value))),
         UnaryOp::Void => return Ok(Value::Undefined),
@@ -1445,29 +1434,33 @@ fn eval_unary(op: UnaryOp, value: Value, env: &CallEnv) -> Result<Value, Runtime
     if let Some(value) = crate::bytecode::vm_props::fast_number_unary(op, &value) {
         return Ok(value);
     }
-    let mut env = env.empty_frame();
-    crate::operations::eval_unary(op, value, &mut env)
+    let env = &mut *env;
+    crate::operations::eval_unary(op, value, env)
 }
 
 /// `ToNumeric` on a non-number, mirroring `Vm::eval_to_numeric`.
 #[cold]
 #[inline(never)]
-fn to_numeric(value: Value, env: &CallEnv) -> Result<Value, RuntimeError> {
+fn to_numeric(value: Value, env: &mut crate::context::Context<'_>) -> Result<Value, RuntimeError> {
     if matches!(value, Value::BigInt(_)) {
         return Ok(value);
     }
-    let mut env = env.empty_frame();
-    let primitive = crate::to_primitive_with_hint(value, crate::PreferredType::Number, &mut env)?;
+    let env = &mut *env;
+    let primitive = crate::to_primitive_with_hint(value, crate::PreferredType::Number, env)?;
     Ok(match primitive {
         Value::BigInt(_) => primitive,
-        value => Value::Number(crate::to_number_with_env(value, &mut env)?),
+        value => Value::Number(crate::to_number_with_env(value, env)?),
     })
 }
 
 /// `++`/`--` on a non-number, mirroring `Vm::eval_update`.
 #[cold]
 #[inline(never)]
-fn update(op: UpdateOp, value: Value, env: &CallEnv) -> Result<Value, RuntimeError> {
+fn update(
+    op: UpdateOp,
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<Value, RuntimeError> {
     let one = num_bigint::BigInt::from(1);
     let step = |value: num_bigint::BigInt| match op {
         UpdateOp::Increment => Value::bigint(value + one.clone()),
@@ -1477,12 +1470,12 @@ fn update(op: UpdateOp, value: Value, env: &CallEnv) -> Result<Value, RuntimeErr
         Value::BigInt(value) => return Ok(step(std::rc::Rc::unwrap_or_clone(value))),
         value => value,
     };
-    let mut env = env.empty_frame();
-    let primitive = crate::to_primitive_with_hint(value, crate::PreferredType::Number, &mut env)?;
+    let env = &mut *env;
+    let primitive = crate::to_primitive_with_hint(value, crate::PreferredType::Number, env)?;
     Ok(match primitive {
         Value::BigInt(value) => step(std::rc::Rc::unwrap_or_clone(value)),
         value => {
-            let number = crate::to_number_with_env(value, &mut env)?;
+            let number = crate::to_number_with_env(value, env)?;
             match op {
                 UpdateOp::Increment => Value::Number(number + 1.0),
                 UpdateOp::Decrement => Value::Number(number - 1.0),
@@ -1508,18 +1501,13 @@ fn seed_lexical_markers(program: &WideProgram, window: &mut [Value]) {
 /// callee that cannot observe the caller's frame.
 #[inline(never)]
 fn construct_from_activation(
-    env: &CallEnv,
+    env: &mut crate::context::Context<'_>,
     callee: Value,
     arguments: &[Value],
 ) -> Result<Value, RuntimeError> {
-    if let Some(result) = crate::function::try_construct_direct_leaf_function(
-        &callee,
-        arguments,
-        env,
-        env.module_host(),
-        #[cfg(feature = "agents")]
-        env.agent_context(),
-    ) {
+    if let Some(result) =
+        crate::function::try_construct_direct_leaf_function(&callee, arguments, env)
+    {
         return result;
     }
     if let Some(array) = construct_plain_array(env, &callee, arguments) {
@@ -1532,8 +1520,8 @@ fn construct_from_activation(
     {
         return result;
     }
-    let mut env = env.empty_frame();
-    crate::function::construct_function_slice(callee.clone(), callee, arguments, &mut env)
+    let env = &mut *env;
+    crate::function::construct_function_slice(callee.clone(), callee, arguments, env)
 }
 
 /// `new Array(...)` on the realm's own Array constructor, whose `prototype`
@@ -1541,7 +1529,11 @@ fn construct_from_activation(
 /// without first allocating the ordinary receiver the general construct
 /// path makes for it. A length that is not a valid array length, or any
 /// other constructor, takes the general path and its errors.
-fn construct_plain_array(env: &CallEnv, callee: &Value, arguments: &[Value]) -> Option<Value> {
+fn construct_plain_array(
+    env: &mut crate::context::Context<'_>,
+    callee: &Value,
+    arguments: &[Value],
+) -> Option<Value> {
     let Value::Function(function) = callee else {
         return None;
     };
@@ -1573,6 +1565,10 @@ fn construct_plain_array(env: &CallEnv, callee: &Value, arguments: &[Value]) -> 
     Some(Value::Array(array))
 }
 
+/// Terminal error cleanup only: every caller immediately returns Err from
+/// run_frames. The fresh call activation is then discarded, even if it now
+/// describes an inline child. Never resume or expose it as the parked caller;
+/// restoring caller frames is the normal-return protocol, not this cleanup.
 #[cold]
 #[inline(never)]
 fn unwind(registers: &mut [Value], frames: &mut Vec<WideFrame>, live_end: usize) {
@@ -1598,67 +1594,51 @@ fn call_stack_exhausted() -> RuntimeError {
 }
 
 /// Runs `bytecode` on the wide tier without building a `Vm`, or returns
-/// `None` having consumed nothing. Every guard runs before `env` or `slots`
-/// is taken and before any observable work.
+/// `None` having consumed nothing. Guards precede receiver consumption and
+/// observable work; the actual prepared callee is borrowed in place.
+#[inline(always)]
 pub(in crate::bytecode) fn try_run_standalone(
     bytecode: &Bytecode,
-    env: &mut Option<CallEnv>,
-    slots: &mut Option<DirectCallSlots<'_>>,
+    env: &mut crate::context::ActivationContext,
+    runtime: &mut crate::context::RuntimeServices,
+    slots: &mut DirectCallSlots<'_>,
 ) -> Option<Result<Value, RuntimeError>> {
-    if !environment_is_slot_only(env.as_ref()?) {
+    if !env.indexed_bindings_only() {
+        crate::diagnostics::count!(indexed_binding_admission_rejections);
+        super::super::activation::trace_reference_decline(
+            bytecode,
+            "dynamic scope or selected global",
+        );
         return None;
     }
-    let entry = admit(bytecode, slots.as_ref()?.upvalues)?;
-    // A body that reads `this` needs the caller to seed a receiver, exactly
-    // like the general path's `Vm.direct_this`.
-    if entry.program.requires_this && slots.as_ref()?.this_value.is_none() {
+    // Checked global starts run as compiled checkpoints (`ReferenceCheck`);
+    // only sites that need the dynamic resolver keep the interpreter.
+    if bytecode
+        .binding_plan
+        .references
+        .needs_dynamic_resolution(env)
+    {
+        super::super::activation::trace_reference_decline(bytecode, "dynamic reference sites");
         return None;
     }
-    let call_env = env.take()?;
-    let call_slots = slots.take()?;
+    let entry = admit(bytecode, slots.upvalues)?;
+    // An admitted receiver read borrows the same owner the VM will resume.
+    if entry.program.requires_this && env.initialized_receiver().is_none() {
+        return None;
+    }
+    let call_env = env;
+    let call_slots = slots;
     let root = RootExit {
         upvalues: call_slots.upvalues,
         realm_upvalue_slots: call_slots.realm_upvalue_slots,
     };
     Some(run(
         bytecode,
-        &call_env,
+        call_env,
+        runtime,
         entry,
         call_slots.parameter_slots,
         call_slots.arguments,
-        call_slots.this_value,
-        root,
-    ))
-}
-
-/// The wide half of `compact_fn::try_run_in_caller_env`: the caller has
-/// already proved the environment is shareable and the numeric tier declined.
-/// A body that reads `this` is excluded, as it is for a standalone activation
-/// whose caller seeded no receiver.
-pub(crate) fn try_run_in_caller_env(
-    bytecode: &Bytecode,
-    upvalues: crate::bytecode::DirectCallUpvalues<'_>,
-    arguments: &[Value],
-    env: &CallEnv,
-) -> Option<Result<Value, RuntimeError>> {
-    let entry = admit(bytecode, upvalues)?;
-    if entry.program.requires_this {
-        return None;
-    }
-    crate::diagnostics::count!(compact_caller_env_calls);
-    let root = RootExit {
-        upvalues,
-        realm_upvalue_slots: upvalues
-            .function()
-            .map_or(0, |function| function.realm_upvalue_slots),
-    };
-    Some(run(
-        bytecode,
-        env,
-        entry,
-        bytecode.parameter_slots(),
-        arguments,
-        None,
         root,
     ))
 }
@@ -1667,7 +1647,7 @@ pub(crate) fn try_run_in_caller_env(
 /// interpreter's general call path reaches.
 #[inline(never)]
 fn call_from_activation(
-    activation: &WideActivation<'_>,
+    activation: &mut WideActivation<'_, '_>,
     callee: Value,
     this_value: Value,
     arguments: &[Value],
@@ -1678,9 +1658,6 @@ fn call_from_activation(
             this_value,
             arguments,
             activation.env,
-            activation.env.module_host(),
-            #[cfg(feature = "agents")]
-            activation.env.agent_context(),
         );
     }
     // The interpreter's native fast paths (`charCodeAt`, `String.fromCharCode`,
@@ -1691,12 +1668,12 @@ fn call_from_activation(
             &callee,
             &this_value,
             arguments,
-            &|| activation.env.empty_frame(),
+            &mut *activation.env,
         )
     {
         return result;
     }
-    let mut env = activation.env.empty_frame();
+    let env = &mut *activation.env;
     // A plain native takes its arguments where they are; only a bytecode
     // callee can also read a slice; only semantic forwarding builds a list.
     if let Value::Function(function) = &callee
@@ -1707,14 +1684,18 @@ fn call_from_activation(
         crate::diagnostics::count!(native_calls);
         return crate::native::call_native_function(
             entry,
-            function,
-            &this_value,
+            crate::native::CallInfo {
+                callee: function,
+                this_value: &this_value,
+                is_construct: false,
+            },
             arguments,
-            false,
-            &mut env,
+            None,
+            None,
+            env,
         );
     }
-    crate::function::call_function_slice(&callee, this_value, arguments, &mut env)
+    crate::function::call_function_slice(&callee, this_value, arguments, env)
 }
 
 /// What running a loop's typed program from an exit did.
@@ -1741,10 +1722,9 @@ pub(super) enum LoopHere {
 pub(super) fn run_typed_loop_here(
     bytecode: &Bytecode,
     program: &WideProgram,
-    env: &CallEnv,
+    env: &mut crate::context::Context<'_>,
     window: &mut [Value],
-    upvalues: &[Upvalue],
-    this_value: Option<&Value>,
+    upvalues: &[BindingCell],
     header: usize,
     backedge: usize,
     base_depth: usize,
@@ -1777,7 +1757,6 @@ pub(super) fn run_typed_loop_here(
         program.own_locals,
         upvalues,
         bytecode.cell_received_upvalue_slots().unwrap_or(0),
-        this_value,
         stack.get_mut(base_depth..).unwrap_or_default(),
     );
     if !crate::bytecode::typed_loop::try_run_typed_loop(&mut frame, plans, header, backedge) {

@@ -1,0 +1,1 @@
+(function() { Object.defineProperty(globalThis, 's3bText', { value: 'a', configurable: true }); const result = []; for (const source of ["s3bText += 'b'", "'use strict'; s3bText += 'b'"]) { try { Function(source)(); result.push('ignored'); } catch(error) { result.push(error.name); } result.push(globalThis.s3bText); } delete globalThis.s3bText; return result.join(':'); })()

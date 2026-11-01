@@ -20,7 +20,8 @@ pub(super) struct ArrayDestructuring {
 struct PreparedBindingTarget {
     name: String,
     slot: Option<usize>,
-    object_slot: usize,
+    object_slot: Option<usize>,
+    reference: Option<super::reference_plan::ReferenceId>,
 }
 
 impl Compiler {
@@ -36,7 +37,8 @@ impl Compiler {
             return None;
         };
         let slot = self.resolve_local_slot(name);
-        if !self.identifier_needs_with_resolution(slot) {
+        if !(self.identifier_needs_with_resolution(slot) || self.direct_eval_source && !self.strict)
+        {
             return None;
         }
         let object_slot = self.temp_local("with_var_initializer_object");
@@ -81,12 +83,20 @@ impl Compiler {
         match pattern {
             BindingPattern::Identifier { name, .. } => {
                 if let Some(prepared) = prepared {
-                    self.emit(Op::StoreResolvedIdentWith {
-                        name: prepared.name,
-                        slot: prepared.slot,
-                        object_slot: prepared.object_slot,
-                        is_strict: self.strict,
-                    });
+                    if let Some(object_slot) = prepared.object_slot {
+                        self.emit(Op::StoreResolvedIdentWith {
+                            name: prepared.name,
+                            slot: prepared.slot,
+                            object_slot,
+                            is_strict: self.strict,
+                        });
+                    } else {
+                        let slot = self.declare_var_kind_slot(name, kind);
+                        self.emit_store_var_initializer(slot, name, kind);
+                    }
+                    if let Some(reference) = prepared.reference {
+                        self.finish_reference(reference, None, self.code.len() - 1);
+                    }
                 } else {
                     let slot = self.declare_var_kind_slot(name, kind);
                     self.emit_store_var_initializer(slot, name, kind);
@@ -156,7 +166,7 @@ impl Compiler {
         pattern: &BindingPattern,
         kind: VarKind,
     ) -> Option<PreparedBindingTarget> {
-        if kind != VarKind::Var || !self.inside_current_with() {
+        if kind != VarKind::Var {
             return None;
         }
         let BindingPattern::Identifier { name, .. } = pattern else {
@@ -168,6 +178,14 @@ impl Compiler {
         } else {
             self.resolve_local_slot(name).or(Some(declared_slot))
         };
+        if !(self.inside_current_with() || self.direct_eval_source && !self.strict) {
+            return Some(PreparedBindingTarget {
+                name: name.clone(),
+                slot,
+                object_slot: None,
+                reference: Some(self.begin_reference(name)),
+            });
+        }
         let object_slot = self.temp_local("with_binding_target_object");
         self.emit(Op::ResolveIdentWith {
             name: name.clone(),
@@ -177,7 +195,8 @@ impl Compiler {
         Some(PreparedBindingTarget {
             name: name.clone(),
             slot,
-            object_slot,
+            object_slot: Some(object_slot),
+            reference: None,
         })
     }
 
@@ -253,6 +272,7 @@ impl Compiler {
                 }
             }
             let has_init = declaration.init.is_some();
+            let mut reference = None;
             if let Some(init) = &declaration.init {
                 if let Some((name, slot, object_slot)) =
                     self.resolve_var_initializer_with_target(&declaration.binding, kind)
@@ -265,6 +285,11 @@ impl Compiler {
                         is_strict: self.strict,
                     });
                     continue;
+                }
+                if kind == VarKind::Var
+                    && let BindingPattern::Identifier { name, .. } = &declaration.binding
+                {
+                    reference = Some(self.begin_reference(name));
                 }
                 self.compile_declaration_init(&declaration.binding, init)?;
             }
@@ -284,6 +309,9 @@ impl Compiler {
             }
             if has_init {
                 self.compile_binding_initializer(&declaration.binding, kind)?;
+                if let Some(reference) = reference {
+                    self.finish_reference(reference, None, self.code.len() - 1);
+                }
             } else {
                 self.compile_binding_uninitialized(&declaration.binding, kind)?;
             }
@@ -442,6 +470,13 @@ impl Compiler {
     }
 
     pub(super) fn emit_store_var_initializer(&mut self, slot: usize, name: &str, kind: VarKind) {
+        if self.direct_eval_source && !self.strict && kind == VarKind::Var {
+            self.emit(Op::StoreGlobalSloppy {
+                slot,
+                name: name.to_owned(),
+            });
+            return;
+        }
         if kind == VarKind::Var && self.inside_current_with() {
             // Inside a `with`, a `var` initializer assignment is an ordinary
             // PutValue on a reference resolved through the current lexical

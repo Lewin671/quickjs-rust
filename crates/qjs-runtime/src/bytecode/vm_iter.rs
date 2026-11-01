@@ -11,7 +11,6 @@ use super::ir::ObjectRestExclusion;
 use super::util::is_object_value;
 use super::vm::Vm;
 use super::vm_result::ResumeMode;
-use crate::CallEnv;
 
 /// The outcome of one pass through the `yield*` delegation op.
 pub(super) enum DelegateStep {
@@ -34,12 +33,11 @@ pub(super) enum DelegateStep {
     Continue,
 }
 
-impl Vm<'_> {
+impl Vm<'_, '_> {
     pub(super) fn get_iterator(&mut self) -> Result<(), RuntimeError> {
         let value = self.pop()?;
-        let mut env = self.callee_env();
+        let mut env = self.context();
         let result = iterator_for_value(value, &mut env);
-        self.apply_env(env);
         if let Some(iterator) = self.handle_runtime_result(result)? {
             self.stack.push(iterator);
         }
@@ -48,9 +46,8 @@ impl Vm<'_> {
 
     pub(super) fn get_async_iterator(&mut self) -> Result<(), RuntimeError> {
         let value = self.pop()?;
-        let mut env = self.callee_env();
+        let mut env = self.context();
         let result = crate::async_generator::get_async_iterator(value, &mut env);
-        self.apply_env(env);
         if let Some(iterator) = self.handle_runtime_result(result)? {
             self.stack.push(iterator);
         }
@@ -71,9 +68,8 @@ impl Vm<'_> {
             self.handle_runtime_result(error)?;
             return Ok(());
         }
-        let mut env = self.callee_env();
+        let mut env = self.context();
         let done = property_value(result.clone(), "done", &mut env).map(|value| is_truthy(&value));
-        self.apply_env(env);
         let Some(done) = self.handle_runtime_result(done)? else {
             return Ok(());
         };
@@ -82,9 +78,8 @@ impl Vm<'_> {
             self.stack.push(Value::Undefined);
             return Ok(());
         }
-        let mut env = self.callee_env();
+        let mut env = self.context();
         let value = property_value(result, "value", &mut env);
-        self.apply_env(env);
         if let Some(value) = self.handle_runtime_result(value)? {
             self.stack.push(value);
         }
@@ -114,15 +109,14 @@ impl Vm<'_> {
         iterator: &Value,
         next: &Value,
     ) -> Result<Option<Value>, RuntimeError> {
-        let mut call_env = self.call_env(next);
+        let mut call_env = self.context();
         let result = call_function(
             next.clone(),
             iterator.clone(),
             Vec::new(),
-            &mut call_env.env,
+            &mut call_env,
             false,
         );
-        self.apply_call_env(call_env);
         let result = result?;
         if !is_iterator_result_object(&result) {
             return Err(RuntimeError {
@@ -130,15 +124,13 @@ impl Vm<'_> {
                 message: "TypeError: iterator result is not an object".to_owned(),
             });
         }
-        let mut env = self.callee_env();
+        let mut env = self.context();
         let done = property_value(result.clone(), "done", &mut env).map(|value| is_truthy(&value));
-        self.apply_env(env);
         if done? {
             return Ok(None);
         }
-        let mut env = self.callee_env();
+        let mut env = self.context();
         let value = property_value(result, "value", &mut env);
-        self.apply_env(env);
         Ok(Some(value?))
     }
 
@@ -150,9 +142,8 @@ impl Vm<'_> {
             return Ok(());
         }
         self.store_local(done_slot, Value::Boolean(true))?;
-        let mut env = self.callee_env();
+        let mut env = self.context();
         let result = iterator_rest_values(&iterator, &next, &mut env);
-        self.apply_env(env);
         if let Some(values) = self.handle_runtime_result(result)? {
             self.push_array_literal(ArrayRef::new(self.env.realm(), values));
         }
@@ -161,9 +152,8 @@ impl Vm<'_> {
 
     pub(super) fn iterator_close(&mut self, swallow: bool) -> Result<(), RuntimeError> {
         let iterator = self.pop()?;
-        let mut env = self.callee_env();
+        let mut env = self.context();
         let result = close_iterator(&iterator, &mut env);
-        self.apply_env(env);
         if swallow {
             return Ok(());
         }
@@ -188,11 +178,10 @@ impl Vm<'_> {
                 }
             }
         }
-        let mut env = self.callee_env();
+        let mut env = self.context();
         // Excluded keys are filtered before `[[GetOwnProperty]]` is observed, so
         // a Proxy/accessor trap never runs for a destructured-away key.
         let result = object::enumerable_property_entries_excluding(value, &excluded_keys, &mut env);
-        self.apply_env(env);
         let Some(entries) = self.handle_runtime_result(result)? else {
             return Ok(());
         };
@@ -235,9 +224,8 @@ impl Vm<'_> {
             Some(mode) => mode,
             None => {
                 let iterable = self.pop()?;
-                let mut env = self.callee_env();
+                let mut env = self.context();
                 let resolved = resolve_delegate_iterator(iterable, async_delegate, &mut env);
-                self.apply_env(env);
                 let Some((iterator, next)) = self.handle_runtime_result(resolved)? else {
                     // The GetIterator failure was routed into a try/finally.
                     return Ok(DelegateStep::Continue);
@@ -321,9 +309,8 @@ impl Vm<'_> {
         value: Value,
         async_delegate: bool,
     ) -> Result<DelegateStep, RuntimeError> {
-        let mut env = self.callee_env();
+        let mut env = self.context();
         let method = get_iterator_method(iterator, "throw", &mut env);
-        self.apply_env(env);
         let Some(method) = self.handle_runtime_result(method)? else {
             return Ok(DelegateStep::Continue);
         };
@@ -331,9 +318,8 @@ impl Vm<'_> {
             // No inner `throw`: close the inner iterator first. If `return`
             // itself completes abruptly, that completion is delivered to the
             // `yield*` site; otherwise the missing `throw` becomes a TypeError.
-            let mut env = self.callee_env();
+            let mut env = self.context();
             let close_result = close_iterator(iterator, &mut env);
-            self.apply_env(env);
             if self.handle_runtime_result(close_result)?.is_none() {
                 return Ok(DelegateStep::Continue);
             }
@@ -367,9 +353,8 @@ impl Vm<'_> {
         value: Value,
         async_delegate: bool,
     ) -> Result<DelegateStep, RuntimeError> {
-        let mut env = self.callee_env();
+        let mut env = self.context();
         let method = get_iterator_method(iterator, "return", &mut env);
-        self.apply_env(env);
         let Some(method) = self.handle_runtime_result(method)? else {
             return Ok(DelegateStep::Continue);
         };
@@ -415,16 +400,15 @@ impl Vm<'_> {
         iterator: &Value,
         argument: Value,
     ) -> Result<Value, RuntimeError> {
-        let mut env = self.callee_env();
-        let result = call_function(
+        let mut env = self.context();
+
+        call_function(
             method.clone(),
             iterator.clone(),
             vec![argument],
             &mut env,
             false,
-        );
-        self.apply_env(env);
-        result
+        )
     }
 
     /// Validates an inner iterator result, classifying it as done or not, and
@@ -447,21 +431,19 @@ impl Vm<'_> {
         let Some(result) = self.handle_runtime_result(validated)? else {
             return Ok(None);
         };
-        let mut env = self.callee_env();
+        let mut env = self.context();
         let done = property_value(result.clone(), "done", &mut env).map(|v| is_truthy(&v));
-        self.apply_env(env);
         let Some(done) = self.handle_runtime_result(done)? else {
             return Ok(None);
         };
         if done || async_delegate {
-            let mut env = self.callee_env();
+            let mut env = self.context();
             let value = property_value(result.clone(), "value", &mut env);
-            self.apply_env(env);
             let Some(value) = self.handle_runtime_result(value)? else {
                 return Ok(None);
             };
             if !done {
-                let env = self.callee_env();
+                let env = self.context();
                 return Ok(Some(InnerStep::Suspend(iterator_result(
                     value,
                     false,
@@ -497,7 +479,7 @@ impl Vm<'_> {
 fn iterator_result(
     value: Value,
     done: bool,
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
     domain: &crate::property::atom::AtomDomain,
 ) -> Value {
     let object = ObjectRef::with_prototype(HashMap::new(), object_prototype(env), domain);
@@ -523,7 +505,7 @@ enum InnerStep {
 fn resolve_delegate_iterator(
     value: Value,
     async_delegate: bool,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<(Value, Value), RuntimeError> {
     let iterator = if async_delegate {
         crate::async_generator::get_async_iterator(value, env)?
@@ -539,7 +521,7 @@ fn resolve_delegate_iterator(
 fn get_iterator_method(
     iterator: &Value,
     name: &str,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let method = property_value(iterator.clone(), name, env)?;
     if matches!(method, Value::Undefined | Value::Null) {
@@ -558,12 +540,15 @@ fn get_iterator_method(
 /// async-from-sync iterator path (`for await` over a non-async iterable).
 pub(crate) fn sync_iterator_for_value(
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     iterator_for_value(value, env)
 }
 
-fn iterator_for_value(value: Value, env: &mut CallEnv) -> Result<Value, RuntimeError> {
+fn iterator_for_value(
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<Value, RuntimeError> {
     if matches!(value, Value::Undefined | Value::Null) {
         return Err(RuntimeError {
             thrown: None,
@@ -606,7 +591,7 @@ fn is_iterator_result_object(value: &Value) -> bool {
 fn iterator_step_value(
     iterator: &Value,
     next: &Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Option<Value>, RuntimeError> {
     let result = call_function(next.clone(), iterator.clone(), Vec::new(), env, false)?;
     if !is_iterator_result_object(&result) {
@@ -624,7 +609,7 @@ fn iterator_step_value(
 fn iterator_rest_values(
     iterator: &Value,
     next: &Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Vec<Value>, RuntimeError> {
     let mut values = Vec::new();
     while let Some(value) = iterator_step_value(iterator, next, env)? {
@@ -633,7 +618,10 @@ fn iterator_rest_values(
     Ok(values)
 }
 
-fn close_iterator(iterator: &Value, env: &mut CallEnv) -> Result<(), RuntimeError> {
+fn close_iterator(
+    iterator: &Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<(), RuntimeError> {
     let return_method = property_value(iterator.clone(), "return", env)?;
     if matches!(return_method, Value::Null | Value::Undefined) {
         return Ok(());

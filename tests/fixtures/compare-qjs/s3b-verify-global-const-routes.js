@@ -1,0 +1,1 @@
+(0,eval)("var out=[];function print(s){out.push(s);}\nconst y = 1;\nvar f = eval('(function () { return y--; })');\ntry { f(); } catch (e) { print(e.constructor.name); }\nprint(y);\nout.join(\"|\");")

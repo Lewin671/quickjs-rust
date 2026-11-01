@@ -16,7 +16,6 @@
 use crate::{ObjectRef, PropertyKey, RuntimeError, Value, call_function, property_value, symbol};
 
 use super::capability::{self, PromiseCapability};
-use crate::CallEnv;
 
 /// The realm constructor `C` plus the resolved `promiseResolve` function used to
 /// wrap each iterated value.
@@ -35,7 +34,7 @@ pub(super) trait ElementHandler {
         &mut self,
         index: usize,
         capability: &PromiseCapability,
-        env: &mut CallEnv,
+        env: &mut crate::context::Context<'_>,
     ) -> Result<(Value, Value), RuntimeError>;
 
     /// Called after the loop completes with the final element count. Returns an
@@ -46,7 +45,7 @@ pub(super) trait ElementHandler {
         &mut self,
         count: usize,
         capability: &PromiseCapability,
-        env: &mut CallEnv,
+        env: &mut crate::context::Context<'_>,
     ) -> Result<(), RuntimeError>;
 }
 
@@ -59,7 +58,7 @@ pub(super) fn run_combinator<H: ElementHandler>(
     iterable: Value,
     context_label: &str,
     mut handler: H,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let capability = capability::new_promise_capability(&this_value, env)?;
 
@@ -87,7 +86,7 @@ fn perform<H: ElementHandler>(
     context_label: &str,
     handler: &mut H,
     capability: &PromiseCapability,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<(), RuntimeError> {
     // promiseResolve = ? Get(C, "resolve"); if not callable, throw TypeError.
     let promise_resolve = property_value(this_value.clone(), "resolve", env)?;
@@ -147,7 +146,7 @@ fn process_element<H: ElementHandler>(
     index: usize,
     handler: &mut H,
     capability: &PromiseCapability,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<(), RuntimeError> {
     // nextPromise = ? Call(promiseResolve, C, « value »).
     let next_promise = call_function(
@@ -175,7 +174,7 @@ fn process_element<H: ElementHandler>(
 fn get_iterator(
     iterable: Value,
     context_label: &str,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let Some(iterator_symbol) = symbol::iterator_symbol(env) else {
         return Err(RuntimeError {
@@ -207,7 +206,7 @@ fn get_iterator(
 fn iterator_close_on_error(
     iterator: &Value,
     error: RuntimeError,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> RuntimeError {
     let return_method = match property_value(iterator.clone(), "return", env) {
         Ok(method) => method,

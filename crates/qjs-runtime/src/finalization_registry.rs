@@ -1,13 +1,11 @@
 use std::collections::HashMap;
 
-use crate::{
-    ArrayRef, CallEnv, Function, NativeFunction, ObjectRef, Property, RuntimeError, Value, symbol,
-};
+use crate::{ArrayRef, Function, NativeFunction, ObjectRef, Property, RuntimeError, Value, symbol};
 
 const FINALIZATION_REGISTRY_CELLS: &str = "\0FinalizationRegistryCells";
 
 pub(crate) fn install_finalization_registry(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     global_this: &Value,
     object_prototype: ObjectRef,
 ) {
@@ -53,7 +51,7 @@ pub(crate) fn native_finalization_registry(
     function: &Function,
     argument_values: &[Value],
     is_construct: bool,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if !is_construct {
         return Err(RuntimeError {
@@ -84,7 +82,7 @@ pub(crate) fn native_finalization_registry(
 pub(crate) fn native_finalization_registry_prototype_register(
     this_value: Value,
     argument_values: &[Value],
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let object = finalization_registry_object(&this_value)?;
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
@@ -120,7 +118,7 @@ pub(crate) fn native_finalization_registry_prototype_register(
 pub(crate) fn native_finalization_registry_prototype_unregister(
     this_value: Value,
     argument_values: &[Value],
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let object = finalization_registry_object(&this_value)?;
     let unregister_token = argument_values.first().cloned().unwrap_or(Value::Undefined);
@@ -201,7 +199,7 @@ fn finalization_registry_unregister(
     Ok(removed)
 }
 
-pub(crate) fn can_be_held_weakly(value: &Value, env: &CallEnv) -> bool {
+pub(crate) fn can_be_held_weakly(value: &Value, env: &crate::context::Context<'_>) -> bool {
     match value {
         Value::Object(object) if symbol::is_symbol_primitive(object) => {
             !symbol::is_registered_symbol(object, env)

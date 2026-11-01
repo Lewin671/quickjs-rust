@@ -16,23 +16,18 @@
 
 use std::rc::Rc;
 
+use crate::RuntimeError;
 use crate::bytecode::{Bytecode, DirectCallSlots};
 use crate::value::Value;
-use crate::{CallEnv, RuntimeError};
 
-use super::upvalue::Upvalue;
+use crate::binding::BindingCell;
 
 /// What must happen after an ordinary bytecode call returns -- and nothing
 /// about how it runs.
 ///
-/// Both members are caller-side obligations, which is exactly why they belong
-/// with the prepared call rather than in the executor: whoever runs the body
-/// must be able to hand back what the caller is owed without knowing why.
+/// Derived construction completion stays with the prepared call so execution
+/// can return semantic state without mutating the caller.
 pub(crate) struct CallCompletionPolicy {
-    /// A named function expression binds its own name for the duration of the
-    /// call, shadowing whatever the caller had. This is the caller's value,
-    /// captured before the call and restored after it.
-    restored_caller_binding: Option<(String, Value)>,
     /// A derived constructor implicitly returns its super-bound `this` when
     /// the body returns no object, and finishing without having called
     /// `super(...)` is a ReferenceError.
@@ -40,24 +35,14 @@ pub(crate) struct CallCompletionPolicy {
 }
 
 impl CallCompletionPolicy {
-    pub(crate) fn new(
-        restored_caller_binding: Option<(String, Value)>,
-        finishes_derived_construct: bool,
-    ) -> Self {
+    pub(crate) fn new(finishes_derived_construct: bool) -> Self {
         Self {
-            restored_caller_binding,
             finishes_derived_construct,
         }
     }
 
     pub(crate) fn finishes_derived_construct(&self) -> bool {
         self.finishes_derived_construct
-    }
-
-    /// Returns the caller binding to restore, consuming it so a completion
-    /// policy cannot be applied twice.
-    pub(crate) fn take_restored_caller_binding(&mut self) -> Option<(String, Value)> {
-        self.restored_caller_binding.take()
     }
 }
 
@@ -69,16 +54,16 @@ impl CallCompletionPolicy {
 /// call is* from *how it is dispatched and executed* is this one.
 pub(crate) struct PreparedBytecodeCall<'a> {
     pub(crate) bytecode: Rc<Bytecode>,
-    pub(crate) env: CallEnv,
+    pub(crate) env: crate::context::ActivationContext,
     /// The direct-leaf entry contract: receiver, parameters and received cells
     /// can use the compact tiers and the minimal frame initializer.
     pub(crate) slots: Option<DirectCallSlots<'a>>,
-    /// General synchronous entry seeds these before constructing capture cells.
+    /// General entry seeds these before constructing capture cells.
     /// Special call context remains owned by `env`; this is not a leaf contract.
-    pub(crate) positional_arguments: Option<&'a [Value]>,
+    pub(crate) call_inputs: Option<crate::function::CallInputs<'a>>,
     /// Only the general path needs these; a slot-seeded call carries its
     /// upvalues inside `slots`.
-    pub(crate) upvalues: Vec<Upvalue>,
+    pub(crate) upvalues: Vec<BindingCell>,
     pub(crate) with_stack: Vec<Value>,
     pub(crate) completion: CallCompletionPolicy,
 }
@@ -97,20 +82,6 @@ impl PreparedBytecodeCall<'_> {
             "a slot-seeded call cannot be a derived constructor"
         );
         self.slots.is_some()
-    }
-}
-
-/// Restores the caller binding an ordinary call shadowed, if any.
-pub(crate) fn apply_completion_to_caller(
-    completion: &mut CallCompletionPolicy,
-    caller_env: &mut CallEnv,
-) {
-    let Some((name, value)) = completion.take_restored_caller_binding() else {
-        return;
-    };
-    caller_env.set_local(&name, value.clone());
-    if caller_env.realm_contains(&name) {
-        caller_env.insert_realm(name, value);
     }
 }
 

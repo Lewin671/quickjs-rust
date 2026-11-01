@@ -1,9 +1,11 @@
-use crate::CallEnv;
 use std::collections::HashMap;
 
 use crate::{Function, NativeFunction, ObjectRef, Property, Value};
 
-pub(crate) fn install_object(env: &mut CallEnv, global_this: &Value) -> ObjectRef {
+pub(crate) fn install_object(
+    env: &mut crate::context::Context<'_>,
+    global_this: &Value,
+) -> ObjectRef {
     let object_prototype = ObjectRef::new(HashMap::new(), env.realm().atoms());
     object_prototype.mark_immutable_prototype_exotic();
     env.realm()

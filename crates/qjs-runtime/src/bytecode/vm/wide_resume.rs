@@ -15,7 +15,6 @@ use crate::bytecode::ir::Bytecode;
 use crate::bytecode::vm_loop_dispatch::LoopPlanView;
 use crate::bytecode::vm_result::Completion;
 use crate::bytecode::{DirectCallSlots, compact_fn};
-use crate::function::CallEnv;
 use crate::{RuntimeError, Value};
 
 /// How an interpreter continuation of a wide activation ended.
@@ -78,26 +77,53 @@ pub(in crate::bytecode) enum ResumeFrom {
 /// probed backedge whose accelerators decline.
 pub(in crate::bytecode) fn resume_direct_call_bytecode(
     bytecode: &Bytecode,
-    env: CallEnv,
+    mut env: crate::context::ActivationContext,
+    runtime: &mut crate::context::RuntimeServices,
     direct_call_slots: DirectCallSlots<'_>,
     ip: usize,
     registers: WideRegisters<'_>,
     from: ResumeFrom,
 ) -> Resumed {
+    let saved_references = env.saved_references.take();
     let mut vm = Vm::new_with_globals_upvalues_with_stack_and_direct_call_slots(
         bytecode,
+        runtime,
         env,
         Vec::new(),
         Vec::new(),
         Some(direct_call_slots),
     );
-    vm.enter_body_deopt_scope();
+    vm.enter_function_body();
+    // References the tier selected before a live RHS: the frame's reference
+    // events consume them at the recorded store, exactly as its own.
+    if let Some(saved) = saved_references {
+        let lifetimes = &bytecode.binding_plan.references.lifetimes;
+        for (lifetime, reference) in *saved {
+            vm.save_reference(lifetimes[lifetime].bank, lifetime, reference);
+        }
+        vm.current.reference_hooks = true;
+    }
     for (slot, register) in registers.locals.iter_mut().enumerate() {
         if !is_own(registers.own_locals, slot) {
             continue;
         }
         let value = std::mem::replace(register, Value::Undefined);
-        if let Some(target) = vm.current.locals.get_mut(slot) {
+        if let Some(cell) = vm.local_upvalue_cell(slot) {
+            if value.is_uninitialized_lexical_marker() {
+                let replacement = cell.fresh_uninitialized();
+                vm.local_upvalues[slot] = Some(replacement);
+            } else {
+                let result = if cell.is_initialized() {
+                    cell.assign(value, vm.execution_is_strict())
+                } else {
+                    cell.initialize(value)
+                };
+                if let Err(error) = result {
+                    return Resumed::Finished(Err(error));
+                }
+            }
+            vm.locals[slot] = None;
+        } else if let Some(target) = vm.current.locals.get_mut(slot) {
             *target = (!value.is_uninitialized_lexical_marker()).then_some(value);
         }
     }
@@ -107,6 +133,16 @@ pub(in crate::bytecode) fn resume_direct_call_bytecode(
             .push(std::mem::replace(register, Value::Undefined));
     }
     vm.current.ip = ip;
+    // This is an existing scope instance, not an entry from the prologue.
+    // Force exposure after restoring its initialized/TDZ registers, and seed
+    // the cursor at the continuation so tracking cannot clear live loop cells
+    // while mistaking the first resumed instruction for fresh scope entry.
+    if let Some(scope) = bytecode.binding_plan.pc_scopes.get(ip).copied() {
+        if vm.current.binding_scope.is_some() {
+            vm.current.binding_scope = Some(scope);
+        }
+        vm.force_binding_exposure(scope);
+    }
     let resumed = match from {
         ResumeFrom::ProbedBackedge(target) => {
             vm.current.ip = ip + 1;
@@ -114,6 +150,7 @@ pub(in crate::bytecode) fn resume_direct_call_bytecode(
                 // A loop the accelerator finished leaves the frame past its
                 // backedge; the rest of the body runs on the tier again.
                 if vm.current.ip > ip
+                    && vm.current.active_reference_count == 0
                     && compact_fn::resumes_at(bytecode, vm.current.ip, vm.current.stack.len())
                 {
                     Resumed::LoopFinished {
@@ -141,14 +178,14 @@ pub(in crate::bytecode) fn resume_direct_call_bytecode(
     if let Resumed::HandedBack { .. } | Resumed::LoopFinished { .. } = resumed {
         hand_back(&mut vm, registers);
     }
-    bytecode.recycle_local_slots(std::mem::take(&mut vm.current.locals));
+    vm.recycle_binding_slots();
     if let Some(cold) = vm.current.cold.take() {
         bytecode.recycle_cold_frame(cold);
     }
     resumed
 }
 
-fn run(vm: &mut Vm<'_>) -> Resumed {
+fn run(vm: &mut Vm<'_, '_>) -> Resumed {
     match vm.run_completion() {
         Ok(Completion::Return(value)) => Resumed::Finished(Ok(value)),
         Ok(_) => match vm
@@ -166,14 +203,21 @@ fn run(vm: &mut Vm<'_>) -> Resumed {
     }
 }
 
-fn hand_back(vm: &mut Vm<'_>, registers: WideRegisters<'_>) {
+fn hand_back(vm: &mut Vm<'_, '_>, registers: WideRegisters<'_>) {
     for (slot, register) in registers.locals.iter_mut().enumerate() {
         if !is_own(registers.own_locals, slot) {
             continue;
         }
-        if let Some(local) = vm.current.locals.get_mut(slot) {
-            *register = local.take().unwrap_or_else(|| registers.tdz_marker.clone());
-        }
+        *register = if let Some(cell) = vm.local_upvalue_cell(slot) {
+            cell.value_if_initialized()
+                .unwrap_or_else(|| registers.tdz_marker.clone())
+        } else {
+            vm.current
+                .locals
+                .get_mut(slot)
+                .and_then(Option::take)
+                .unwrap_or_else(|| registers.tdz_marker.clone())
+        };
     }
     let depth = vm.current.stack.len();
     for register in registers.stack[..depth].iter_mut().rev() {
@@ -185,18 +229,21 @@ fn is_own(own_locals: u128, slot: usize) -> bool {
     slot < u128::BITS as usize && own_locals & (1_u128 << slot) != 0
 }
 
-impl Vm<'_> {
+impl Vm<'_, '_> {
     /// After an ordinary backward jump from `backedge` that no accelerator
     /// claimed: whether this frame hands the loop back to the wide tier.
     /// It does when it was resumed at a probed backedge, is the only frame on
     /// this VM, and stands at another probed backedge with the operand stack
     /// the tier expects there. The jump is undone so the tier performs it.
+    /// A frame holding a selected reference keeps it: the tier's checkpoint
+    /// state is not rebuilt from the interpreter's bank.
     #[cold]
     pub(super) fn hand_back_to_wide(&mut self, backedge: usize) -> Option<FrameExit> {
         let Some(Some(None)) = self.current.cold().map(|cold| cold.wide_handback) else {
             return None;
         };
         if !self.callers.is_empty()
+            || self.current.active_reference_count != 0
             || !compact_fn::hands_back_at(
                 &self.current.bytecode,
                 backedge,

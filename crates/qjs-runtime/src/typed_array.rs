@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use crate::CallEnv;
 use crate::{
     Function, NativeFunction, ObjectRef, Property, PropertyKey, Prototype, RuntimeError, Value,
     array_buffer, construct_function, ensure_constructor, property_value, property_value_key,
@@ -116,7 +115,7 @@ const TYPED_ARRAY_KINDS: [(&str, NativeFunction); 11] = [
 ];
 
 pub(crate) fn install_typed_arrays(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     global_this: &Value,
     object_prototype: ObjectRef,
 ) {
@@ -163,7 +162,7 @@ pub(crate) fn install_typed_arrays(
 /// ES specifies `%TypedArray%.prototype.toString` as the same function object
 /// as `%Array.prototype.toString%`. Array is installed after TypedArray in this
 /// runtime, so the alias is patched once both prototypes exist.
-pub(crate) fn alias_array_prototype_to_string(env: &mut CallEnv) {
+pub(crate) fn alias_array_prototype_to_string(env: &mut crate::context::Context<'_>) {
     let array_constructor = match env.get("Array") {
         Some(Value::Function(function)) => function,
         _ => return,
@@ -219,7 +218,10 @@ fn install_typed_array_static_methods(intrinsic: &Function) {
 
 /// Installs `buffer`/`byteLength`/`byteOffset`/`length` accessors and the
 /// `Symbol.toStringTag` accessor on `%TypedArray.prototype%`.
-fn install_typed_array_prototype_accessors(env: &CallEnv, prototype: &ObjectRef) {
+fn install_typed_array_prototype_accessors(
+    env: &crate::context::Context<'_>,
+    prototype: &ObjectRef,
+) {
     for (name, native) in [
         ("buffer", NativeFunction::TypedArrayPrototypeBuffer),
         ("byteLength", NativeFunction::TypedArrayPrototypeByteLength),
@@ -265,7 +267,7 @@ fn install_typed_array_prototype_accessors(env: &CallEnv, prototype: &ObjectRef)
 
 /// Installs the shared `%TypedArray.prototype%` methods (ES2023 23.2.3),
 /// brand-checked through their receiver.
-fn install_typed_array_prototype_methods(env: &CallEnv, prototype: &ObjectRef) {
+fn install_typed_array_prototype_methods(env: &crate::context::Context<'_>, prototype: &ObjectRef) {
     for (name, length, native) in [
         ("at", 1, NativeFunction::TypedArrayPrototypeAt),
         ("indexOf", 1, NativeFunction::TypedArrayPrototypeIndexOf),
@@ -350,7 +352,7 @@ fn define_prototype_method(
 }
 
 fn install_typed_array_constructor(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     global_this: &Value,
     typed_array_prototype: ObjectRef,
     typed_array_intrinsic: &Function,
@@ -567,14 +569,17 @@ pub(crate) fn validate_typed_array_write(
 pub(crate) fn create_typed_array_of_kind(
     native: NativeFunction,
     values: Vec<Value>,
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
 ) -> ObjectRef {
     construct::create_with_values(native, values, env)
 }
 
 /// Builds a `Uint8Array` backed by an immutable `ArrayBuffer` containing
 /// `bytes`. Used by static import-bytes module records.
-pub(crate) fn create_immutable_uint8_array(bytes: &[u8], env: &CallEnv) -> ObjectRef {
+pub(crate) fn create_immutable_uint8_array(
+    bytes: &[u8],
+    env: &crate::context::Context<'_>,
+) -> ObjectRef {
     let values = bytes
         .iter()
         .map(|byte| Value::Number(f64::from(*byte)))
@@ -593,7 +598,7 @@ pub(crate) fn create_immutable_uint8_array(bytes: &[u8], env: &CallEnv) -> Objec
 pub(crate) fn typed_array_species_create(
     exemplar: &ObjectRef,
     length: usize,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<(Value, ObjectRef), RuntimeError> {
     let (result, object) = typed_array_species_create_read(exemplar, length, env)?;
     if typed_array_buffer(&object).is_some_and(|buffer| array_buffer::is_immutable(&buffer)) {
@@ -608,7 +613,7 @@ pub(crate) fn typed_array_species_create(
 pub(crate) fn typed_array_species_create_read(
     exemplar: &ObjectRef,
     length: usize,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<(Value, ObjectRef), RuntimeError> {
     let (result, object) =
         typed_array_species_create_with_args(exemplar, vec![Value::Number(length as f64)], env)?;
@@ -627,7 +632,7 @@ pub(crate) fn typed_array_species_create_read(
 pub(crate) fn typed_array_species_create_with_args(
     exemplar: &ObjectRef,
     args: Vec<Value>,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<(Value, ObjectRef), RuntimeError> {
     let default_constructor = env
         .get(typed_array_name(typed_array_kind(exemplar)))
@@ -645,7 +650,7 @@ pub(crate) fn typed_array_species_create_with_args(
 fn typed_array_species_constructor(
     exemplar: &ObjectRef,
     default_constructor: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let constructor = property_value(Value::Object(exemplar.clone()), "constructor", env)?;
     if matches!(constructor, Value::Undefined) {
@@ -907,7 +912,7 @@ pub(crate) fn bytes_per_element(native: NativeFunction) -> usize {
 
 pub(crate) fn to_typed_array_length(
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<usize, RuntimeError> {
     let number = to_number_with_env(value, env)?;
     let integer = if number.is_nan() { 0.0 } else { number.trunc() };

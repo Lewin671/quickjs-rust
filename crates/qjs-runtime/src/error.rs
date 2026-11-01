@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use crate::CallEnv;
 use crate::{
     Function, NativeFunction, ObjectRef, Property, RuntimeError, Value, function_prototype,
     has_property, property_value, property_value_key, symbol, to_js_string_with_env,
@@ -17,7 +16,11 @@ const NATIVE_ERRORS: &[(&str, NativeFunction)] = &[
     ("URIError", NativeFunction::UriError),
 ];
 
-pub(crate) fn install_error(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
+pub(crate) fn install_error(
+    env: &mut crate::context::Context<'_>,
+    global_this: &Value,
+    object_prototype: ObjectRef,
+) {
     let error_prototype =
         ObjectRef::with_prototype(HashMap::new(), Some(object_prototype), env.realm().atoms());
     let error_function =
@@ -56,10 +59,15 @@ pub(crate) fn install_error(env: &mut CallEnv, global_this: &Value, object_proto
     );
     error_function.define_property(
         "prototype".to_owned(),
-        Property::fixed_non_enumerable(Value::Object(error_prototype)),
+        Property::fixed_non_enumerable(Value::Object(error_prototype.clone())),
     );
     define_function_name(&error_function, "Error");
 
+    env.realm().initialize_error_intrinsic(
+        crate::context::ErrorKind::Error,
+        error_function.clone(),
+        error_prototype,
+    );
     let error_value = Value::Function(error_function);
     env.insert_realm("Error".to_owned(), error_value.clone());
     if let Value::Object(global_object) = global_this {
@@ -109,7 +117,7 @@ pub(crate) fn native_error(
     this_value: Value,
     argument_values: &[Value],
     is_construct: bool,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let object = match (is_construct, this_value) {
         (true, Value::Object(object)) => object,
@@ -143,7 +151,7 @@ pub(crate) fn native_aggregate_error(
     this_value: Value,
     argument_values: &[Value],
     is_construct: bool,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let object = match (is_construct, this_value) {
         (true, Value::Object(object)) => object,
@@ -182,7 +190,7 @@ pub(crate) fn native_suppressed_error(
     this_value: Value,
     argument_values: &[Value],
     is_construct: bool,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let object = match (is_construct, this_value) {
         (true, Value::Object(object)) => object,
@@ -231,9 +239,12 @@ pub(crate) fn native_suppressed_error(
 pub(crate) fn create_suppressed_error(
     error: Value,
     suppressed: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
-    let Some(Value::Function(function)) = env.get("SuppressedError") else {
+    let Some(function) = env
+        .realm()
+        .error_constructor(crate::context::ErrorKind::SuppressedError)
+    else {
         return Ok(Value::String("SuppressedError".to_owned().into()));
     };
     native_suppressed_error(
@@ -251,7 +262,10 @@ fn ensure_default_error_prototype(object: &ObjectRef, function: &Function) {
     }
 }
 
-fn aggregate_error_errors(errors: Option<Value>, env: &mut CallEnv) -> Result<Value, RuntimeError> {
+fn aggregate_error_errors(
+    errors: Option<Value>,
+    env: &mut crate::context::Context<'_>,
+) -> Result<Value, RuntimeError> {
     let Some(errors) = errors else {
         return Err(aggregate_error_errors_not_iterable());
     };
@@ -276,7 +290,10 @@ fn aggregate_error_errors_not_iterable() -> RuntimeError {
     }
 }
 
-fn aggregate_errors_is_iterable(value: Value, env: &mut CallEnv) -> Result<bool, RuntimeError> {
+fn aggregate_errors_is_iterable(
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<bool, RuntimeError> {
     let Some(iterator_symbol) = symbol::iterator_symbol(env) else {
         return Ok(false);
     };
@@ -288,7 +305,7 @@ fn aggregate_errors_is_iterable(value: Value, env: &mut CallEnv) -> Result<bool,
 fn install_error_cause(
     object: &ObjectRef,
     options: Option<Value>,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<(), RuntimeError> {
     let Some(options) = options else {
         return Ok(());
@@ -317,7 +334,7 @@ pub(crate) fn is_native_error(native: NativeFunction) -> bool {
 
 pub(crate) fn native_error_prototype_to_string(
     this_value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if !is_error_to_string_receiver_object(&this_value) {
         return Err(RuntimeError {
@@ -371,10 +388,13 @@ pub(crate) fn is_error_object(object: &ObjectRef) -> bool {
 ///
 /// Engine-internal errors carry their reason in `thrown` when one exists;
 /// otherwise the `message` encodes a native error (`"TypeError: ..."`) that is
-/// reconstructed into a real Error object using the realm's constructors. This
+/// reconstructed into a real Error object using stable realm prototypes. This
 /// mirrors the VM's catch-path reification so values rejected from native code
 /// (combinators, async functions) are observably `instanceof TypeError`.
-pub(crate) fn runtime_error_to_value(error: RuntimeError, env: &CallEnv) -> Value {
+pub(crate) fn runtime_error_to_value(
+    error: RuntimeError,
+    env: &crate::context::Context<'_>,
+) -> Value {
     if let Some(thrown) = error.thrown {
         return *thrown;
     }
@@ -382,18 +402,58 @@ pub(crate) fn runtime_error_to_value(error: RuntimeError, env: &CallEnv) -> Valu
         .message
         .trim_start_matches("throw statement executed: ");
     let (constructor_name, detail) = split_native_error_message(message);
-    if let Some(Value::Function(function)) = env.get(constructor_name) {
-        if let Ok(value) = native_error(
-            &function,
-            Value::Undefined,
-            &[Value::String(detail.clone().into())],
-            false,
-            &mut CallEnv::new(env.realm_rc()),
-        ) {
-            return value;
-        }
+    if let Some(kind) = crate::context::ErrorKind::from_name(constructor_name)
+        && let Some(value) =
+            intrinsic_error_from_creation(env.creation_context_ref(), kind, &detail)
+    {
+        return value;
     }
     Value::String(message.to_owned().into())
+}
+
+/// Preserve the intrinsic realm while its originating execution context is live.
+/// Explicit thrown values retain their original identity.
+#[cold]
+#[inline(never)]
+pub(crate) fn capture_error_origin(
+    mut error: RuntimeError,
+    context: &crate::context::Context<'_>,
+) -> RuntimeError {
+    if error.thrown.is_none() {
+        let value = runtime_error_to_value(
+            RuntimeError {
+                thrown: None,
+                message: error.message.clone(),
+            },
+            context,
+        );
+        error.thrown = Some(Box::new(value));
+    }
+    error
+}
+
+/// Pure error materialization: message is already a JS string and no options
+/// are supplied, so this performs no coercion, property Get or native call.
+pub(crate) fn intrinsic_error_from_creation(
+    creation: &crate::context::CreationContext,
+    kind: crate::context::ErrorKind,
+    message: &str,
+) -> Option<Value> {
+    let prototype = creation.intrinsics.errors[kind.index()]
+        .clone()
+        .or_else(|| creation.realm.error_prototype(kind))?;
+    Some(error_value_with_prototype(prototype, message))
+}
+
+pub(crate) fn error_value_with_prototype(prototype: ObjectRef, message: &str) -> Value {
+    let domain = prototype.domain();
+    let object = ObjectRef::with_prototype(HashMap::new(), Some(prototype), &domain);
+    define_error_data(&object);
+    object.define_property(
+        "message".into(),
+        Property::data(Value::String(message.to_owned().into()), false, true, true),
+    );
+    Value::Object(object)
 }
 
 /// Splits a `"TypeError: detail"`-style message into its constructor name and
@@ -441,7 +501,7 @@ fn define_error_data(object: &ObjectRef) {
 }
 
 fn install_native_error(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     global_this: &Value,
     error_function: &Function,
     error_prototype: &ObjectRef,
@@ -472,10 +532,13 @@ fn install_native_error(
     );
     function.define_property(
         "prototype".to_owned(),
-        Property::fixed_non_enumerable(Value::Object(prototype)),
+        Property::fixed_non_enumerable(Value::Object(prototype.clone())),
     );
     define_function_name(&function, name);
 
+    let kind = crate::context::ErrorKind::from_name(name).expect("installed native error kind");
+    env.realm()
+        .initialize_error_intrinsic(kind, function.clone(), prototype);
     let value = Value::Function(function);
     env.insert_realm(name.to_owned(), value.clone());
     if let Value::Object(global_object) = global_this {

@@ -9,12 +9,12 @@
 
 use super::super::vm::Vm;
 use super::super::vm_bindings::TypedLoopSloppyGlobalWrite;
-use crate::function::CallEnv;
 use crate::{ArrayRef, Property, RuntimeError, Value};
 
 pub(in crate::bytecode) trait LoopFrame {
     /// The environment calls and realm lookups made by the program use.
-    fn loop_env(&self) -> &CallEnv;
+    fn loop_context(&mut self) -> crate::context::Context<'_>;
+    fn loop_activation(&self) -> &crate::context::ActivationContext;
     /// Whether the frame evaluates direct eval code with a live operand
     /// stack, which no program may enter.
     fn direct_eval_with_stack(&self) -> bool;
@@ -34,6 +34,17 @@ pub(in crate::bytecode) trait LoopFrame {
     fn write_typed_loop_slot(&mut self, slot: usize, value: Value);
     fn load_global(&mut self, name: &str) -> Result<Value, RuntimeError>;
     fn global_this_own_property(&self, name: &str) -> Option<Property>;
+    /// Entry seeding/helper preparation may not execute a getter that would
+    /// then be replayed (or folded away) by the loop. Inherited/exotic routes
+    /// decline unless a separate pure proof exists; ordinary globals stay fast.
+    fn global_read_is_pure(&self, name: &str) -> bool {
+        name == "this"
+            || self.loop_activation().can_cache_realm_globals()
+                && self.loop_activation().is_global_lexical_binding(name)
+            || self
+                .global_this_own_property(name)
+                .is_some_and(|p| !p.is_accessor())
+    }
     /// Whether `array` uses the realm's `Array.prototype` and nothing on
     /// that chain has an own indexed property an element access could meet.
     fn array_access_is_plain(&mut self, array: &ArrayRef) -> bool;
@@ -61,9 +72,12 @@ pub(in crate::bytecode) trait LoopFrame {
     fn bytecode_op(&self, ip: usize) -> Option<&super::super::ir::Op>;
 }
 
-impl LoopFrame for Vm<'_> {
+impl LoopFrame for Vm<'_, '_> {
     #[inline]
-    fn loop_env(&self) -> &CallEnv {
+    fn loop_context(&mut self) -> crate::context::Context<'_> {
+        self.context()
+    }
+    fn loop_activation(&self) -> &crate::context::ActivationContext {
         &self.env
     }
 

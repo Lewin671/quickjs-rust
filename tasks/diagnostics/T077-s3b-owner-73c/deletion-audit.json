@@ -1,0 +1,38 @@
+{
+  "source": "73c93d8feb3b0e46b8aee581cf293ed2a6d953c8",
+  "base": "3cc12c6f8d93ffd6eae91d1bd44efe74134ae195",
+  "removed_identifiers_checked": [
+    "CallEnv",
+    "FrameBindings",
+    "FrameBindingValue",
+    "VmCallEnv",
+    "OwnedCallInputs",
+    "NativeContext",
+    "binding_snapshot",
+    "snapshot_locals",
+    "visible_local_entries",
+    "fork_current_frame_values",
+    "fork_deopt_bindings",
+    "apply_env",
+    "apply_call_env",
+    "creation_env",
+    "new_function_frame_with_capacity",
+    "new_direct_leaf_function_frame",
+    "empty_frame",
+    "shares_caller_environment",
+    "try_run_in_caller_env",
+    "environment_is_slot_only"
+  ],
+  "execution_identifier_hits": {},
+  "unchanged_against_main": [
+    "Cargo.toml",
+    "Cargo.lock",
+    "rust-toolchain.toml",
+    ".gitmodules",
+    "third_party",
+    "crates/qjs-runtime/src/value/layout",
+    "crates/qjs-runtime/src/bytecode/named_property_cache"
+  ],
+  "native_bound_variant_arms": 592,
+  "native_entry_source_sha256": "2850b6f382efade3ef6111e52682582163db7f1ef8675853adea4ae1305237db"
+}

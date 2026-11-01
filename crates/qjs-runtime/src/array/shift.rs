@@ -4,11 +4,10 @@ use super::{
     array_like::array_like_length,
     mutation::{delete_array_like_property_with_error, set_array_like_property_with_error},
 };
-use crate::CallEnv;
 
 pub(crate) fn native_array_prototype_shift(
     this_value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if matches!(this_value, Value::String(_)) {
         return Err(shift_length_error());
@@ -54,7 +53,7 @@ fn shift_set_property(
     receiver: Value,
     key: &str,
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<(), RuntimeError> {
     set_array_like_property_with_error(receiver, key.to_owned(), value, env, shift_property_error)
 }
@@ -62,12 +61,16 @@ fn shift_set_property(
 fn shift_delete_property(
     receiver: Value,
     key: &str,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<(), RuntimeError> {
     delete_array_like_property_with_error(receiver, key, env, shift_delete_error)
 }
 
-fn shift_set_length(receiver: Value, length: usize, env: &mut CallEnv) -> Result<(), RuntimeError> {
+fn shift_set_length(
+    receiver: Value,
+    length: usize,
+    env: &mut crate::context::Context<'_>,
+) -> Result<(), RuntimeError> {
     set_array_like_property_with_error(
         receiver,
         "length".to_owned(),

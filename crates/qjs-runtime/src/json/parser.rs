@@ -2,7 +2,6 @@
 mod objects;
 use std::{collections::HashMap, rc::Rc};
 
-use crate::CallEnv;
 use crate::value::OrderedDataPropertyBuilder;
 use crate::{
     ArrayRef, ObjectRef, Property, PropertyKey, RuntimeError, Value, object_prototype,
@@ -11,7 +10,7 @@ use crate::{
 
 pub(crate) fn native_json_parse(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let source = to_js_string_with_env(
         argument_values.first().cloned().unwrap_or(Value::Undefined),
@@ -54,7 +53,7 @@ fn internalize_json_property(
     name: &str,
     node: &JsonNode,
     reviver: &Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let value = crate::property_value(holder.clone(), name, env)?;
     internalize_json_property_with_value(holder, name, node, value, reviver, env)
@@ -66,7 +65,7 @@ fn internalize_json_property_with_value(
     node: &JsonNode,
     value: Value,
     reviver: &Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if is_object_like(&value) {
         if is_array_object(&value)? {
@@ -190,7 +189,7 @@ fn empty_node(value: Value) -> JsonNode {
     }
 }
 
-fn reviver_context(node: &JsonNode, env: &CallEnv) -> Value {
+fn reviver_context(node: &JsonNode, env: &crate::context::Context<'_>) -> Value {
     let context =
         ObjectRef::with_prototype(HashMap::new(), object_prototype(env), env.realm().atoms());
     if let Some(source) = &node.source {
@@ -204,7 +203,7 @@ fn reviver_context(node: &JsonNode, env: &CallEnv) -> Value {
 
 fn enumerable_own_string_keys(
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Vec<String>, RuntimeError> {
     let keys = match value.clone() {
         Value::Proxy(proxy) => crate::proxy::proxy_own_keys(proxy, env)?,
@@ -230,7 +229,7 @@ fn enumerable_own_string_keys(
 fn own_property_descriptor(
     value: Value,
     key: &PropertyKey,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Option<Property>, RuntimeError> {
     match value {
         Value::Proxy(proxy) => {
@@ -247,13 +246,17 @@ fn create_data_property(
     target: Value,
     key: PropertyKey,
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<(), RuntimeError> {
     crate::object::define_property_on_value_key(target, key, Property::enumerable(value), env)?;
     Ok(())
 }
 
-fn delete_property(target: Value, key: PropertyKey, env: &mut CallEnv) -> Result<(), RuntimeError> {
+fn delete_property(
+    target: Value,
+    key: PropertyKey,
+    env: &mut crate::context::Context<'_>,
+) -> Result<(), RuntimeError> {
     match target {
         Value::Object(object) => match key {
             PropertyKey::String(key) => object.delete_own_property(&key),
@@ -291,19 +294,28 @@ fn delete_property(target: Value, key: PropertyKey, env: &mut CallEnv) -> Result
     Ok(())
 }
 
-pub(crate) fn parse_json_text(source: &str, env: &CallEnv) -> Result<Value, RuntimeError> {
+pub(crate) fn parse_json_text(
+    source: &str,
+    env: &crate::context::Context<'_>,
+) -> Result<Value, RuntimeError> {
     JsonParser::new(source, env, JsonSourceMode::RuntimeWtf16)
         .parse::<false>()
         .map(|node| node.value)
 }
 
-pub(crate) fn parse_host_json_text(source: &str, env: &CallEnv) -> Result<Value, RuntimeError> {
+pub(crate) fn parse_host_json_text(
+    source: &str,
+    env: &crate::context::Context<'_>,
+) -> Result<Value, RuntimeError> {
     JsonParser::new(source, env, JsonSourceMode::HostUtf8)
         .parse::<false>()
         .map(|node| node.value)
 }
 
-fn parse_json_node(source: &str, env: &CallEnv) -> Result<JsonNode, RuntimeError> {
+fn parse_json_node(
+    source: &str,
+    env: &crate::context::Context<'_>,
+) -> Result<JsonNode, RuntimeError> {
     JsonParser::new(source, env, JsonSourceMode::RuntimeWtf16).parse::<true>()
 }
 
@@ -332,7 +344,8 @@ enum JsonStringScan {
 struct JsonParser<'a> {
     source: &'a str,
     cursor: usize,
-    env: &'a CallEnv,
+    realm: &'a crate::function::Realm,
+    prototype: Option<ObjectRef>,
     source_mode: JsonSourceMode,
     object_depth: usize,
     sequences: Vec<Option<Rc<crate::value::layout::Layout>>>,
@@ -348,11 +361,16 @@ struct JsonParser<'a> {
 const MAX_INTERNED_KEYS: usize = 256;
 
 impl<'a> JsonParser<'a> {
-    fn new(source: &'a str, env: &'a CallEnv, source_mode: JsonSourceMode) -> Self {
+    fn new(
+        source: &'a str,
+        env: &'a crate::context::Context<'_>,
+        source_mode: JsonSourceMode,
+    ) -> Self {
         Self {
             source,
             cursor: 0,
-            env,
+            realm: env.realm(),
+            prototype: object_prototype(env),
             source_mode,
             object_depth: 0,
             sequences: Vec::new(),
@@ -392,7 +410,7 @@ impl<'a> JsonParser<'a> {
         self.skip_whitespace();
         if self.consume_byte(b']') {
             return Ok(JsonNode {
-                value: Value::Array(ArrayRef::new(self.env.realm(), Vec::new())),
+                value: Value::Array(ArrayRef::new(self.realm, Vec::new())),
                 source: None,
                 children: children
                     .map(JsonNodeChildren::Array)
@@ -415,7 +433,7 @@ impl<'a> JsonParser<'a> {
             self.expect_byte(b',')?;
         }
         Ok(JsonNode {
-            value: Value::Array(ArrayRef::new(self.env.realm(), values)),
+            value: Value::Array(ArrayRef::new(self.realm, values)),
             source: None,
             children: children
                 .map(JsonNodeChildren::Array)
@@ -430,14 +448,14 @@ impl<'a> JsonParser<'a> {
         self.expect_byte(b'{')?;
         let mut properties = OrderedDataPropertyBuilder::with_prototype(
             0,
-            self.env.realm().atoms(),
-            object_prototype(self.env).map(crate::Prototype::Object),
+            self.realm.atoms(),
+            self.prototype.clone().map(crate::Prototype::Object),
         );
         let mut children = PRESERVE_METADATA.then(Vec::new);
         self.skip_whitespace();
         if self.consume_byte(b'}') {
             return Ok(JsonNode {
-                value: Value::Object(properties.finish(object_prototype(self.env))),
+                value: Value::Object(properties.finish(self.prototype.clone())),
                 source: None,
                 children: children
                     .map(JsonNodeChildren::Object)
@@ -467,7 +485,7 @@ impl<'a> JsonParser<'a> {
             self.expect_byte(b',')?;
         }
         Ok(JsonNode {
-            value: Value::Object(properties.finish(object_prototype(self.env))),
+            value: Value::Object(properties.finish(self.prototype.clone())),
             source: None,
             children: children
                 .map(JsonNodeChildren::Object)
@@ -792,12 +810,13 @@ mod tests {
     use super::*;
     use crate::function::new_realm;
 
-    fn test_env() -> CallEnv {
-        CallEnv::new(new_realm(HashMap::new()))
+    fn test_root() -> crate::context::HostRoot {
+        crate::context::HostRoot::new(new_realm(HashMap::new()))
     }
 
     fn scan(source: &str, mode: JsonSourceMode) -> JsonStringScan {
-        let env = test_env();
+        let mut root = test_root();
+        let env = root.context();
         JsonParser::new(source, &env, mode)
             .scan_string()
             .expect("test source starts with a quote")
@@ -886,7 +905,8 @@ mod tests {
 
     #[test]
     fn string_decoder_resumes_at_tail_errors_without_rescanning_prefix() {
-        let env = test_env();
+        let mut root = test_root();
+        let env = root.context();
         let trailing_escape = "\"long scanned prefix\\";
         let mut parser = JsonParser::new(trailing_escape, &env, JsonSourceMode::RuntimeWtf16);
         assert!(parser.string_value_rc().is_err());
@@ -908,7 +928,8 @@ mod tests {
 
     #[test]
     fn unescaped_string_fast_path_preserves_parsed_keys_and_values() {
-        let env = test_env();
+        let mut root = test_root();
+        let env = root.context();
         let value =
             parse_json_text(r#"{"文😀":"plain value"}"#, &env).expect("unescaped object parses");
         let Value::Object(value) = value else {
@@ -922,7 +943,8 @@ mod tests {
 
     #[test]
     fn ascii_syntax_scanning_never_steps_into_utf8_content() {
-        let env = test_env();
+        let mut root = test_root();
+        let env = root.context();
         assert!(parse_json_text(r#" { "文" : [ 12, "😀" ] } "#, &env).is_ok());
 
         let mut parser = JsonParser::new("12文", &env, JsonSourceMode::RuntimeWtf16);
@@ -934,7 +956,8 @@ mod tests {
     #[test]
     fn metadata_is_retained_only_for_the_reviver_parse_mode() {
         let source = r#"{"items":[1,"x",true,null]}"#;
-        let env = test_env();
+        let mut root = test_root();
+        let env = root.context();
 
         let plain = JsonParser::new(source, &env, JsonSourceMode::RuntimeWtf16)
             .parse::<false>()
@@ -958,7 +981,8 @@ mod tests {
 
     #[test]
     fn distinguishes_host_utf8_json_from_runtime_wtf16_json() {
-        let env = test_env();
+        let mut root = test_root();
+        let env = root.context();
         let host = parse_host_json_text("\"\u{F0000}\"", &env).expect("host JSON parses");
         let Value::String(host) = host else {
             panic!("host JSON string expected");

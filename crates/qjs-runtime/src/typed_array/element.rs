@@ -1,5 +1,3 @@
-use crate::CallEnv;
-
 use num_bigint::BigInt;
 
 use crate::{
@@ -20,7 +18,7 @@ use super::{
 pub(crate) fn coerce_element(
     native: NativeFunction,
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if is_big_int_kind(native) {
         return coerce_big_int_element(native, value, env);
@@ -58,7 +56,7 @@ fn coerce_number_for_storage(native: NativeFunction, number: f64) -> Option<f64>
 fn coerce_big_int_element(
     native: NativeFunction,
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let big = bigint::to_bigint(value, env)?;
     Ok(Value::bigint(wrap_big_int(native, big)))
@@ -287,7 +285,7 @@ pub(crate) fn set_indexed_element(
     object: &ObjectRef,
     key: &str,
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<IndexedWrite, RuntimeError> {
     let Some(number) = canonical_numeric_index(key) else {
         return Ok(IndexedWrite::NotIndexed);
@@ -327,7 +325,7 @@ pub(crate) fn set_integer_indexed_element(
     object: &ObjectRef,
     index: usize,
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<bool, RuntimeError> {
     if super::typed_array_buffer(object).is_some_and(|buffer| array_buffer::is_immutable(&buffer)) {
         return Ok(false);
@@ -383,7 +381,7 @@ pub(crate) fn define_indexed_element_value(
     object: &ObjectRef,
     key: &str,
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<IndexedDefine, RuntimeError> {
     let Some(number) = canonical_numeric_index(key) else {
         return Ok(IndexedDefine::NotIndexed);
@@ -406,7 +404,7 @@ pub(crate) fn define_indexed_property_descriptor(
     object: &ObjectRef,
     key: &str,
     descriptor: &PropertyDescriptor,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<IndexedDefine, RuntimeError> {
     let Some(number) = canonical_numeric_index(key) else {
         return Ok(IndexedDefine::NotIndexed);

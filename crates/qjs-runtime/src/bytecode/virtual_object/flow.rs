@@ -673,6 +673,9 @@ impl<'a> Analyzer<'a> {
             | Op::EndFinally
             | Op::DiscardPendingAbrupt
             | Op::NewClass { .. }
+            | Op::BeginClass
+            | Op::DefineClassElement { .. }
+            | Op::FinishClass
             | Op::SuperGet { .. }
             | Op::SuperReference
             | Op::SuperGetComputed
@@ -894,7 +897,6 @@ impl<'a> Analyzer<'a> {
 fn function_candidate_is_safe(op: &Op) -> bool {
     let Op::NewFunction {
         has_name_binding,
-        immutable_name_binding,
         params,
         lexical_captures,
         bytecode,
@@ -909,7 +911,6 @@ fn function_candidate_is_safe(op: &Op) -> bool {
     };
 
     !has_name_binding
-        && !immutable_name_binding
         && lexical_captures.is_empty()
         && bytecode.received_upvalue_slots().is_empty()
         && !lexical_this

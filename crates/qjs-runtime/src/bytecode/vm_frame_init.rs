@@ -11,89 +11,64 @@ use super::frame_program::FrameBytecode;
 use super::ir::Bytecode;
 use super::operand_stack::OperandStack;
 use super::vm::{ColdFrame, FrameState, Slot, Vm};
-use crate::{
-    GLOBAL_THIS_BINDING, ObjectRef, RuntimeError, Value,
-    function::{CallEnv, DynamicBindings, Realm, Upvalue},
-    initialize_builtins,
-};
-use std::collections::{HashMap, HashSet};
-use std::rc::Rc;
+use crate::{RuntimeError, Value, function::BindingCell};
 
-impl<'a> Vm<'a> {
-    pub(super) fn new(bytecode: &'a Bytecode) -> Result<Self, RuntimeError> {
-        let mut globals = HashMap::new();
-        let atoms = crate::property::atom::AtomDomain::new();
-        let global_this = Value::Object(ObjectRef::new(HashMap::new(), &atoms));
-        globals.insert("this".to_owned(), global_this.clone());
-        globals.insert(GLOBAL_THIS_BINDING.to_owned(), global_this.clone());
-        globals.insert("undefined".to_owned(), Value::Undefined);
-        // The realm cell is live before builtin installation: every `install_*`
-        // runs against a `CallEnv` over it and writes intrinsics straight to the
-        // shared cell (`insert_realm`), so no install-vs-runtime signature split
-        // is needed.
-        let realm: Realm = crate::function::new_realm_sharing_atoms(globals, atoms);
-        let mut env = CallEnv::new(Rc::clone(&realm));
-        initialize_builtins(&mut env, &global_this);
-        Self::initialize_script_global_bindings(bytecode, &realm)?;
-        realm.refresh_dynamic_function_realm_global();
-        Ok(Self::new_with_globals(bytecode, env))
+impl<'a, 's> Vm<'a, 's> {
+    pub(super) fn new(
+        bytecode: &'a Bytecode,
+        runtime: &'s mut crate::context::RuntimeServices,
+        env: crate::context::ActivationContext,
+    ) -> Result<Self, RuntimeError> {
+        Self::initialize_script_global_bindings(bytecode, env.realm())?;
+        Ok(Self::new_with_globals(bytecode, runtime, env))
     }
 
-    pub(super) fn new_with_globals(bytecode: &'a Bytecode, env: CallEnv) -> Self {
-        Self::new_with_globals_and_with_stack(bytecode, env, Vec::new())
-    }
-
-    pub(super) fn persist_global_lexical_bindings(&mut self) {
-        if !self.bytecode.is_global_scope() {
-            return;
-        }
-        let hoisted = self.bytecode.hoisted_local_names().collect::<HashSet<_>>();
-        let global_lexical_names = self.bytecode.global_lexical_names();
-        for (slot, local) in self.bytecode.locals.iter().enumerate() {
-            if hoisted.contains(local.name.as_str()) {
-                continue;
-            }
-            if !global_lexical_names.iter().any(|name| name == &local.name) {
-                continue;
-            }
-            let Some(_value) = self.local_slot_value(slot) else {
-                continue;
-            };
-            self.env.mark_global_lexical_binding(local.name.clone());
-            if !local.mutable {
-                self.env.mark_immutable_lexical_binding(local.name.clone());
-            }
-        }
+    pub(super) fn new_with_globals(
+        bytecode: &'a Bytecode,
+        runtime: &'s mut crate::context::RuntimeServices,
+        env: crate::context::ActivationContext,
+    ) -> Self {
+        Self::new_with_globals_and_with_stack(bytecode, runtime, env, Vec::new())
     }
 
     pub(super) fn new_with_globals_and_with_stack(
         bytecode: &'a Bytecode,
-        env: CallEnv,
+        runtime: &'s mut crate::context::RuntimeServices,
+        env: crate::context::ActivationContext,
         with_stack: Vec<Value>,
     ) -> Self {
-        Self::new_with_globals_upvalues_and_with_stack(bytecode, env, Vec::new(), with_stack)
+        Self::new_with_globals_upvalues_and_with_stack(
+            bytecode,
+            runtime,
+            env,
+            Vec::new(),
+            with_stack,
+        )
     }
 
     pub(super) fn new_with_globals_upvalues_and_with_stack(
         bytecode: &'a Bytecode,
-        env: CallEnv,
-        upvalues: Vec<Upvalue>,
+        runtime: &'s mut crate::context::RuntimeServices,
+        env: crate::context::ActivationContext,
+        upvalues: Vec<BindingCell>,
         with_stack: Vec<Value>,
     ) -> Self {
         Self::new_with_globals_upvalues_with_stack_and_direct_call_slots(
-            bytecode, env, upvalues, with_stack, None,
+            bytecode, runtime, env, upvalues, with_stack, None,
         )
     }
 
     pub(super) fn new_with_globals_upvalues_with_stack_and_direct_call_slots(
         bytecode: &'a Bytecode,
-        env: CallEnv,
-        upvalues: Vec<Upvalue>,
+        runtime: &'s mut crate::context::RuntimeServices,
+        env: crate::context::ActivationContext,
+        upvalues: Vec<BindingCell>,
         with_stack: Vec<Value>,
         direct_call_slots: Option<DirectCallSlots<'_>>,
     ) -> Self {
         Self::with_frame_bytecode(
             FrameBytecode::Borrowed(bytecode),
+            runtime,
             env,
             upvalues,
             with_stack,
@@ -110,14 +85,42 @@ impl<'a> Vm<'a> {
     /// borrow.
     pub(super) fn with_frame_bytecode(
         handle: FrameBytecode<'a>,
-        mut env: CallEnv,
-        upvalues: Vec<Upvalue>,
+        runtime: &'s mut crate::context::RuntimeServices,
+        mut env: crate::context::ActivationContext,
+        upvalues: Vec<BindingCell>,
         with_stack: Vec<Value>,
         direct_call_slots: Option<DirectCallSlots<'_>>,
-        positional_arguments: Option<&[Value]>,
+        call_inputs: Option<crate::function::CallInputs<'_>>,
     ) -> Self {
         crate::diagnostics::count!(nested_vm_constructions);
         let bytecode: &Bytecode = &handle;
+        if env.owner_kind().is_none() {
+            let saved = env.execution_state();
+            let kind = if bytecode.binding_plan.scopes[0].kind == crate::binding::ScopeKind::Module
+            {
+                crate::context::OwnerKind::Module
+            } else {
+                crate::context::OwnerKind::Script
+            };
+            let receiver = if kind == crate::context::OwnerKind::Module {
+                Value::Undefined
+            } else {
+                env.selected_global_this()
+                    .or_else(|| env.get("this"))
+                    .unwrap_or(Value::Undefined)
+            };
+            env.set_call_owner(crate::context::CallOwner::root(receiver, kind));
+            if saved.0 == crate::context::ExecutionMode::Eval {
+                env.set_execution_state(saved.0, saved.1);
+            }
+        }
+        let (mode, _) = env.execution_state();
+        if mode != crate::context::ExecutionMode::ClassKey {
+            env.set_execution_state(mode, bytecode.is_strict());
+        }
+        if bytecode.global_scope {
+            env.select_script_bindings();
+        }
         // `QJS_CF_TRACE=1` names the body behind every general-path frame, so
         // a histogram of these lines ranks the callees no compact tier runs.
         #[cfg(feature = "perf-counters")]
@@ -131,27 +134,56 @@ impl<'a> Vm<'a> {
                 eprintln!("CFVMCODE {:?}", bytecode.code);
             }
         }
-        if (bytecode.contains_direct_eval() || bytecode.contains_with())
-            && env.deopt_bindings().is_none()
-        {
-            env.set_deopt_bindings(DynamicBindings::new());
+        if bytecode.binding_plan.has_realm_lexicals {
+            for (slot, &lexical) in bytecode.binding_plan.realm_lexical_slots.iter().enumerate() {
+                if lexical && let Some(meta) = bytecode.binding_meta(slot) {
+                    env.declare_global_lexical(meta);
+                }
+            }
         }
         let realm = env.realm_rc();
         let module_host = env.module_host();
         let array_literal_prototype_override = env
             .has_dynamic_function_realm_global()
-            .then(|| crate::array_prototype(&env))
+            .then(|| {
+                crate::array_prototype(&crate::context::Context {
+                    runtime,
+                    activation: &mut env,
+                    native: None,
+                })
+            })
             .flatten();
-        #[cfg(feature = "agents")]
-        let agent_context = env.agent_context();
         let is_direct_call = direct_call_slots.is_some();
         let mut locals = if is_direct_call {
             Self::initial_direct_call_slots(bytecode)
         } else {
             Self::initial_slots(bytecode, &env)
         };
-        if let Some(arguments) = positional_arguments {
-            Self::seed_positional_arguments(bytecode.parameter_slots(), &mut locals, arguments);
+        if let Some(inputs) = call_inputs {
+            Self::seed_call_inputs(bytecode.parameter_slots(), &mut locals, inputs.arguments);
+            if let Some(slot) = bytecode.binding_plan.parameters.rest_slot {
+                let array = crate::ArrayRef::new(
+                    env.realm(),
+                    inputs
+                        .arguments
+                        .iter()
+                        .skip(inputs.function.params.positional.len())
+                        .cloned()
+                        .collect(),
+                );
+                if env.has_dynamic_function_realm_global()
+                    && let Some(prototype) = crate::array_prototype(&crate::context::Context {
+                        runtime,
+                        activation: &mut env,
+                        native: None,
+                    })
+                {
+                    array
+                        .set_prototype_slot(Some(crate::Prototype::Object(prototype)))
+                        .expect("fresh rest array accepts its realm prototype");
+                }
+                locals[slot] = Some(Value::Array(array));
+            }
         }
         let direct_upvalue_source = direct_call_slots
             .as_ref()
@@ -170,10 +202,10 @@ impl<'a> Vm<'a> {
                 .then(|| (owner.clone(), slots))
             })
             .map_or((None, 0), |(owner, slots)| (Some(owner), slots));
-        let direct_this = direct_call_slots.and_then(|direct_call_slots| {
-            Self::seed_direct_call_slots(bytecode, &mut locals, direct_call_slots)
-        });
-        let (local_upvalues, direct_realm_binding_slots) =
+        if let Some(direct_call_slots) = direct_call_slots {
+            Self::seed_direct_call_slots(&mut locals, direct_call_slots);
+        }
+        let (mut local_upvalues, direct_realm_binding_slots) =
             if direct_readonly_upvalue_owner.is_some() {
                 (
                     Vec::new(),
@@ -192,16 +224,43 @@ impl<'a> Vm<'a> {
                     None,
                 )
             };
+        if let Some(inputs) = call_inputs
+            && let Some(slot) = bytecode.binding_plan.arguments_slot
+        {
+            let recipe = crate::function::ArgumentsRecipe::prepare(
+                inputs,
+                bytecode,
+                &locals,
+                &mut local_upvalues,
+                &crate::context::Context {
+                    runtime,
+                    activation: &mut env,
+                    native: None,
+                },
+            );
+            local_upvalues[slot]
+                .as_ref()
+                .expect("arguments cell route")
+                .initialize_arguments(recipe)
+                .expect("fresh arguments binding");
+        }
+        // A cell route owns the value; slots never retain a second copy.
+        for (slot, cell) in local_upvalues.iter().enumerate() {
+            if cell.is_some() {
+                locals[slot] = None;
+            }
+        }
         let authoritative_slots =
             Self::initial_authoritative_slots(bytecode, &local_upvalues, &env)
                 & !direct_readonly_upvalue_slots;
+        let realm_binding_generation = env.realm().binding_cells().generation();
         let realm_binding_slots = direct_realm_binding_slots
             .unwrap_or_else(|| Self::initial_realm_binding_slots(bytecode, &local_upvalues, &env));
         // Ordinary function creation captures these runtime-only contexts.
         // The data-only variant keeps object/array SRA available while leaving
         // function literals materialized in a frame that needs those captures.
-        let virtual_function_context_safe = env.deopt_bindings().is_none()
-            && env.immutable_function_name().is_none()
+        let virtual_function_context_safe = env.scope_cursor().is_none()
+            && !bytecode.has_dynamic_scope_tree()
             && with_stack.is_empty();
         // Keep cold virtual candidates allocation-free. Their first
         // initializer grows this bank only as far as the candidate needs.
@@ -209,14 +268,21 @@ impl<'a> Vm<'a> {
         let stack = OperandStack::new(bytecode);
         let cold =
             (!with_stack.is_empty() || array_literal_prototype_override.is_some()).then(|| {
+                crate::diagnostics::count!(cold_frame_allocations);
                 Box::new(ColdFrame {
                     with_stack,
                     array_literal_prototype_override,
                     ..ColdFrame::default()
                 })
             });
-        Self {
+        let mut vm = Self {
+            runtime,
             current: FrameState {
+                slow_flags: 0,
+                reference_hooks: !handle.binding_plan.references.can_skip(&env),
+                active_reference_count: 0,
+                binding_scope: None,
+                scope_instances: Default::default(),
                 bytecode: handle,
                 ip: 0,
                 declined_typed_loop_programs: 0,
@@ -229,13 +295,12 @@ impl<'a> Vm<'a> {
                 direct_readonly_upvalue_slots,
                 authoritative_slots,
                 realm_binding_slots,
+                realm_binding_generation,
                 upvalues,
                 env,
-                direct_this,
+                indexed_call: is_direct_call,
                 realm,
                 module_host,
-                #[cfg(feature = "agents")]
-                agent_context,
                 stop_at_prologue: false,
                 array_prototype_cache: None,
                 object_prototype_cache: None,
@@ -245,37 +310,31 @@ impl<'a> Vm<'a> {
             },
             callers: Vec::new(),
             pending_frame_entry: None,
-        }
+        };
+        let scope = vm
+            .bytecode
+            .binding_plan
+            .pc_scopes
+            .first()
+            .copied()
+            .unwrap_or(crate::binding::ScopeId(0));
+        vm.force_binding_exposure(scope);
+        vm.verify_binding_authority();
+        vm
     }
 
     pub(super) fn seed_direct_call_slots(
-        bytecode: &Bytecode,
         locals: &mut [Slot],
         direct_call_slots: DirectCallSlots<'_>,
-    ) -> Option<Value> {
-        let direct_this = if let Some(this_value) = direct_call_slots.this_value {
-            if let Some(slot) = bytecode.this_slot() {
-                locals[slot] = Some(this_value);
-                None
-            } else {
-                Some(this_value)
-            }
-        } else {
-            None
-        };
-        Self::seed_positional_arguments(
+    ) {
+        Self::seed_call_inputs(
             direct_call_slots.parameter_slots,
             locals,
             direct_call_slots.arguments,
         );
-        direct_this
     }
 
-    fn seed_positional_arguments(
-        parameter_slots: &[usize],
-        locals: &mut [Slot],
-        arguments: &[Value],
-    ) {
+    fn seed_call_inputs(parameter_slots: &[usize], locals: &mut [Slot], arguments: &[Value]) {
         for (index, &slot) in parameter_slots.iter().enumerate() {
             let value = arguments.get(index).cloned().unwrap_or(Value::Undefined);
             locals[slot] = Some(value);
@@ -291,214 +350,6 @@ impl<'a> Vm<'a> {
         }
         locals
     }
-
-    /// Builds a `CallEnv` over the shared realm with this frame's live slots.
-    pub(super) fn frame_call_env(&self) -> CallEnv {
-        let deopt_bindings = self.frame_deopt_bindings();
-        let mut env = self.attach_host(self.env.fork_current_frame_values());
-        for index in 0..self.locals.len() {
-            if self.bytecode.local_is_compiler_temporary(index)
-                || self.bytecode.local_is_sloppy_global_fallback(index)
-                || (self.bytecode.is_global_scope()
-                    && self.bytecode.local_is_body_hoist_only(index)
-                    && !self.bytecode.local_is_compiler_temporary(index))
-            {
-                continue;
-            }
-            if let Some(value) = self.local_slot_value(index) {
-                let name = self.bytecode.locals[index].name.clone();
-                if name == "this" && env.derived_this_cell().is_some() {
-                    continue;
-                }
-                // Slots are emitted in lexical declaration order. Inserting every
-                // active slot under its source name therefore makes an inner
-                // shadowing binding replace the outer entry, while an exited
-                // block's cleared slot never wins. Slot identity, not a mangled
-                // name, remains authoritative for ordinary bytecode access.
-                env.insert(name, value);
-            }
-        }
-        for index in 0..self.locals.len() {
-            let Some(upvalue) = self.local_upvalue_cell(index) else {
-                continue;
-            };
-            if self.bytecode.local_is_compiler_temporary(index)
-                || self.bytecode.local_is_sloppy_global_fallback(index)
-                || (self.bytecode.is_global_scope()
-                    && self.bytecode.local_is_body_hoist_only(index)
-                    && !self.bytecode.local_is_compiler_temporary(index))
-            {
-                continue;
-            }
-            if self.locals.get(index).is_some_and(Option::is_some)
-                || self.bytecode.locals[index].is_received_upvalue()
-            {
-                if self.bytecode.locals[index].name == "this" && env.derived_this_cell().is_some() {
-                    continue;
-                }
-                env.insert_frame_cell(self.bytecode.locals[index].name.clone(), upvalue.clone());
-            }
-        }
-        for (index, slot) in self.locals.iter().enumerate() {
-            if slot.is_some() && self.bytecode.locals[index].catch_binding {
-                env.mark_catch_binding(self.bytecode.locals[index].name.clone());
-            }
-        }
-        env.clear_direct_eval_var_conflicts();
-        let in_parameter_prologue = self.in_parameter_prologue();
-        for (index, local) in self.bytecode.locals.iter().enumerate() {
-            if self.bytecode.local_is_compiler_temporary(index) {
-                continue;
-            }
-            if in_parameter_prologue && local.parameter {
-                env.mark_direct_eval_var_conflict(local.name.clone());
-                continue;
-            }
-            if local.hoisted {
-                continue;
-            }
-            let active_lexical = self.locals.get(index).is_some_and(Option::is_some);
-            if active_lexical {
-                env.mark_direct_eval_var_conflict(local.name.clone());
-            }
-        }
-        env.set_private_environment(self.current_private_environment());
-        if let Some(bindings) = deopt_bindings {
-            env.set_deopt_bindings(bindings);
-        }
-        env
-    }
-
-    pub(super) fn frame_deopt_bindings(&self) -> Option<DynamicBindings> {
-        let bindings = self.env.deopt_bindings()?.clone();
-        self.for_each_deopt_overlay_cell(|slot, upvalue| {
-            bindings.overlay_cell(&self.bytecode.locals[slot].name, upvalue);
-        });
-        Some(bindings)
-    }
-
-    /// Each live frame cell `frame_deopt_bindings` overlays, with its slot,
-    /// in overlay order.
-    fn for_each_deopt_overlay_cell(&self, mut visit: impl FnMut(usize, &Upvalue)) {
-        for (slot, local) in self.bytecode.locals.iter().enumerate() {
-            if self.bytecode.local_is_compiler_temporary(slot)
-                || local.sloppy_global_fallback
-                || (self.bytecode.is_global_scope()
-                    && self.bytecode.local_is_body_hoist_only(slot)
-                    && !self.bytecode.local_is_compiler_temporary(slot))
-            {
-                continue;
-            }
-            if self.locals.get(slot).is_none_or(Option::is_none)
-                && !(self.in_parameter_prologue() && local.from_env)
-            {
-                continue;
-            }
-            if let Some(upvalue) = self.local_upvalue_cell(slot) {
-                visit(slot, upvalue);
-            }
-        }
-    }
-
-    /// How a function literal this frame evaluates may treat the frame's
-    /// dynamic scope `bindings`. Without it, the closure is called through
-    /// the slot-seeded direct path and the compact tiers, which host no
-    /// dynamic scope.
-    ///
-    /// The closure must not reach the scope another way -- no `eval` or
-    /// `with`, no nested function to hand it on, its own `this` and
-    /// `arguments` -- and nothing it resolves by name may be in the scope
-    /// now. Then:
-    ///
-    /// - In a direct eval's top-level code with no `eval` or `with` of its
-    ///   own, the scope is a fork only that code writes, and its `var`s are
-    ///   in it from the start: no name can appear later, so the closure drops
-    ///   it (`Drop`). A formatter assigned in eval'd source, `format0 =
-    ///   function () { return this.getFullYear() + ... }`, is the case.
-    /// - In a function body that has a direct `eval`, a later `eval` there
-    ///   can add a `var` the closure would then have to see, so the closure
-    ///   keeps the scope but bypasses it until the scope next changes which
-    ///   names it binds (`Bypass`; `DynamicBindings::bypass`). A frame that
-    ///   can suspend is left alone: its `eval` could run while one of these
-    ///   closures is mid-call. Helper closures created inside a function
-    ///   that also calls `eval` are the case.
-    pub(super) fn closure_scope_use(
-        &self,
-        closure: &Bytecode,
-        inherits_frame: bool,
-        bindings: &DynamicBindings,
-    ) -> ClosureScopeUse {
-        let frame: &Bytecode = &self.bytecode;
-        if inherits_frame
-            || !self.with_stack().is_empty()
-            || frame.contains_with()
-            || closure.contains_direct_eval()
-            || closure.contains_with()
-            || closure.creates_closures()
-            || closure
-                .names_resolved_by_name()
-                .any(|name| name != "this" && bindings.contains_key(name))
-        {
-            return ClosureScopeUse::Keep;
-        }
-        if frame.is_direct_eval_code() {
-            return if frame.contains_direct_eval() {
-                ClosureScopeUse::Keep
-            } else {
-                ClosureScopeUse::Drop
-            };
-        }
-        if frame.is_global_scope() || frame.suspends() {
-            return ClosureScopeUse::Keep;
-        }
-        ClosureScopeUse::Bypass
-    }
-
-    /// `frame_deopt_bindings` for a frame that asks repeatedly -- every
-    /// closure a body with a direct `eval` creates. The overlay is skipped
-    /// when it would change nothing: the environment is the one last
-    /// overlaid, no name has been remapped since (its generation), and the
-    /// frame would overlay exactly the same cells in the same order. The
-    /// check walks the frame's locals but hashes no name, where the overlay
-    /// hashes every one.
-    pub(super) fn frame_deopt_bindings_memoized(&mut self) -> Option<DynamicBindings> {
-        let bindings = self.env.deopt_bindings()?.clone();
-        if let Some(memo) = self
-            .current
-            .cold()
-            .and_then(|cold| cold.deopt_overlay_memo.as_ref())
-            && memo.bindings == bindings.identity()
-            && memo.generation == bindings.generation()
-        {
-            let mut expected = memo.cells.iter();
-            let mut same = true;
-            self.for_each_deopt_overlay_cell(|slot, upvalue| {
-                same &= expected.next() == Some(&(slot, upvalue.identity()));
-            });
-            if same && expected.next().is_none() {
-                return Some(bindings);
-            }
-        }
-        let mut cells = Vec::new();
-        self.for_each_deopt_overlay_cell(|slot, upvalue| {
-            bindings.overlay_cell(&self.bytecode.locals[slot].name, upvalue);
-            cells.push((slot, upvalue.identity()));
-        });
-        self.current.cold_mut().deopt_overlay_memo = Some(super::vm::DeoptOverlayMemo {
-            bindings: bindings.identity(),
-            generation: bindings.generation(),
-            cells,
-        });
-        Some(bindings)
-    }
-}
-
-/// What a new closure does with its creating frame's dynamic scope
-/// (`Vm::closure_scope_use`).
-pub(super) enum ClosureScopeUse {
-    Keep,
-    Drop,
-    Bypass,
 }
 
 #[cfg(test)]
@@ -523,10 +374,14 @@ mod tests {
         }
     }
 
-    use crate::function::new_realm;
+    use crate::function::{DynamicBindings, new_realm};
+    use std::collections::HashMap;
 
-    fn empty_env() -> CallEnv {
-        CallEnv::new(new_realm(HashMap::new()))
+    fn empty_env() -> crate::context::ActivationContext {
+        crate::context::ActivationContext::new(
+            crate::context::CreationContext::root(new_realm(HashMap::new())),
+            crate::context::ExecutionMode::Function,
+        )
     }
 
     #[test]
@@ -549,7 +404,7 @@ mod tests {
     fn direct_captured_frame_keeps_received_upvalue_storage() {
         let bytecode = Bytecode::new(Vec::new(), vec![local("captured", true)], Vec::new());
         let env = empty_env();
-        let captured = Upvalue::new(Value::Number(42.0));
+        let captured = BindingCell::new(Value::Number(42.0));
 
         let (local_upvalues, realm_binding_slots) =
             Vm::initial_direct_local_upvalues(&bytecode, std::slice::from_ref(&captured), 0, &env);
@@ -570,7 +425,10 @@ mod tests {
             "captured".to_owned(),
             Value::Number(42.0),
         )]));
-        let env = CallEnv::new(realm);
+        let env = crate::context::ActivationContext::new(
+            crate::context::CreationContext::root(realm),
+            crate::context::ExecutionMode::Function,
+        );
         let captured = env.realm_binding_cell("captured").unwrap();
 
         let (local_upvalues, realm_binding_slots) =
@@ -600,13 +458,15 @@ mod tests {
             .received_upvalue_slots()
             .first()
             .expect("function should receive captured cell");
+        let activation = empty_env();
+        let mut runtime = crate::context::RuntimeServices::for_realm(activation.realm());
         let mut vm = Vm::new_with_globals_upvalues_with_stack_and_direct_call_slots(
             bytecode,
-            empty_env(),
+            &mut runtime,
+            activation,
             Vec::new(),
             Vec::new(),
             Some(DirectCallSlots {
-                this_value: None,
                 parameter_slots: bytecode.parameter_slots(),
                 arguments: &[],
                 upvalues: DirectCallUpvalues::Function(&function),
@@ -629,8 +489,8 @@ mod tests {
     }
 
     #[test]
-    fn direct_module_frame_keeps_import_cell_storage() {
-        let bytecode = Bytecode::new(Vec::new(), vec![local("imported", false)], Vec::new());
+    fn direct_import_capture_keeps_canonical_cell_storage() {
+        let bytecode = Bytecode::new(Vec::new(), vec![local("imported", true)], Vec::new());
         let mut env = empty_env();
         let exports = DynamicBindings::new();
         exports.insert("exported".to_owned(), Value::Number(7.0));
@@ -654,6 +514,26 @@ mod tests {
     }
 
     #[test]
+    fn direct_frame_import_homonyms_preserve_own_and_received_routes() {
+        let mut env = empty_env();
+        let exports = DynamicBindings::new();
+        exports.insert("exported".into(), Value::Number(7.0));
+        env.set_module_import("name".into(), exports, "exported".into());
+        let mut parameter = local("name", true);
+        parameter.parameter = true;
+        for own in [local("name", false), parameter] {
+            let bytecode = Bytecode::new(Vec::new(), vec![own], Vec::new());
+            let (cells, _) = Vm::initial_direct_local_upvalues(&bytecode, &[], 0, &env);
+            assert!(cells[0].is_none(), "own binding cannot become an import");
+        }
+        let bytecode = Bytecode::new(Vec::new(), vec![local("name", true)], Vec::new());
+        let captured = BindingCell::new(Value::Number(42.0));
+        let (cells, _) =
+            Vm::initial_direct_local_upvalues(&bytecode, std::slice::from_ref(&captured), 0, &env);
+        assert!(cells[0].as_ref().unwrap().ptr_eq(&captured));
+    }
+
+    #[test]
     fn top_level_loop_compiler_temporaries_stay_frame_private() {
         let script = qjs_parser::parse_script(
             "function addOne(value) { return value + 1; } var limit = 4, checksum = 0; for (var index = 0; index < limit; index++) checksum += addOne(index);",
@@ -667,7 +547,9 @@ mod tests {
                 .hoisted_local_names()
                 .all(|name| !name.starts_with("\0\0"))
         );
-        let vm = Vm::new(&bytecode).expect("top-level VM should initialize");
+        let (mut vm_services, vm_activation) = crate::context::HostRoot::script().into_parts();
+        let vm = Vm::new(&bytecode, &mut vm_services, vm_activation)
+            .expect("top-level VM should initialize");
         for (slot, local) in bytecode.locals.iter().enumerate() {
             if !local.compiler_temporary {
                 continue;

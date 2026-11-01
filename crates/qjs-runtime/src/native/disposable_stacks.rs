@@ -1,10 +1,10 @@
 //! Operation entries for disposable stacks; bound once when a native is created.
 
 use super::CallInfo;
-use crate::{CallEnv, RuntimeError, Value, disposable_stack};
+use crate::{RuntimeError, Value, disposable_stack};
 
 pub(super) fn async_disposable_stack(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -12,7 +12,7 @@ pub(super) fn async_disposable_stack(
 }
 
 pub(super) fn async_disposable_stack_prototype_adopt(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -23,7 +23,7 @@ pub(super) fn async_disposable_stack_prototype_adopt(
 }
 
 pub(super) fn async_disposable_stack_prototype_defer(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -34,7 +34,7 @@ pub(super) fn async_disposable_stack_prototype_defer(
 }
 
 pub(super) fn async_disposable_stack_prototype_disposed(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -42,7 +42,7 @@ pub(super) fn async_disposable_stack_prototype_disposed(
 }
 
 pub(super) fn async_disposable_stack_prototype_dispose_async(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -53,7 +53,7 @@ pub(super) fn async_disposable_stack_prototype_dispose_async(
 }
 
 pub(super) fn async_disposable_stack_prototype_move(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -61,7 +61,7 @@ pub(super) fn async_disposable_stack_prototype_move(
 }
 
 pub(super) fn async_disposable_stack_prototype_use(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -73,7 +73,7 @@ pub(super) fn async_disposable_stack_prototype_use(
 }
 
 pub(super) fn disposable_stack(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -81,7 +81,7 @@ pub(super) fn disposable_stack(
 }
 
 pub(super) fn disposable_stack_prototype_adopt(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -92,7 +92,7 @@ pub(super) fn disposable_stack_prototype_adopt(
 }
 
 pub(super) fn disposable_stack_prototype_defer(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -103,7 +103,7 @@ pub(super) fn disposable_stack_prototype_defer(
 }
 
 pub(super) fn disposable_stack_prototype_disposed(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -111,7 +111,7 @@ pub(super) fn disposable_stack_prototype_disposed(
 }
 
 pub(super) fn disposable_stack_prototype_dispose(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -119,7 +119,7 @@ pub(super) fn disposable_stack_prototype_dispose(
 }
 
 pub(super) fn disposable_stack_prototype_move(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -127,7 +127,7 @@ pub(super) fn disposable_stack_prototype_move(
 }
 
 pub(super) fn disposable_stack_prototype_use(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {

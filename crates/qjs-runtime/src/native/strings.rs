@@ -1,10 +1,10 @@
 //! Operation entries for strings; bound once when a native is created.
 
 use super::CallInfo;
-use crate::{CallEnv, RuntimeError, Value, string};
+use crate::{RuntimeError, Value, string};
 
 pub(super) fn string(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -18,7 +18,7 @@ pub(super) fn string(
 }
 
 pub(super) fn string_from_char_code(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -26,7 +26,7 @@ pub(super) fn string_from_char_code(
 }
 
 pub(super) fn string_from_code_point(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -34,7 +34,7 @@ pub(super) fn string_from_code_point(
 }
 
 pub(super) fn string_raw(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -42,7 +42,7 @@ pub(super) fn string_raw(
 }
 
 pub(super) fn string_prototype_at(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -50,7 +50,7 @@ pub(super) fn string_prototype_at(
 }
 
 pub(super) fn string_prototype_anchor(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -63,7 +63,7 @@ pub(super) fn string_prototype_anchor(
 }
 
 pub(super) fn string_prototype_big(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -76,7 +76,7 @@ pub(super) fn string_prototype_big(
 }
 
 pub(super) fn string_prototype_blink(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -89,7 +89,7 @@ pub(super) fn string_prototype_blink(
 }
 
 pub(super) fn string_prototype_bold(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -102,7 +102,7 @@ pub(super) fn string_prototype_bold(
 }
 
 pub(super) fn string_prototype_char_at(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -110,7 +110,7 @@ pub(super) fn string_prototype_char_at(
 }
 
 pub(super) fn string_prototype_char_code_at(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -118,7 +118,7 @@ pub(super) fn string_prototype_char_code_at(
 }
 
 pub(super) fn string_prototype_code_point_at(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -126,7 +126,7 @@ pub(super) fn string_prototype_code_point_at(
 }
 
 pub(super) fn string_prototype_concat(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -134,7 +134,7 @@ pub(super) fn string_prototype_concat(
 }
 
 pub(super) fn string_prototype_ends_with(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -142,7 +142,7 @@ pub(super) fn string_prototype_ends_with(
 }
 
 pub(super) fn string_prototype_fixed(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -155,7 +155,7 @@ pub(super) fn string_prototype_fixed(
 }
 
 pub(super) fn string_prototype_fontcolor(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -168,7 +168,7 @@ pub(super) fn string_prototype_fontcolor(
 }
 
 pub(super) fn string_prototype_fontsize(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -181,7 +181,7 @@ pub(super) fn string_prototype_fontsize(
 }
 
 pub(super) fn string_prototype_includes(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -189,7 +189,7 @@ pub(super) fn string_prototype_includes(
 }
 
 pub(super) fn string_prototype_index_of(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -197,7 +197,7 @@ pub(super) fn string_prototype_index_of(
 }
 
 pub(super) fn string_prototype_italics(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -210,7 +210,7 @@ pub(super) fn string_prototype_italics(
 }
 
 pub(super) fn string_prototype_iterator(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -218,7 +218,7 @@ pub(super) fn string_prototype_iterator(
 }
 
 pub(super) fn string_iterator_prototype_next(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -226,7 +226,7 @@ pub(super) fn string_iterator_prototype_next(
 }
 
 pub(super) fn string_prototype_is_well_formed(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -234,7 +234,7 @@ pub(super) fn string_prototype_is_well_formed(
 }
 
 pub(super) fn string_prototype_last_index_of(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -242,7 +242,7 @@ pub(super) fn string_prototype_last_index_of(
 }
 
 pub(super) fn string_prototype_link(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -255,7 +255,7 @@ pub(super) fn string_prototype_link(
 }
 
 pub(super) fn string_prototype_locale_compare(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -263,7 +263,7 @@ pub(super) fn string_prototype_locale_compare(
 }
 
 pub(super) fn string_prototype_match(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -271,7 +271,7 @@ pub(super) fn string_prototype_match(
 }
 
 pub(super) fn string_prototype_match_all(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -279,7 +279,7 @@ pub(super) fn string_prototype_match_all(
 }
 
 pub(super) fn string_prototype_normalize(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -287,7 +287,7 @@ pub(super) fn string_prototype_normalize(
 }
 
 pub(super) fn string_prototype_pad_end(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -300,7 +300,7 @@ pub(super) fn string_prototype_pad_end(
 }
 
 pub(super) fn string_prototype_pad_start(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -313,7 +313,7 @@ pub(super) fn string_prototype_pad_start(
 }
 
 pub(super) fn string_prototype_repeat(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -321,7 +321,7 @@ pub(super) fn string_prototype_repeat(
 }
 
 pub(super) fn string_prototype_replace(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -329,7 +329,7 @@ pub(super) fn string_prototype_replace(
 }
 
 pub(super) fn string_prototype_replace_all(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -337,7 +337,7 @@ pub(super) fn string_prototype_replace_all(
 }
 
 pub(super) fn string_prototype_search(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -345,7 +345,7 @@ pub(super) fn string_prototype_search(
 }
 
 pub(super) fn string_prototype_slice(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -353,7 +353,7 @@ pub(super) fn string_prototype_slice(
 }
 
 pub(super) fn string_prototype_small(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -366,7 +366,7 @@ pub(super) fn string_prototype_small(
 }
 
 pub(super) fn string_prototype_split(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -374,7 +374,7 @@ pub(super) fn string_prototype_split(
 }
 
 pub(super) fn string_prototype_starts_with(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -382,7 +382,7 @@ pub(super) fn string_prototype_starts_with(
 }
 
 pub(super) fn string_prototype_strike(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -395,7 +395,7 @@ pub(super) fn string_prototype_strike(
 }
 
 pub(super) fn string_prototype_substr(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -403,7 +403,7 @@ pub(super) fn string_prototype_substr(
 }
 
 pub(super) fn string_prototype_substring(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -411,7 +411,7 @@ pub(super) fn string_prototype_substring(
 }
 
 pub(super) fn string_prototype_sub(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -424,7 +424,7 @@ pub(super) fn string_prototype_sub(
 }
 
 pub(super) fn string_prototype_sup(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -437,7 +437,7 @@ pub(super) fn string_prototype_sup(
 }
 
 pub(super) fn string_prototype_to_lower_case(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -445,7 +445,7 @@ pub(super) fn string_prototype_to_lower_case(
 }
 
 pub(super) fn string_prototype_to_locale_lower_case(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -453,7 +453,7 @@ pub(super) fn string_prototype_to_locale_lower_case(
 }
 
 pub(super) fn string_prototype_to_locale_upper_case(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -461,7 +461,7 @@ pub(super) fn string_prototype_to_locale_upper_case(
 }
 
 pub(super) fn string_prototype_trim(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -469,7 +469,7 @@ pub(super) fn string_prototype_trim(
 }
 
 pub(super) fn string_prototype_trim_end(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -477,7 +477,7 @@ pub(super) fn string_prototype_trim_end(
 }
 
 pub(super) fn string_prototype_trim_start(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -485,7 +485,7 @@ pub(super) fn string_prototype_trim_start(
 }
 
 pub(super) fn string_prototype_to_string(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -493,7 +493,7 @@ pub(super) fn string_prototype_to_string(
 }
 
 pub(super) fn string_prototype_value_of(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -501,7 +501,7 @@ pub(super) fn string_prototype_value_of(
 }
 
 pub(super) fn string_prototype_to_upper_case(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -509,7 +509,7 @@ pub(super) fn string_prototype_to_upper_case(
 }
 
 pub(super) fn string_prototype_to_well_formed(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {

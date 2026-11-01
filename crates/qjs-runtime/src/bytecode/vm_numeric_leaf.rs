@@ -10,9 +10,12 @@
 //!
 //! The `Math` and number helpers at the end are shared with other tiers.
 
+mod effects;
+pub(super) use effects::try_eval_pure_numeric_leaf;
+
 use qjs_ast::{BinaryOp, FunctionParams, UpdateOp};
 
-use crate::{NativeFunction, Value, function::Upvalue};
+use crate::{NativeFunction, Value, function::BindingCell};
 
 use super::ir::{Bytecode, Op};
 
@@ -106,6 +109,9 @@ pub(super) struct GeneralNumericLeafPlan {
     shortcut: Option<NumericLeafShortcut>,
     hoisted_slots: u32,
     writes_received_upvalues: bool,
+    /// No op writes a received cell, so the body may be probed or retried
+    /// (`effects`); decided once here rather than rescanned per call.
+    pure: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -306,11 +312,13 @@ impl NumericLeafPlan {
                     {
                         return Some(Self::NumberOnly(program));
                     }
+                    let pure = effects::ops_are_pure(&ops);
                     return Some(Self::General(GeneralNumericLeafPlan {
                         ops,
                         shortcut,
                         hoisted_slots,
                         writes_received_upvalues,
+                        pure,
                     }));
                 }
                 _ => return None,
@@ -406,7 +414,8 @@ impl NumericLeafShortcut {
         None
     }
 
-    fn eval(&self, arguments: &[Value], upvalues: &[Upvalue]) -> Option<Value> {
+    #[inline]
+    fn eval(&self, arguments: &[Value], upvalues: &[BindingCell]) -> Option<Value> {
         if let Self::Constant(value) = self {
             return value.into_value();
         }
@@ -420,7 +429,7 @@ impl NumericLeafShortcut {
             upvalues.get(index)?.with_value(|value| match value {
                 Value::Number(value) => Some(*value),
                 _ => None,
-            })
+            })?
         };
         match self {
             // Handled above, before the numeric accessors.
@@ -475,7 +484,10 @@ impl NumericLeafShortcut {
             } => {
                 let value = direct_number_binary(upvalue_number(*upvalue_index)?, *op, *right)?
                     .into_value()?;
-                upvalues.get(*upvalue_index)?.set(value.clone());
+                upvalues
+                    .get(*upvalue_index)?
+                    .assign(value.clone(), true)
+                    .ok()?;
                 Some(value)
             }
         }
@@ -754,7 +766,7 @@ pub(super) fn has_number_only_leaf(bytecode: &Bytecode) -> bool {
 pub(super) fn eval_number_only_leaf(
     bytecode: &Bytecode,
     params: &FunctionParams,
-    upvalues: &[Upvalue],
+    upvalues: &[BindingCell],
     arguments: &[f64],
 ) -> Option<f64> {
     let Some(Some(NumericLeafPlan::NumberOnly(program))) = bytecode.numeric_leaf_plan.get() else {
@@ -778,12 +790,23 @@ pub(crate) fn try_eval_numeric_leaf(
     bytecode: &Bytecode,
     params: &FunctionParams,
     arguments: &[Value],
-    upvalues: &[Upvalue],
+    upvalues: &[BindingCell],
 ) -> Option<Value> {
     let plan = bytecode
         .numeric_leaf_plan
         .get_or_init(|| NumericLeafPlan::compile(bytecode))
         .as_ref()?;
+    eval_numeric_leaf_plan(plan, bytecode, params, arguments, upvalues)
+}
+
+#[inline]
+fn eval_numeric_leaf_plan(
+    plan: &NumericLeafPlan,
+    bytecode: &Bytecode,
+    params: &FunctionParams,
+    arguments: &[Value],
+    upvalues: &[BindingCell],
+) -> Option<Value> {
     let NumericLeafPlan::General(plan) = plan else {
         let NumericLeafPlan::NumberOnly(program) = plan else {
             unreachable!("numeric leaf plan variants are exhaustive");
@@ -834,7 +857,7 @@ pub(crate) fn try_eval_numeric_leaf(
         return None;
     }
     for (&slot, upvalue) in received_upvalue_slots.iter().zip(upvalues) {
-        locals[slot] = upvalue.with_value(FastValue::from_value)?;
+        locals[slot] = upvalue.with_value(FastValue::from_value)??;
     }
 
     let mut assigned_upvalues = 0_u32;
@@ -917,7 +940,10 @@ pub(crate) fn try_eval_numeric_leaf(
                 };
                 let value = direct_number_binary(left, *op, *right)?;
                 let value = value.into_value()?;
-                upvalues.get(*upvalue_index)?.set(value.clone());
+                upvalues
+                    .get(*upvalue_index)?
+                    .assign(value.clone(), true)
+                    .ok()?;
                 return Some(value);
             }
             FastOp::Return => {
@@ -941,7 +967,7 @@ fn try_eval_numeric_leaf_bytecode(
     bytecode: &Bytecode,
     params: &FunctionParams,
     arguments: &[Value],
-    upvalues: &[Upvalue],
+    upvalues: &[BindingCell],
 ) -> Option<Value> {
     let mut locals = [FastValue::Uninitialized; MAX_FAST_LOCALS];
     for (slot, local) in bytecode.locals.iter().enumerate() {
@@ -963,7 +989,7 @@ fn try_eval_numeric_leaf_bytecode(
         return None;
     }
     for (&slot, upvalue) in received_upvalue_slots.iter().zip(upvalues) {
-        locals[slot] = upvalue.with_value(FastValue::from_value)?;
+        locals[slot] = upvalue.with_value(FastValue::from_value)??;
     }
 
     let mut assigned_upvalues = 0_u32;
@@ -1112,13 +1138,23 @@ fn materialize_deferred(stack: &mut [AbstractValue], ops: &mut Vec<FastOp>) -> O
 
 fn commit_upvalues(
     received_upvalue_slots: &[usize],
-    upvalues: &[Upvalue],
+    upvalues: &[BindingCell],
     locals: &[FastValue; MAX_FAST_LOCALS],
     assigned_upvalues: u32,
 ) -> Option<()> {
+    // Validate every destination before publishing any speculative result.
     for (index, &slot) in received_upvalue_slots.iter().enumerate() {
         if assigned_upvalues & (1 << index) != 0 {
-            upvalues.get(index)?.set(locals[slot].into_value()?);
+            upvalues.get(index)?.check_assignment(true).ok()?;
+            locals[slot].into_value()?;
+        }
+    }
+    for (index, &slot) in received_upvalue_slots.iter().enumerate() {
+        if assigned_upvalues & (1 << index) != 0 {
+            upvalues
+                .get(index)?
+                .assign(locals[slot].into_value()?, true)
+                .ok()?;
         }
     }
     Some(())

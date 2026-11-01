@@ -2,14 +2,10 @@
 //! heritage, methods, fields, static blocks) and the `super` property,
 //! method and call operations.
 
-use std::{collections::HashMap, rc::Rc};
-
 use crate::{
     Function, ObjectRef, Property, PropertyKey, RuntimeError, Value, array_as_prototype_slot,
-    function::{CompiledUserFunction, InstanceFieldInitializer, Upvalue},
-    object, property_value,
+    function::CompiledUserFunction, object, property_value,
     symbol::symbol_function_name_description,
-    to_property_key_value,
 };
 use crate::{
     call_field_initializer, construct_function, property_value_key_with_receiver,
@@ -17,369 +13,14 @@ use crate::{
 };
 
 use super::ir::{
-    ClassComputedKeyDef, ClassConstructorDef, ClassElementDef, ClassFieldDef,
-    ClassFieldInitializerDef, ClassMemberKeyDef, ClassMethodDef, ClassMethodKind,
-    ClassStaticBlockDef,
+    ClassFieldDef, ClassFieldInitializerDef, ClassMethodDef, ClassMethodKind, ClassStaticBlockDef,
 };
 use super::vm::Vm;
-use crate::CallEnv;
 
-/// A class element whose evaluation is deferred to pass 2 of class definition,
-/// preserving source order so static fields and static blocks interleave.
-enum PendingStaticItem<'a> {
-    Field(&'a ClassFieldDef, PropertyKey),
-    Block(&'a ClassStaticBlockDef),
-}
-
-/// The class inner-name binding a class member actually needs.
-///
-/// A class body's inner name is in scope for every member, but a member that
-/// never mentions it does not need the binding -- and carrying one excludes
-/// the member from the slot-seeded direct call path, which is why an ordinary
-/// class method used to cost more than the identical function assigned to a
-/// prototype. The binding is kept whenever the member could reach the name by
-/// a route the compiler does not record as a reference: a nested closure that
-/// captures it, a direct `eval`, or a `with` body. Those are exactly the
-/// members the direct call path declines anyway, so nothing that could benefit
-/// is affected.
-fn class_inner_name_binding(
-    name: Option<&str>,
-    bytecode: &super::ir::Bytecode,
-    local_names: &[String],
-) -> Option<String> {
-    let name = name?;
-    if bytecode.creates_closures() || bytecode.contains_direct_eval() || bytecode.contains_with() {
-        return Some(name.to_owned());
-    }
-    if local_names.iter().any(|local| local == name) {
-        return None;
-    }
-    // A class member's bytecode declares the inner name as a slot whether or
-    // not the member mentions it, so slot existence is not a reference test.
-    let references_name = bytecode.uses_local_binding(name)
-        || bytecode.global_names().iter().any(|global| global == name);
-    references_name.then(|| name.to_owned())
-}
-
-impl Vm<'_> {
-    /// Builds a class constructor function object, wires its `prototype` and
-    /// `constructor` properties, and installs prototype and static members.
-    ///
-    /// Computed member keys are evaluated by the surrounding bytecode unless
-    /// they need the class private environment, so generator `yield` and abrupt
-    /// completions suspend or unwind at the class definition point while
-    /// private names remain visible where required.
-    pub(super) fn new_class(
-        &mut self,
-        name: Option<&str>,
-        constructor: &ClassConstructorDef,
-        elements: &[ClassElementDef],
-        private_elements: &[super::ir::ClassPrivateElementDef],
-        computed_key_defs: &[ClassComputedKeyDef],
-        has_heritage: bool,
-    ) -> Result<Value, RuntimeError> {
-        let precomputed_keys = self.pop_precomputed_class_keys(computed_key_defs)?;
-        // Resolve the parent
-        // constructor and the prototype the new class prototype inherits from.
-        let heritage = if has_heritage {
-            let mut heritage_env = self.current_env();
-            let heritage = ClassHeritage::resolve(self.pop()?, &mut heritage_env)?;
-            self.apply_env(heritage_env);
-            Some(heritage)
-        } else {
-            None
-        };
-        let prototype_parent = match &heritage {
-            Some(ClassHeritage::Null) => None,
-            Some(ClassHeritage::Parent(parent)) => parent.prototype.clone(),
-            None => self.cached_object_prototype().map(crate::Prototype::Object),
-        };
-
-        let super_constructor = match &heritage {
-            Some(ClassHeritage::Parent(parent)) => Some(parent.constructor.clone()),
-            Some(ClassHeritage::Null) => function_prototype_value(&self.env),
-            _ => None,
-        };
-        let class_name_upvalue =
-            name.map(|_| Upvalue::new(Value::Function(Function::uninitialized_lexical_marker())));
-        let constructor_upvalues = self.captured_upvalues_for_function_with_override(
-            &constructor.bytecode,
-            &constructor.lexical_captures,
-            name.zip(class_name_upvalue.as_ref()),
-        );
-        let constructor_function = Function::new_user_compiled(CompiledUserFunction {
-            name: constructor.name.clone(),
-            has_name_binding: false,
-            immutable_name_binding: false,
-            immutable_env_binding: class_inner_name_binding(
-                name,
-                &constructor.bytecode,
-                &constructor.local_names,
-            ),
-            immutable_env_value: None,
-            params: std::rc::Rc::new(constructor.params.clone()),
-            realm: Rc::clone(&self.realm),
-            module_host: self.module_host.clone(),
-            module_imports: self.env.module_imports(),
-            bytecode: constructor.bytecode.clone(),
-            source_text: None,
-            local_names: constructor.local_names.clone().into(),
-            constructable: true,
-            is_strict: true,
-            lexical_this: false,
-            lexical_arguments: false,
-            lexical_new_target: None,
-            is_generator: false,
-            is_async: false,
-            is_class_constructor: true,
-            is_derived_constructor: has_heritage,
-            is_field_initializer: false,
-            home_object: None,
-            super_constructor: super_constructor.clone(),
-            deopt_bindings: self.frame_deopt_bindings(),
-            with_stack: self.with_stack().to_vec(),
-            upvalues: constructor_upvalues,
-        });
-        if let Some(upvalue) = &class_name_upvalue {
-            upvalue.set(Value::Function(constructor_function.clone()));
-        }
-
-        // Static-side inheritance: a subclass constructor inherits the parent
-        // constructor's static members through its [[Prototype]], which is the
-        // parent constructor itself. Storing the function directly gives
-        // `Object.getPrototypeOf(Sub) === Super` reference identity and lets
-        // inherited static methods and static `super.x` resolve live (rather
-        // than against a definition-time snapshot).
-        let constructor_parent_slot = match &heritage {
-            Some(ClassHeritage::Parent(heritage_parent)) => match &heritage_parent.constructor {
-                Value::Function(parent) => Some(crate::Prototype::Function(parent.clone())),
-                Value::Object(parent) => Some(crate::Prototype::Object(parent.clone())),
-                _ => None,
-            },
-            Some(ClassHeritage::Null) => {
-                function_prototype_value(&self.env).and_then(|value| match value {
-                    Value::Object(parent) => Some(crate::Prototype::Object(parent)),
-                    _ => None,
-                })
-            }
-            None => None,
-        };
-        if let Some(parent_slot) = constructor_parent_slot {
-            let _ = constructor_function.set_internal_prototype_slot(Some(parent_slot));
-        }
-
-        let prototype = ObjectRef::with_prototype_slot(
-            HashMap::new(),
-            prototype_parent,
-            self.env.realm().atoms(),
-        );
-        constructor_function.install_class_prototype(prototype.clone());
-
-        // The constructor's home object is its prototype; static `super.x`
-        // resolves through it.
-        constructor_function.set_home_object(Value::Object(prototype.clone()));
-
-        self.create_private_environment(private_elements, &prototype, &constructor_function);
-        let computed_keys = self.resolve_computed_class_keys(
-            computed_key_defs,
-            precomputed_keys,
-            &constructor_function,
-            name,
-        )?;
-        let mut computed_keys = computed_keys.into_iter();
-
-        // A class binding is visible to its own methods and constructor under
-        // the class name, so methods can reference the class recursively. The
-        // binding is immutable, so each function gets its own captured env
-        // seeded with the class value rather than sharing a mutable parent env.
-        //
-        // Pass 1: resolve computed keys in source order, install methods
-        // immediately, and stash field definitions (with their resolved keys)
-        // and static blocks in source order for pass 2.
-        let mut pending = Vec::new();
-        let mut queued_private_brands = Vec::new();
-        for element in elements {
-            if let ClassElementDef::Private(private) = element {
-                self.queue_instance_private_method_brand(
-                    private,
-                    &constructor_function,
-                    &mut queued_private_brands,
-                );
-            }
-        }
-        for element in elements {
-            match element {
-                ClassElementDef::Method(method) => {
-                    let key = resolve_element_key(&method.key, &mut computed_keys);
-                    self.install_method(method, key, &prototype, &constructor_function, name)?;
-                }
-                ClassElementDef::Field(field) => {
-                    let key = resolve_element_key(&field.key, &mut computed_keys);
-                    if field.is_static {
-                        pending.push(PendingStaticItem::Field(field, key));
-                    } else {
-                        let initializer = self.build_field_initializer(
-                            field,
-                            &prototype,
-                            &constructor_function,
-                            name,
-                        );
-                        constructor_function.push_instance_public_field(
-                            InstanceFieldInitializer::new(key, initializer),
-                        );
-                    }
-                }
-                ClassElementDef::Private(private) => {
-                    self.queue_instance_private_element(
-                        private,
-                        &prototype,
-                        &constructor_function,
-                        name,
-                    );
-                }
-                ClassElementDef::StaticBlock(block) => {
-                    pending.push(PendingStaticItem::Block(block));
-                }
-            }
-        }
-
-        // Install private elements: register shared private methods/accessors,
-        // brand the constructor with static privates (running static private
-        // field initializers now), and queue instance private brands/fields for
-        // construction time. Done after public methods so private static field
-        // initializers can reference private methods.
-        self.install_private_elements(private_elements, &prototype, &constructor_function, name)?;
-
-        // Pass 2: static fields and static blocks are evaluated now, after all
-        // method definitions, in source order, with `this` = the constructor.
-        for item in pending {
-            match item {
-                PendingStaticItem::Field(field, key) => {
-                    let initializer = self.build_field_initializer(
-                        field,
-                        &prototype,
-                        &constructor_function,
-                        name,
-                    );
-                    let value = match &initializer {
-                        Some(thunk) => self.run_field_initializer(
-                            thunk,
-                            Value::Function(constructor_function.clone()),
-                        )?,
-                        None => Value::Undefined,
-                    };
-                    install_field_value(
-                        &Value::Function(constructor_function.clone()),
-                        key,
-                        value,
-                        &mut self.realm_env(),
-                    )?;
-                }
-                PendingStaticItem::Block(block) => {
-                    self.run_static_block(block, &constructor_function, name)?;
-                }
-            }
-        }
-
-        Ok(Value::Function(constructor_function))
-    }
-
-    fn pop_precomputed_class_keys(
-        &mut self,
-        computed_key_defs: &[ClassComputedKeyDef],
-    ) -> Result<Vec<PropertyKey>, RuntimeError> {
-        let computed_key_count = computed_key_defs
-            .iter()
-            .filter(|key| matches!(key, ClassComputedKeyDef::Precomputed))
-            .count();
-        let mut keys = Vec::with_capacity(computed_key_count);
-        for _ in 0..computed_key_count {
-            let value = self.pop()?;
-            let mut env = self.current_env();
-            let key = to_property_key_value(value, &mut env)?;
-            self.apply_env(env);
-            keys.push(key);
-        }
-        keys.reverse();
-        Ok(keys)
-    }
-
-    fn resolve_computed_class_keys(
-        &mut self,
-        computed_key_defs: &[ClassComputedKeyDef],
-        precomputed_keys: Vec<PropertyKey>,
-        constructor_function: &Function,
-        name: Option<&str>,
-    ) -> Result<Vec<PropertyKey>, RuntimeError> {
-        let mut precomputed_keys = precomputed_keys.into_iter();
-        let mut keys = Vec::with_capacity(computed_key_defs.len());
-        for key_def in computed_key_defs {
-            match key_def {
-                ClassComputedKeyDef::Precomputed => {
-                    keys.push(
-                        precomputed_keys
-                            .next()
-                            .expect("precomputed key count matches descriptors"),
-                    );
-                }
-                ClassComputedKeyDef::Deferred {
-                    local_names,
-                    lexical_captures,
-                    bytecode,
-                } => {
-                    let class_upvalue = class_inner_upvalue(constructor_function, name);
-                    let thunk = Function::new_user_compiled(CompiledUserFunction {
-                        name: None,
-                        has_name_binding: false,
-                        immutable_name_binding: false,
-                        immutable_env_binding: class_inner_name_binding(
-                            name,
-                            bytecode,
-                            local_names,
-                        ),
-                        immutable_env_value: None,
-                        params: std::rc::Rc::new(qjs_ast::FunctionParams::positional(Vec::new())),
-                        realm: Rc::clone(&self.realm),
-                        module_host: self.module_host.clone(),
-                        module_imports: self.env.module_imports(),
-                        bytecode: bytecode.clone(),
-                        source_text: None,
-                        local_names: local_names.clone().into(),
-                        constructable: false,
-                        is_strict: true,
-                        lexical_this: false,
-                        lexical_arguments: false,
-                        lexical_new_target: None,
-                        is_generator: false,
-                        is_async: false,
-                        is_class_constructor: false,
-                        is_derived_constructor: false,
-                        is_field_initializer: false,
-                        home_object: Some(Value::Function(constructor_function.clone())),
-                        super_constructor: None,
-                        deopt_bindings: self.frame_deopt_bindings(),
-                        with_stack: self.with_stack().to_vec(),
-                        upvalues: self.captured_upvalues_for_function_with_override(
-                            bytecode,
-                            lexical_captures,
-                            name.zip(class_upvalue.as_ref()),
-                        ),
-                    });
-                    let this_value = self.env.get("this").unwrap_or(Value::Undefined);
-                    let value = self.run_field_initializer(&thunk, this_value)?;
-                    let mut env = self.current_env();
-                    let key = to_property_key_value(value, &mut env)?;
-                    self.apply_env(env);
-                    keys.push(key);
-                }
-            }
-        }
-        Ok(keys)
-    }
-
+impl Vm<'_, '_> {
     /// Builds and installs a single method/accessor on the prototype (instance)
     /// or the constructor (static).
-    fn install_method(
+    pub(super) fn install_method(
         &mut self,
         method: &ClassMethodDef,
         key: PropertyKey,
@@ -394,21 +35,12 @@ impl Vm<'_> {
         } else {
             Value::Object(prototype.clone())
         };
-        let class_upvalue = class_inner_upvalue(constructor_function, name);
+        let class_upvalue = self.class_inner_upvalue(constructor_function, name);
         let method_function = Function::new_user_compiled(CompiledUserFunction {
             name: class_method_function_name(method, &key),
             has_name_binding: false,
-            immutable_name_binding: false,
-            immutable_env_binding: class_inner_name_binding(
-                name,
-                &method.bytecode,
-                &method.local_names,
-            ),
-            immutable_env_value: None,
             params: std::rc::Rc::new(method.params.clone()),
-            realm: Rc::clone(&self.realm),
-            module_host: self.module_host.clone(),
-            module_imports: self.env.module_imports(),
+            creation: self.current_creation_context(),
             bytecode: method.bytecode.clone(),
             source_text: method.source_text.clone(),
             local_names: method.local_names.clone().into(),
@@ -416,16 +48,15 @@ impl Vm<'_> {
             is_strict: true,
             lexical_this: false,
             lexical_arguments: false,
-            lexical_new_target: None,
+            lexical_call: None,
             is_generator: method.is_generator,
             is_async: method.is_async,
             is_class_constructor: false,
             is_derived_constructor: false,
-            is_field_initializer: false,
+            owner_kind: crate::context::OwnerKind::Function,
             home_object: Some(home_object.clone()),
             super_constructor: None,
-            deopt_bindings: self.frame_deopt_bindings(),
-            with_stack: self.with_stack().to_vec(),
+            lexical_scope: self.closure_scope_cursor(&method.bytecode),
             upvalues: self.captured_upvalues_for_function_with_override(
                 &method.bytecode,
                 &method.lexical_captures,
@@ -435,7 +66,7 @@ impl Vm<'_> {
         if method.is_generator && method.is_async {
             crate::async_generator::wire_async_generator_function_intrinsics(
                 &method_function,
-                &self.env,
+                &self.context(),
             );
         } else if method.is_generator {
             self.wire_generator_function_intrinsics(&method_function);
@@ -467,12 +98,12 @@ impl Vm<'_> {
 
         // Member definition only needs realm access (array length coercion on
         // concrete values); no frame bindings can change here.
-        let mut prop_env = self.realm_env();
+        let mut prop_env = self.context();
         let success = object::define_property_on_value_key(target, key, descriptor, &mut prop_env)?;
         if !success {
             return Err(RuntimeError {
                 thrown: None,
-                message: "class member definition failed".to_owned(),
+                message: "TypeError: cannot define class member".to_owned(),
             });
         }
         Ok(())
@@ -481,7 +112,7 @@ impl Vm<'_> {
     /// Builds the initializer thunk function for a field. The thunk runs with
     /// `this` bound at call time; its home object resolves `super.x` (instance
     /// fields use the prototype, static fields the constructor).
-    fn build_field_initializer(
+    pub(super) fn build_field_initializer(
         &mut self,
         field: &ClassFieldDef,
         prototype: &ObjectRef,
@@ -498,17 +129,12 @@ impl Vm<'_> {
         } else {
             Value::Object(prototype.clone())
         };
-        let class_upvalue = class_inner_upvalue(constructor_function, name);
+        let class_upvalue = self.class_inner_upvalue(constructor_function, name);
         Some(Function::new_user_compiled(CompiledUserFunction {
             name: None,
             has_name_binding: false,
-            immutable_name_binding: false,
-            immutable_env_binding: class_inner_name_binding(name, bytecode, local_names),
-            immutable_env_value: None,
             params: std::rc::Rc::new(qjs_ast::FunctionParams::positional(Vec::new())),
-            realm: Rc::clone(&self.realm),
-            module_host: self.module_host.clone(),
-            module_imports: self.env.module_imports(),
+            creation: self.current_creation_context(),
             bytecode: bytecode.clone(),
             source_text: None,
             local_names: local_names.clone().into(),
@@ -516,16 +142,15 @@ impl Vm<'_> {
             is_strict: true,
             lexical_this: false,
             lexical_arguments: false,
-            lexical_new_target: None,
+            lexical_call: None,
             is_generator: false,
             is_async: false,
             is_class_constructor: false,
             is_derived_constructor: false,
-            is_field_initializer: true,
+            owner_kind: crate::context::OwnerKind::Field,
             home_object: Some(home_object),
             super_constructor: None,
-            deopt_bindings: self.frame_deopt_bindings(),
-            with_stack: self.with_stack().to_vec(),
+            lexical_scope: self.closure_scope_cursor(bytecode),
             upvalues: self.captured_upvalues_for_function_with_override(
                 bytecode,
                 lexical_captures,
@@ -537,7 +162,7 @@ impl Vm<'_> {
     /// Runs a `static { ... }` block at class definition: builds a parameterless
     /// strict thunk whose home object and `this` are the constructor (so
     /// `super.x` resolves against the constructor's [[Prototype]]) and calls it.
-    fn run_static_block(
+    pub(super) fn run_static_block(
         &mut self,
         block: &ClassStaticBlockDef,
         constructor_function: &Function,
@@ -548,17 +173,12 @@ impl Vm<'_> {
             lexical_captures,
             bytecode,
         } = block;
-        let class_upvalue = class_inner_upvalue(constructor_function, name);
+        let class_upvalue = self.class_inner_upvalue(constructor_function, name);
         let thunk = Function::new_user_compiled(CompiledUserFunction {
             name: None,
             has_name_binding: false,
-            immutable_name_binding: false,
-            immutable_env_binding: class_inner_name_binding(name, bytecode, local_names),
-            immutable_env_value: None,
             params: std::rc::Rc::new(qjs_ast::FunctionParams::positional(Vec::new())),
-            realm: Rc::clone(&self.realm),
-            module_host: self.module_host.clone(),
-            module_imports: self.env.module_imports(),
+            creation: self.current_creation_context(),
             bytecode: bytecode.clone(),
             source_text: None,
             local_names: local_names.clone().into(),
@@ -566,16 +186,15 @@ impl Vm<'_> {
             is_strict: true,
             lexical_this: false,
             lexical_arguments: false,
-            lexical_new_target: None,
+            lexical_call: None,
             is_generator: false,
             is_async: false,
             is_class_constructor: false,
             is_derived_constructor: false,
-            is_field_initializer: false,
+            owner_kind: crate::context::OwnerKind::StaticBlock,
             home_object: Some(Value::Function(constructor_function.clone())),
             super_constructor: None,
-            deopt_bindings: self.frame_deopt_bindings(),
-            with_stack: self.with_stack().to_vec(),
+            lexical_scope: self.closure_scope_cursor(bytecode),
             upvalues: self.captured_upvalues_for_function_with_override(
                 bytecode,
                 lexical_captures,
@@ -588,15 +207,14 @@ impl Vm<'_> {
 
     /// Runs a field initializer thunk with the given `this` value and returns
     /// its result.
-    fn run_field_initializer(
+    pub(super) fn run_field_initializer(
         &mut self,
         thunk: &Function,
         this_value: Value,
     ) -> Result<Value, RuntimeError> {
-        let mut env = self.current_env();
-        let result = call_field_initializer(thunk, this_value, &mut env);
-        self.apply_env(env);
-        result
+        let mut env = self.context();
+
+        call_field_initializer(thunk, this_value, &mut env)
     }
 
     /// Resolves `super.<key>` (or `super[key]`): the property is looked up on
@@ -624,9 +242,8 @@ impl Vm<'_> {
                     .to_owned(),
             });
         }
-        let mut env = self.current_env();
+        let mut env = self.context();
         let value = property_value_key_with_receiver(lookup_base, key, receiver, &mut env)?;
-        self.apply_env(env);
         Ok(value)
     }
 
@@ -667,10 +284,9 @@ impl Vm<'_> {
                     .to_owned(),
             });
         }
-        let mut env = self.current_env();
+        let mut env = self.context();
         let wrote =
             crate::reflect::ordinary_set(lookup_base, &key, value.clone(), receiver, &mut env)?;
-        self.apply_env(env);
         if !wrote && is_strict {
             return Err(RuntimeError {
                 thrown: None,
@@ -714,15 +330,8 @@ impl Vm<'_> {
         let result = self.super_call_inner(arguments);
         if let Some(this_value) = self.handle_runtime_result(result)? {
             if let Some(cell) = self.env.derived_this_cell() {
-                cell.set(this_value.clone());
-                if let Some(slot) = self.bytecode.this_slot() {
-                    self.locals[slot] = Some(this_value.clone());
-                }
-            } else if let Some(slot) = self.bytecode.local_slot("this") {
-                self.store_local(slot, this_value.clone())?;
+                cell.initialize(this_value.clone())?;
             }
-            self.env.insert("this".to_owned(), this_value.clone());
-            self.write_through_module_live_binding("this", this_value.clone());
             // The instance fields of the derived class initialize immediately
             // after `super(...)` binds `this`, before the rest of the body.
             let field_result = self.initialize_derived_instance_fields(&this_value);
@@ -740,14 +349,12 @@ impl Vm<'_> {
         &mut self,
         this_value: &Value,
     ) -> Result<Value, RuntimeError> {
-        let Some(Value::Function(constructor)) = self.env.get(crate::ACTIVE_CONSTRUCTOR_BINDING)
-        else {
+        let Some(Value::Function(constructor)) = self.env.active_constructor() else {
             return Ok(Value::Undefined);
         };
-        let mut env = self.current_env();
+        let mut env = self.context();
         let result =
             crate::function::initialize_instance_fields(&constructor, this_value, &mut env);
-        self.apply_env(env);
         result.map(|()| Value::Undefined)
     }
 
@@ -761,18 +368,17 @@ impl Vm<'_> {
         };
         let new_target = self
             .env
-            .get(crate::NEW_TARGET_BINDING)
+            .lexical_new_target()
             .unwrap_or_else(|| super_constructor.clone());
 
-        let mut env = self.current_env();
+        let mut env = self.context();
         let result = construct_function(super_constructor, new_target, arguments, &mut env);
-        self.apply_env(env);
         let value = result?;
         // A repeated `super(...)` still performs the parent construction after
         // argument evaluation, then fails while trying to initialize `this`.
         let this_is_bound = self.env.derived_this_cell().map_or_else(
-            || self.env.has_local_binding("this"),
-            |cell| !cell.with_value(Value::is_uninitialized_lexical_marker),
+            || self.env.owner_kind().is_some(),
+            |cell| cell.is_initialized(),
         );
         if this_is_bound {
             return Err(RuntimeError {
@@ -783,36 +389,29 @@ impl Vm<'_> {
         Ok(value)
     }
 
-    fn current_super_constructor(&self) -> Result<Option<Value>, RuntimeError> {
-        if let Some(active_constructor) = self.env.get(crate::ACTIVE_CONSTRUCTOR_BINDING)
-            && let Some(prototype) = value_prototype_slot(active_constructor, &self.env)
+    fn current_super_constructor(&mut self) -> Result<Option<Value>, RuntimeError> {
+        if let Some(active_constructor) = self.env.active_constructor()
+            && let Some(prototype) = value_prototype_slot(active_constructor, &self.context())
         {
             return Ok(Some(prototype.to_value()));
         }
-        Ok(self.env.get(crate::SUPER_CONSTRUCTOR_BINDING))
+        Ok(self.env.super_constructor())
     }
 
     fn current_this(&mut self) -> Result<Value, RuntimeError> {
-        match self.env.get_local("this") {
-            Some(value) if !value.is_uninitialized_lexical_marker() => Ok(value),
-            _ => Err(RuntimeError {
-                thrown: None,
-                message: "ReferenceError: must call super constructor before accessing 'this'"
-                    .to_owned(),
-            }),
-        }
+        self.env.this_value()
     }
 
     /// Returns the lookup base for `super` property access: the [[Prototype]]
     /// of the current method's home object.
-    fn super_lookup_base(&self) -> Result<Value, RuntimeError> {
-        let Some(home) = self.env.get_local(crate::HOME_OBJECT_BINDING) else {
+    fn super_lookup_base(&mut self) -> Result<Value, RuntimeError> {
+        let Some(home) = self.env.home_object() else {
             return Err(RuntimeError {
                 thrown: None,
                 message: "SyntaxError: 'super' keyword unexpected here".to_owned(),
             });
         };
-        match value_prototype_slot(home, &self.env) {
+        match value_prototype_slot(home, &self.context()) {
             Some(prototype) => Ok(prototype.to_value()),
             None => Ok(Value::Undefined),
         }
@@ -822,37 +421,40 @@ impl Vm<'_> {
     /// chain: its [[Prototype]] becomes `%GeneratorFunction.prototype%`, and its
     /// own `prototype` property's [[Prototype]] becomes `%GeneratorPrototype%`
     /// so generator instances inherit `next`/`return`/`throw`.
-    pub(super) fn wire_generator_function_intrinsics(&self, function: &Function) {
-        crate::generator::wire_generator_function_intrinsics(function, &self.env);
+    pub(super) fn wire_generator_function_intrinsics(&mut self, function: &Function) {
+        crate::generator::wire_generator_function_intrinsics(function, &self.context());
     }
 
     /// Wires a freshly created async function into the async intrinsic chain:
     /// its `[[Prototype]]` becomes `%AsyncFunction.prototype%`. Async functions
     /// are non-constructable and carry no own `prototype` property.
-    pub(super) fn wire_async_function_intrinsics(&self, function: &Function) {
-        crate::async_function::wire_async_function_intrinsics(function, &self.env);
+    pub(super) fn wire_async_function_intrinsics(&mut self, function: &Function) {
+        crate::async_function::wire_async_function_intrinsics(function, &self.context());
     }
 }
 
 /// The resolved heritage of a class with an `extends` clause.
-enum ClassHeritage {
+pub(super) enum ClassHeritage {
     /// `extends null`: the prototype object has a null [[Prototype]].
     Null,
     /// `extends <constructor>`: the parent constructor and its `prototype`.
     Parent(Box<ClassHeritageParent>),
 }
 
-struct ClassHeritageParent {
-    constructor: Value,
-    prototype: Option<crate::Prototype>,
+pub(super) struct ClassHeritageParent {
+    pub(super) constructor: Value,
+    pub(super) prototype: Option<crate::Prototype>,
 }
 
-fn function_prototype_value(env: &CallEnv) -> Option<Value> {
+pub(super) fn function_prototype_value(env: &crate::context::Context<'_>) -> Option<Value> {
     env.realm().function_prototype().map(|p| p.to_value())
 }
 
 impl ClassHeritage {
-    fn resolve(value: Value, env: &mut CallEnv) -> Result<Self, RuntimeError> {
+    pub(super) fn resolve(
+        value: Value,
+        env: &mut crate::context::Context<'_>,
+    ) -> Result<Self, RuntimeError> {
         match value {
             Value::Null => Ok(Self::Null),
             Value::Function(function) if function.constructable => {
@@ -876,7 +478,7 @@ impl ClassHeritage {
 
 fn class_heritage_prototype_slot(
     value: Value,
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
 ) -> Result<Option<crate::Prototype>, RuntimeError> {
     match value {
         Value::Null => Ok(None),
@@ -894,20 +496,6 @@ fn class_heritage_prototype_error() -> RuntimeError {
     RuntimeError {
         thrown: None,
         message: "TypeError: superclass prototype must be an object or null".to_owned(),
-    }
-}
-
-/// Resolves a class element's key: a literal key is taken directly; a computed
-/// key consumes the next value from the source-ordered computed-key iterator.
-fn resolve_element_key(
-    key: &ClassMemberKeyDef,
-    computed_keys: &mut impl Iterator<Item = PropertyKey>,
-) -> PropertyKey {
-    match key {
-        ClassMemberKeyDef::Literal(key) => PropertyKey::String(key.clone()),
-        ClassMemberKeyDef::Computed => computed_keys
-            .next()
-            .expect("computed key count matches elements"),
     }
 }
 
@@ -951,7 +539,7 @@ pub(crate) fn install_field_value(
     target: &Value,
     key: PropertyKey,
     value: Value,
-    env: &mut crate::CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<(), RuntimeError> {
     let descriptor = Property::data(value, true, true, true);
     let success = object::define_property_on_value_key(target.clone(), key, descriptor, env)?;
@@ -962,20 +550,6 @@ pub(crate) fn install_field_value(
         });
     }
     Ok(())
-}
-
-pub(super) fn class_inner_upvalue(constructor: &Function, name: Option<&str>) -> Option<Upvalue> {
-    let name = name?;
-    constructor
-        .bytecode
-        .as_ref()
-        .and_then(|bytecode| {
-            bytecode
-                .received_upvalue_names()
-                .zip(&constructor.upvalues)
-                .find_map(|(candidate, upvalue)| (candidate == name).then(|| upvalue.clone()))
-        })
-        .or_else(|| Some(Upvalue::new(Value::Function(constructor.clone()))))
 }
 
 /// Merges a new accessor descriptor with any existing accessor for the same

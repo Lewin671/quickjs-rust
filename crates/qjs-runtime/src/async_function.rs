@@ -13,9 +13,9 @@
 //! functions that carry that object plus the result promise in their captured
 //! environment and call back into the driver.
 
+use crate::function::NativeCaptures;
 use std::collections::HashMap;
 
-use crate::CallEnv;
 use crate::{
     Function, NativeFunction, ObjectRef, Property, RuntimeError, Value,
     bytecode::{GeneratorOutcome, GeneratorStart, GeneratorState, Resume, resume_generator},
@@ -26,16 +26,12 @@ use crate::{
 /// between an async function and `%Function.prototype%` in its prototype chain.
 pub(crate) const ASYNC_FUNCTION_PROTOTYPE_BINDING: &str = "\0AsyncFunctionPrototype";
 
-/// Internal slot names carried in an await-reaction native's environment.
-const ASYNC_CONTEXT: &str = "\0AsyncContext";
-const ASYNC_RESULT_PROMISE: &str = "\0AsyncResultPromise";
-
 /// Installs `%AsyncFunction.prototype%`: an ordinary object whose `[[Prototype]]`
 /// is `%Function.prototype%`, carrying the "AsyncFunction" `Symbol.toStringTag`.
 /// The callable `%AsyncFunction%` constructor is reachable through async
 /// function `.constructor`, but is not exposed as a global binding.
 pub(crate) fn install_async_function(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     _global_this: &Value,
     object_prototype: ObjectRef,
 ) {
@@ -74,7 +70,7 @@ pub(crate) fn install_async_function(
 }
 
 /// Returns `%AsyncFunction.prototype%` from the current environment.
-pub(crate) fn async_function_prototype(env: &CallEnv) -> Option<ObjectRef> {
+pub(crate) fn async_function_prototype(env: &crate::context::Context<'_>) -> Option<ObjectRef> {
     match env.get(ASYNC_FUNCTION_PROTOTYPE_BINDING) {
         Some(Value::Object(object)) => Some(object.clone()),
         _ => None,
@@ -88,8 +84,9 @@ pub(crate) fn async_function_prototype(env: &CallEnv) -> Option<ObjectRef> {
 /// reject the promise rather than throwing synchronously.
 pub(crate) fn call_async_function(
     function: &Function,
-    function_env: CallEnv,
-    env: &mut CallEnv,
+    function_env: crate::context::ActivationContext,
+    inputs: Option<crate::function::CallInputs<'_>>,
+    env: &mut crate::context::Context<'_>,
 ) -> Value {
     let bytecode = function
         .bytecode
@@ -101,21 +98,12 @@ pub(crate) fn call_async_function(
             bytecode,
             env: function_env,
             upvalues: function.upvalues.clone(),
-            with_stack: function.with_stack.clone(),
-            immutable_function_name: function
-                .immutable_name_binding
-                .then(|| function.name.clone())
-                .flatten()
-                .or_else(|| function.immutable_env_binding().map(str::to_owned)),
+            with_stack: Vec::new(),
         })));
 
     let result_promise = promise::new_pending_promise(env);
-    drive(
-        &context,
-        &result_promise,
-        Resume::Next(Value::Undefined),
-        env,
-    );
+    let outcome = crate::bytecode::start_with_call_inputs(&context, inputs, env);
+    settle_outcome(outcome, &context, &result_promise, env);
     Value::Object(result_promise)
 }
 
@@ -125,7 +113,10 @@ pub(crate) fn call_async_function(
 /// settles with the module's completion (16.2.1.5.3 AsyncModuleExecution). A
 /// later `await` resumes through the job queue exactly as an async function
 /// body does, so the caller drains the job queue to settle the module.
-pub(crate) fn drive_async_module(context: &ObjectRef, env: &mut CallEnv) -> ObjectRef {
+pub(crate) fn drive_async_module(
+    context: &ObjectRef,
+    env: &mut crate::context::Context<'_>,
+) -> ObjectRef {
     let result_promise = promise::new_pending_promise(env);
     drive(
         context,
@@ -139,8 +130,22 @@ pub(crate) fn drive_async_module(context: &ObjectRef, env: &mut CallEnv) -> Obje
 /// Resumes the suspended async body with `resume`, then settles or re-suspends:
 /// a `Return` resolves the result promise, a thrown completion rejects it, and a
 /// suspension (`await`) schedules reactions that re-enter this driver later.
-fn drive(context: &ObjectRef, result_promise: &ObjectRef, resume: Resume, env: &mut CallEnv) {
-    match resume_generator(context, resume, env) {
+fn drive(
+    context: &ObjectRef,
+    result_promise: &ObjectRef,
+    resume: Resume,
+    env: &mut crate::context::Context<'_>,
+) {
+    let outcome = resume_generator(context, resume, env);
+    settle_outcome(outcome, context, result_promise, env);
+}
+fn settle_outcome(
+    outcome: Result<GeneratorOutcome, RuntimeError>,
+    context: &ObjectRef,
+    result_promise: &ObjectRef,
+    env: &mut crate::context::Context<'_>,
+) {
+    match outcome {
         Ok(GeneratorOutcome::Await(awaited)) => {
             schedule_await(context, result_promise, awaited, env);
         }
@@ -166,7 +171,7 @@ fn schedule_await(
     context: &ObjectRef,
     result_promise: &ObjectRef,
     awaited: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) {
     let on_fulfilled = await_reaction(
         env.realm(),
@@ -192,18 +197,17 @@ fn await_reaction(
     result_promise: &ObjectRef,
 ) -> Value {
     let mut function = Function::new_native(None, 1, native, false, realm);
-    function.insert_native_context(ASYNC_CONTEXT.to_owned(), Value::Object(context.clone()));
-    function.insert_native_context(
-        ASYNC_RESULT_PROMISE.to_owned(),
-        Value::Object(result_promise.clone()),
-    );
+    function.set_native_captures(NativeCaptures::AsyncFunction {
+        context: context.clone(),
+        result_promise: result_promise.clone(),
+    });
     Value::Function(function)
 }
 
 /// Dispatches the await-resume reactions: delivers the fulfillment value (or an
 /// injected throw at the await site) to the suspended body, then drives it.
 pub(crate) fn async_function_await_fulfilled(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: crate::native::CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -215,7 +219,7 @@ pub(crate) fn async_function_await_fulfilled(
 }
 
 pub(crate) fn async_function_await_rejected(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: crate::native::CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -229,12 +233,13 @@ pub(crate) fn async_function_await_rejected(
 fn resume_await(
     function: &Function,
     resume: Resume,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
-    let (Some(Value::Object(context)), Some(Value::Object(result_promise))) = (
-        function.native_context.get(ASYNC_CONTEXT),
-        function.native_context.get(ASYNC_RESULT_PROMISE),
-    ) else {
+    let NativeCaptures::AsyncFunction {
+        context,
+        result_promise,
+    } = function.native_captures()
+    else {
         return Err(RuntimeError {
             thrown: None,
             message: "TypeError: missing async reaction context".to_owned(),
@@ -250,7 +255,10 @@ fn resume_await(
 /// `[[Prototype]]` becomes `%AsyncFunction.prototype%`. Async functions have no
 /// own `prototype` property (the non-constructable default wiring already
 /// skipped it).
-pub(crate) fn wire_async_function_intrinsics(function: &Function, env: &CallEnv) {
+pub(crate) fn wire_async_function_intrinsics(
+    function: &Function,
+    env: &crate::context::Context<'_>,
+) {
     if let Some(async_function_prototype) = async_function_prototype(env) {
         let _ = function
             .set_internal_prototype_slot(Some(crate::Prototype::Object(async_function_prototype)));

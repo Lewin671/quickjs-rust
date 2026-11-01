@@ -12,7 +12,7 @@ use crate::value::{
     layout::{LayoutVersion, StructuralDependency},
     named::{NamedTarget, Probe, Virtual, WeakTarget},
 };
-use crate::{CallEnv, ObjectRef, Property, Value};
+use crate::{ObjectRef, Property, Value};
 use std::{
     cell::{Cell, OnceCell, RefCell},
     ops::Deref,
@@ -606,7 +606,11 @@ impl CacheData {
         }
     }
     #[inline(always)]
-    pub(super) fn get_value(&self, value: &Value, _env: Option<&CallEnv>) -> Option<Value> {
+    pub(super) fn get_value(
+        &self,
+        value: &Value,
+        _env: Option<&crate::context::Context<'_>>,
+    ) -> Option<Value> {
         if let Value::Object(object) = value {
             return self.data_value(NamedTarget::Object(object));
         }
@@ -705,7 +709,7 @@ impl CacheData {
         &self,
         value: &Value,
         key: &KeyLease,
-        _env: Option<&CallEnv>,
+        _env: Option<&crate::context::Context<'_>>,
     ) -> Option<Value> {
         self.get_value(value, _env)
             .or_else(|| self.read_key_slow(value, key))
@@ -719,7 +723,12 @@ impl CacheData {
         })?
     }
     #[inline(always)]
-    pub(super) fn read_string(&self, value: &Value, name: &str, _env: &CallEnv) -> Option<Value> {
+    pub(super) fn read_string(
+        &self,
+        value: &Value,
+        name: &str,
+        _env: &crate::context::Context<'_>,
+    ) -> Option<Value> {
         value.with_named_target(|t| {
             self.data_value(t)
                 .or_else(|| self.read_string_slow(t, name))

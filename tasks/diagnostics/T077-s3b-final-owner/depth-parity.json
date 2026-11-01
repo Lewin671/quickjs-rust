@@ -1,0 +1,706 @@
+{
+  "base": "3cc12c6f",
+  "candidate": "e1405670",
+  "frozen_landmarks_source": "tasks/diagnostics/T077-s3b-owner-ca5/depth-parity.json",
+  "source_sha256": "3ed84d29fb0b9531fdfc54dd702f33935ba71275406f03fb1e814ecbe2d23c3b",
+  "rows": [
+    {
+      "profile": "debug",
+      "case": "forEach",
+      "depth": 100,
+      "base": {
+        "depth": 100,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "101\n",
+        "stderr": ""
+      },
+      "candidate": {
+        "depth": 100,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "101\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "debug",
+      "case": "forEach",
+      "depth": 177,
+      "base": {
+        "depth": 177,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "178\n",
+        "stderr": ""
+      },
+      "candidate": {
+        "depth": 177,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "178\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "debug",
+      "case": "map",
+      "depth": 100,
+      "base": {
+        "depth": 100,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "101\n",
+        "stderr": ""
+      },
+      "candidate": {
+        "depth": 100,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "101\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "debug",
+      "case": "map",
+      "depth": 176,
+      "base": {
+        "depth": 176,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "177\n",
+        "stderr": ""
+      },
+      "candidate": {
+        "depth": 176,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "177\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "debug",
+      "case": "reduce",
+      "depth": 100,
+      "base": {
+        "depth": 100,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "101\n",
+        "stderr": ""
+      },
+      "candidate": {
+        "depth": 100,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "101\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "debug",
+      "case": "reduce",
+      "depth": 225,
+      "base": {
+        "depth": 225,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "226\n",
+        "stderr": ""
+      },
+      "candidate": {
+        "depth": 225,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "226\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "debug",
+      "case": "call",
+      "depth": 257,
+      "base": {
+        "depth": 257,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "257\n",
+        "stderr": ""
+      },
+      "candidate": {
+        "depth": 257,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "257\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "debug",
+      "case": "call",
+      "depth": 461,
+      "base": {
+        "depth": 461,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "461\n",
+        "stderr": ""
+      },
+      "candidate": {
+        "depth": 461,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "461\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "debug",
+      "case": "apply",
+      "depth": 257,
+      "base": {
+        "depth": 257,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "257\n",
+        "stderr": ""
+      },
+      "candidate": {
+        "depth": 257,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "257\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "debug",
+      "case": "apply",
+      "depth": 372,
+      "base": {
+        "depth": 372,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "372\n",
+        "stderr": ""
+      },
+      "candidate": {
+        "depth": 372,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "372\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "debug",
+      "case": "reflect_apply",
+      "depth": 257,
+      "base": {
+        "depth": 257,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "257\n",
+        "stderr": ""
+      },
+      "candidate": {
+        "depth": 257,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "257\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "debug",
+      "case": "reflect_apply",
+      "depth": 373,
+      "base": {
+        "depth": 373,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "373\n",
+        "stderr": ""
+      },
+      "candidate": {
+        "depth": 373,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "373\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "debug",
+      "case": "yield_star",
+      "depth": 146,
+      "base": {
+        "depth": 146,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "42\n",
+        "stderr": ""
+      },
+      "candidate": {
+        "depth": 146,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "42\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "debug",
+      "case": "plain_in_callback",
+      "depth": 400,
+      "base": {
+        "depth": 400,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "400\n",
+        "stderr": ""
+      },
+      "candidate": {
+        "depth": 400,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "400\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "debug",
+      "case": "plain_in_callback",
+      "depth": 4096,
+      "base": {
+        "depth": 4096,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "4096\n",
+        "stderr": ""
+      },
+      "candidate": {
+        "depth": 4096,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "4096\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "release",
+      "case": "forEach",
+      "depth": 100,
+      "base": {
+        "depth": 100,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "101\n",
+        "stderr": ""
+      },
+      "candidate": {
+        "depth": 100,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "101\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "release",
+      "case": "forEach",
+      "depth": 796,
+      "base": {
+        "depth": 796,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "797\n",
+        "stderr": ""
+      },
+      "candidate": {
+        "depth": 796,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "797\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "release",
+      "case": "map",
+      "depth": 100,
+      "base": {
+        "depth": 100,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "101\n",
+        "stderr": ""
+      },
+      "candidate": {
+        "depth": 100,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "101\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "release",
+      "case": "map",
+      "depth": 790,
+      "base": {
+        "depth": 790,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "791\n",
+        "stderr": ""
+      },
+      "candidate": {
+        "depth": 790,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "791\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "release",
+      "case": "reduce",
+      "depth": 100,
+      "base": {
+        "depth": 100,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "101\n",
+        "stderr": ""
+      },
+      "candidate": {
+        "depth": 100,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "101\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "release",
+      "case": "reduce",
+      "depth": 829,
+      "base": {
+        "depth": 829,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "830\n",
+        "stderr": ""
+      },
+      "candidate": {
+        "depth": 829,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "830\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "release",
+      "case": "call",
+      "depth": 257,
+      "base": {
+        "depth": 257,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "257\n",
+        "stderr": ""
+      },
+      "candidate": {
+        "depth": 257,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "257\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "release",
+      "case": "call",
+      "depth": 3234,
+      "base": {
+        "depth": 3234,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "3234\n",
+        "stderr": ""
+      },
+      "candidate": {
+        "depth": 3234,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "3234\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "release",
+      "case": "apply",
+      "depth": 257,
+      "base": {
+        "depth": 257,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "257\n",
+        "stderr": ""
+      },
+      "candidate": {
+        "depth": 257,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "257\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "release",
+      "case": "apply",
+      "depth": 2066,
+      "base": {
+        "depth": 2066,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "2066\n",
+        "stderr": ""
+      },
+      "candidate": {
+        "depth": 2066,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "2066\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "release",
+      "case": "reflect_apply",
+      "depth": 257,
+      "base": {
+        "depth": 257,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "257\n",
+        "stderr": ""
+      },
+      "candidate": {
+        "depth": 257,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "257\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "release",
+      "case": "reflect_apply",
+      "depth": 2188,
+      "base": {
+        "depth": 2188,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "2188\n",
+        "stderr": ""
+      },
+      "candidate": {
+        "depth": 2188,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "2188\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "release",
+      "case": "yield_star",
+      "depth": 600,
+      "base": {
+        "depth": 600,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "42\n",
+        "stderr": ""
+      },
+      "candidate": {
+        "depth": 600,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "42\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "release",
+      "case": "yield_star",
+      "depth": 714,
+      "base": {
+        "depth": 714,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "42\n",
+        "stderr": ""
+      },
+      "candidate": {
+        "depth": 714,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "42\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "release",
+      "case": "plain_in_callback",
+      "depth": 400,
+      "base": {
+        "depth": 400,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "400\n",
+        "stderr": ""
+      },
+      "candidate": {
+        "depth": 400,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "400\n",
+        "stderr": ""
+      }
+    },
+    {
+      "profile": "release",
+      "case": "plain_in_callback",
+      "depth": 4096,
+      "base": {
+        "depth": 4096,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "4096\n",
+        "stderr": ""
+      },
+      "candidate": {
+        "depth": 4096,
+        "ok": true,
+        "kind": "pass",
+        "exit": 0,
+        "stdout": "4096\n",
+        "stderr": ""
+      }
+    }
+  ],
+  "all_pass": true,
+  "maxima": {
+    "base": {
+      "debug": {
+        "forEach": 177,
+        "map": 176,
+        "reduce": 225,
+        "call": 461,
+        "apply": 372,
+        "reflect_apply": 373,
+        "yield_star": 146,
+        "plain_in_callback": 4096
+      },
+      "release": {
+        "forEach": 796,
+        "map": 790,
+        "reduce": 829,
+        "call": 3234,
+        "apply": 2066,
+        "reflect_apply": 2188,
+        "yield_star": 714,
+        "plain_in_callback": 4096
+      }
+    },
+    "candidate": {
+      "debug": {
+        "forEach": 187,
+        "map": 185,
+        "reduce": 233,
+        "call": 479,
+        "apply": 390,
+        "reflect_apply": 390,
+        "yield_star": 150,
+        "plain_in_callback": 4096
+      },
+      "release": {
+        "forEach": 920,
+        "map": 912,
+        "reduce": 963,
+        "call": 3801,
+        "apply": 2367,
+        "reflect_apply": 2528,
+        "yield_star": 795,
+        "plain_in_callback": 4096
+      }
+    }
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "candidate": "8413f925963f42e65c0d972756fe3762659dbfff",
+  "runtime_revision": "e1405670495aa0e75829996d51b797e211f16242",
+  "baseline": "3cc12c6f8d93ffd6eae91d1bd44efe74134ae195",
+  "binaries": {
+    "default-arm64": {
+      "path": "target/s3b-r2-default/release/qjs",
+      "sha256": "81b0360f4c30e6689f838d0dd19419a1a103b792bd17f6457ff0a24738accbd6"
+    },
+    "debug-arm64": {
+      "path": "target/s3b-r2-default/debug/qjs",
+      "sha256": "8f699a741e370d14795dda957338bb168c10ef05c28b78d782d67e40926adc15"
+    },
+    "agents-arm64": {
+      "path": "target/s3b-r2-agents/release/qjs",
+      "sha256": "856ffa9d6fad8dc61b1b9bde705d5b8f55cf430442cb3336ab93287f313b808b"
+    },
+    "counts-arm64": {
+      "path": "target/s3b-r2-counts/release/qjs",
+      "sha256": "71fdf5e0a88c23c0f42c5e00451cefd54abedb3ec6a02767d4f6d6a5cf6dd132"
+    },
+    "verify-arm64": {
+      "path": "target/s3b-round2-verify/release/qjs",
+      "sha256": "924ebf9476235b95298ff4309b0eb6d5ea89bd2cad149cc538da598eaeb8f633"
+    }
+  },
+  "production_release_recipe": "workspace release defaults; default/agents/perf-counters builds use separate target directories",
+  "verify_recipe": "cargo build --release -p qjs-cli --config profile.release.debug-assertions=true --config profile.release.overflow-checks=true",
+  "fuzz_to_final_build_input_delta": [
+    "crates/qjs-cli/hot-functions-x86_64.order"
+  ],
+  "arm_binaries_unchanged_after_order": true,
+  "test262_pin": "4249661388e5d3f92a85186213da140a6481490f",
+  "ng_pin": "f7830186043e4488f2998759d60a514faf07cbc9",
+  "rustc": "rustc 1.95.0 (59807616e 2026-04-14)\nbinary: rustc\ncommit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860\ncommit-date: 2026-04-14\nhost: aarch64-apple-darwin\nrelease: 1.95.0\nLLVM version: 22.1.2\n",
+  "new_dependencies": false,
+  "origin_push_or_main_merge": false
+}

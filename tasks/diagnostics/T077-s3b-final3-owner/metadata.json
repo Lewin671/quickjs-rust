@@ -1,0 +1,27 @@
+{
+ "candidate": "8abd4c69b1c6aadbfdd551696211d1d52b6c4520",
+ "runtime_revision": "0148b2ebee40bf5ddecd92f612806856ec7d0feb",
+ "baseline": "3cc12c6f8d93ffd6eae91d1bd44efe74134ae195",
+ "binaries_arm64": {
+  "target/final3-default/release/qjs": "2ff1cddad8e2d5f8676cd9937c397429afbf27f200a7f835651573b798eb46bd",
+  "target/final3-default/debug/qjs": "7c22428b445a29b28701323ab65b4090a45309ead620161b913756fdb4547c5c",
+  "target/final3-agents/release/qjs": "494a48f452723f72cce74ec381207064166c0f042c84d406e8f6335515331db2",
+  "target/final3-counts/release/qjs": "1514c61c245aa6c7a853287aac4fddd72aafc14bf6f631a08a19892da2f6c9e9",
+  "target/final3-verify/release/qjs": "757cba0bc8764c583ce4acaca145ec00884df4c305686989a93fe035b80bdabe"
+ },
+ "verify_recipe": "cargo build --release -p qjs-cli --config profile.release.debug-assertions=true --config profile.release.overflow-checks=true",
+ "build_input_delta_after_runtime": [
+  "crates/qjs-cli/hot-functions-x86_64.order (x86 only)",
+  "tools/binding_fuzz (not an engine input)"
+ ],
+ "reference_7b3ed258_runtime_binaries": {
+  "release": "fb39e4bc4c96c3ae35c769364a571073c4d4a1066f10fe014ec27d62be6c8eb7",
+  "verify": "b2f5b43eb3270c9a758f052e32a4c5cc1d29216fb42a5a3cfb5607e511827d6f",
+  "source": "git archive e1405670"
+ },
+ "test262_pin": "4249661388e5d3f92a85186213da140a6481490f",
+ "ng_pin": "f7830186043e4488f2998759d60a514faf07cbc9",
+ "rustc": "rustc 1.95.0 (59807616e 2026-04-14)\nbinary: rustc\ncommit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860\ncommit-date: 2026-04-14\nhost: aarch64-apple-darwin\nrelease: 1.95.0\nLLVM version: 22.1.2\n",
+ "new_dependencies": false,
+ "origin_push_or_main_merge": false
+}

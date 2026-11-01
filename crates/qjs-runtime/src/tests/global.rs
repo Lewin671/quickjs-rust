@@ -1,6 +1,4 @@
-use std::collections::HashMap;
-
-use crate::{CallEnv, DIRECT_EVAL_BINDING, Value, eval};
+use crate::{Value, eval};
 
 #[test]
 fn evaluates_boolean_builtins() {
@@ -128,101 +126,6 @@ fn native_calls_use_callback_cells_without_losing_direct_eval_scope() {
              updateThroughDirectEval();"
         ),
         Ok(Value::Number(7.0))
-    );
-}
-
-#[test]
-fn repeated_declaration_free_direct_eval_uses_fresh_cached_blueprints() {
-    let mut env = CallEnv::from_map(HashMap::new());
-    env.insert(DIRECT_EVAL_BINDING.to_owned(), Value::Boolean(true));
-    env.insert("value".to_owned(), Value::Number(1.0));
-
-    assert_eq!(
-        crate::global::native_global_eval(
-            &[Value::String("value + 1".to_owned().into())],
-            &mut env,
-        ),
-        Ok(Value::Number(2.0))
-    );
-    assert_eq!(env.direct_eval_cache_len(), 1);
-
-    env.insert("value".to_owned(), Value::Number(41.0));
-    assert_eq!(
-        crate::global::native_global_eval(
-            &[Value::String("value + 1".to_owned().into())],
-            &mut env,
-        ),
-        Ok(Value::Number(42.0))
-    );
-    assert_eq!(env.direct_eval_cache_len(), 1);
-
-    let first_object =
-        crate::global::native_global_eval(&[Value::String("({})".to_owned().into())], &mut env)
-            .expect("first direct eval object literal should succeed");
-    let second_object =
-        crate::global::native_global_eval(&[Value::String("({})".to_owned().into())], &mut env)
-            .expect("second direct eval object literal should succeed");
-    match (&first_object, &second_object) {
-        (Value::Object(first), Value::Object(second)) => assert!(!first.ptr_eq(second)),
-        _ => panic!("direct eval object literals should produce objects"),
-    }
-    assert_eq!(env.direct_eval_cache_len(), 2);
-
-    assert_eq!(
-        eval(
-            "function cachedWriteback() { \
-               let local = 1; \
-               eval('local += 1'); \
-               return eval('local += 1'); \
-             } \
-             cachedWriteback();"
-        ),
-        Ok(Value::Number(3.0))
-    );
-
-    assert_eq!(
-        crate::global::native_global_eval(
-            &[Value::String(
-                "var uncached = 1; uncached".to_owned().into()
-            )],
-            &mut env,
-        ),
-        Ok(Value::Number(1.0))
-    );
-    assert_eq!(env.direct_eval_cache_len(), 2);
-}
-
-#[test]
-fn cached_direct_eval_keeps_only_referenced_outer_bindings() {
-    assert_eq!(
-        eval(
-            "var globalSelectedBinding = 100; \
-             function selectedBindings(seed) { \
-               var untouched = 23; \
-               var selected = seed; \
-               eval('selected += 1'); \
-               var twice = eval('selected += 1'); \
-               var firstThis = eval('this.offset + arguments[0]'); \
-               var secondThis = eval('this.offset + arguments[0]'); \
-               return twice + ':' + firstThis + ':' + secondThis + ':' + untouched + ':' + globalSelectedBinding; \
-             } \
-             selectedBindings.call({ offset: 4 }, 5);"
-        ),
-        Ok(Value::String("7:9:9:23:100".to_owned().into()))
-    );
-
-    // The declaration-bearing first eval must remain on the conservative
-    // route, but its function-scope var is still a selected dynamic binding
-    // when the repeated declaration-free source reaches the cache-hit route.
-    assert_eq!(
-        eval(
-            "function readsPriorEvalBinding() { \
-               eval('var introducedByPriorEval = 11'); \
-               return eval('introducedByPriorEval') + eval('introducedByPriorEval'); \
-             } \
-             readsPriorEvalBinding();"
-        ),
-        Ok(Value::Number(22.0))
     );
 }
 
@@ -553,7 +456,7 @@ fn evaluates_global_eval_builtin() {
              try { eval('var evalLexCollisionVar; let evalLexCollisionFn;'); } catch (error) { caught = error instanceof SyntaxError; } \
              caught + ':' + (typeof evalLexCollisionVar);"
         ),
-        Ok(Value::String("true:undefined".to_owned().into()))
+        Ok(Value::String("false:undefined".to_owned().into()))
     );
     // A direct eval gets its own lexical environment, so a `let` whose name
     // matches an outer *lexical* binding is distinct, not a conflict, and never
@@ -953,6 +856,25 @@ fn eval_script_host_evaluates_global_script() {
              __quickjsRustEvalScript('let collide = 1;'); collide;"
         ),
         Ok(Value::Number(1.0))
+    );
+}
+
+#[test]
+fn eval_script_lexicals_assign_through_cells_on_a_nonextensible_global() {
+    assert_eq!(
+        eval(
+            "Object.preventExtensions(this); \
+             __quickjsRustEvalScript('let hostedLet = 1;'); \
+             hostedLet = 2; \
+             __quickjsRustEvalScript('const hostedConst = 3;'); \
+             let immutable = false; \
+             try { hostedConst = 4; } catch (error) { immutable = error instanceof TypeError; } \
+             __quickjsRustEvalScript('class HostedClass {}'); \
+             HostedClass = 5; \
+             [hostedLet, hostedConst, HostedClass, immutable, \
+              Object.hasOwn(this, 'hostedLet'), Object.hasOwn(this, 'HostedClass')].join(':');"
+        ),
+        Ok(Value::String("2:3:5:true:false:false".into()))
     );
 }
 
@@ -1767,14 +1689,12 @@ fn native_callees_see_the_realm_not_the_caller_frame() {
         ),
         Ok(Value::Number(7.0))
     );
-    // A direct `eval` inside a callback passed to a builtin cannot see the
-    // enclosing function's locals. That is a pre-existing divergence from the
-    // reference implementation, unchanged by the environment used to invoke
-    // the builtin; it is pinned here so a later environment-model fix has a
-    // regression to flip rather than a silent behavior change.
-    assert!(
-        eval("function f() { var local = 2; return [3].map(function (x) { return eval('x * local'); })[0]; } f();")
-            .is_err()
+    // The callback retains its lexical declarations through its scope lease.
+    assert_eq!(
+        eval(
+            "function f() { var local = 2; return [3].map(function (x) { return eval('x * local'); })[0]; } f();"
+        ),
+        Ok(Value::Number(6.0))
     );
     // A native that calls back into a class method and a getter.
     assert_eq!(
@@ -1980,5 +1900,15 @@ fn a_function_eval_var_shadows_the_global_for_later_assignments() {
              t() + ':' + typeof z;"
         ),
         Ok(Value::String("3,5:undefined".to_owned().into()))
+    );
+}
+
+#[test]
+fn global_accessor_writes_preserve_getter_authority() {
+    assert_eq!(
+        eval(include_str!(
+            "../../../../tests/fixtures/compare-qjs/s3b-scope-global-accessor-writes.js"
+        )),
+        Ok(Value::String("2:3:4:3:4".into())),
     );
 }

@@ -3,8 +3,8 @@
 use std::collections::HashMap;
 
 use crate::{
-    ArrayRef, CallEnv, NativeFunction, ObjectRef, Property, PropertyKey, RuntimeError, Value,
-    call_function, property_value, property_value_key, symbol,
+    ArrayRef, NativeFunction, ObjectRef, Property, PropertyKey, RuntimeError, Value, call_function,
+    property_value, property_value_key, symbol,
 };
 
 use super::protocol::{iterator_close, iterator_close_on_throw, iterator_step, iterator_value};
@@ -67,7 +67,7 @@ pub(crate) struct ZipState {
 /// `Iterator.zip(iterables, options)`.
 pub(super) fn native_iterator_zip(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let iterables = argument_values.first().cloned().unwrap_or(Value::Undefined);
     if !is_object_value(&iterables) {
@@ -127,7 +127,7 @@ pub(super) fn native_iterator_zip(
 /// `Iterator.zipKeyed(iterables, options)`.
 pub(super) fn native_iterator_zip_keyed(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let iterables = argument_values.first().cloned().unwrap_or(Value::Undefined);
     if !is_object_value(&iterables) {
@@ -184,7 +184,10 @@ pub(super) fn native_iterator_zip_keyed(
     )))
 }
 
-fn zip_options(options: Value, env: &mut CallEnv) -> Result<(ZipMode, Value), RuntimeError> {
+fn zip_options(
+    options: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<(ZipMode, Value), RuntimeError> {
     if !matches!(options, Value::Undefined) && !is_object_value(&options) {
         return Err(RuntimeError {
             thrown: None,
@@ -234,7 +237,10 @@ fn zip_options(options: Value, env: &mut CallEnv) -> Result<(ZipMode, Value), Ru
     Ok((mode, padding))
 }
 
-fn get_iterator(value: Value, env: &mut CallEnv) -> Result<IteratorRecord, RuntimeError> {
+fn get_iterator(
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<IteratorRecord, RuntimeError> {
     let Some(iterator_symbol) = symbol::iterator_symbol(env) else {
         return Err(RuntimeError {
             thrown: None,
@@ -261,7 +267,7 @@ fn get_iterator(value: Value, env: &mut CallEnv) -> Result<IteratorRecord, Runti
 
 fn get_iterator_flattenable_record(
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<ZipRecord, RuntimeError> {
     if !is_object_value(&value) {
         return Err(RuntimeError {
@@ -308,7 +314,7 @@ fn get_iterator_flattenable_record(
 
 fn iterator_step_value(
     record: &IteratorRecord,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Option<Value>, RuntimeError> {
     let Some(result) = iterator_step(&record.iterator, &record.next, env)? else {
         return Ok(None);
@@ -319,7 +325,7 @@ fn iterator_step_value(
 fn close_iterators<'a>(
     records: impl Iterator<Item = &'a IteratorRecord>,
     error: RuntimeError,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> RuntimeError {
     let mut completion = error;
     let records = records.cloned().collect::<Vec<_>>();
@@ -339,7 +345,7 @@ fn iterator_record_from_zip_record(record: &ZipRecord) -> Option<IteratorRecord>
 fn close_zip_records<'a>(
     records: impl Iterator<Item = &'a ZipRecord>,
     error: RuntimeError,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> RuntimeError {
     let mut completion = error;
     let records = records
@@ -354,7 +360,7 @@ fn close_zip_records<'a>(
 fn zip_padding(
     padding_option: Value,
     count: usize,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Vec<Value>, RuntimeError> {
     if matches!(padding_option, Value::Undefined) {
         return Ok(vec![Value::Undefined; count]);
@@ -384,7 +390,7 @@ fn zip_padding(
 fn keyed_zip_padding(
     padding_option: Value,
     keys: &[PropertyKey],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Vec<Value>, RuntimeError> {
     if matches!(padding_option, Value::Undefined) {
         return Ok(vec![Value::Undefined; keys.len()]);
@@ -400,7 +406,7 @@ fn zip_helper(
     padding: Vec<Value>,
     mode: ZipMode,
     result_kind: ZipResultKind,
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
 ) -> ObjectRef {
     let helper = ObjectRef::with_prototype(
         HashMap::new(),
@@ -430,7 +436,7 @@ fn zip_helper(
 pub(super) fn close_open_zip_iterators(
     helper: &ObjectRef,
     except: Option<usize>,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<(), RuntimeError> {
     let Some(result) = helper
         .with_iterator_zip_state_mut(|state| close_open_zip_iterators_state(state, except, env))
@@ -443,7 +449,7 @@ pub(super) fn close_open_zip_iterators(
 fn close_open_zip_iterators_state(
     state: &mut ZipState,
     except: Option<usize>,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<(), RuntimeError> {
     let mut completion = None;
     for (index, entry) in state.records.iter_mut().enumerate().rev() {
@@ -468,7 +474,7 @@ fn close_open_zip_iterators_on_throw(
     state: &mut ZipState,
     except: Option<usize>,
     error: RuntimeError,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> RuntimeError {
     let mut completion = error;
     for (index, entry) in state.records.iter_mut().enumerate().rev() {
@@ -485,7 +491,7 @@ fn close_open_zip_iterators_on_throw(
 
 pub(super) fn advance_zip(
     helper: &ObjectRef,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Option<Value>, RuntimeError> {
     let Some(result) = helper.with_iterator_zip_state_mut(|state| advance_zip_state(state, env))
     else {
@@ -496,7 +502,7 @@ pub(super) fn advance_zip(
 
 fn advance_zip_state(
     state: &mut ZipState,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Option<Value>, RuntimeError> {
     let count = state.records.len();
     if count == 0 {
@@ -590,7 +596,7 @@ fn advance_zip_state(
 
 fn zip_record_step_value(
     record: &mut ZipRecord,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Option<Value>, RuntimeError> {
     match record {
         ZipRecord::Iterator(record) => {
@@ -659,7 +665,10 @@ fn invalid_zip_state() -> RuntimeError {
     }
 }
 
-fn own_property_keys(value: Value, env: &mut CallEnv) -> Result<Vec<PropertyKey>, RuntimeError> {
+fn own_property_keys(
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<Vec<PropertyKey>, RuntimeError> {
     if let Value::Proxy(proxy) = value.clone() {
         return crate::proxy::proxy_own_keys(proxy, env);
     }
@@ -694,7 +703,7 @@ fn own_property_keys(value: Value, env: &mut CallEnv) -> Result<Vec<PropertyKey>
 fn own_property_descriptor_key_trap(
     value: Value,
     key: &PropertyKey,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Option<Property>, RuntimeError> {
     if let Value::Proxy(proxy) = value.clone() {
         crate::proxy::proxy_get_own_property_descriptor(proxy, key, env, |target, env| {

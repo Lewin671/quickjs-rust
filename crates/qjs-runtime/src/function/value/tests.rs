@@ -5,6 +5,27 @@ use super::{Function, FunctionData};
 use crate::{NativeFunction, Value, eval};
 
 #[test]
+fn captures_beyond_the_inline_mask_keep_their_cell_routes() {
+    for count in [128, 129, 130] {
+        let names: Vec<_> = (0..count).map(|index| format!("x{index}")).collect();
+        let declarations: String = names
+            .iter()
+            .enumerate()
+            .map(|(index, name)| format!("let {name}={index};"))
+            .collect();
+        let source = format!(
+            "(function(){{{declarations}return function(){{return {};}};}})()();",
+            names.join("+")
+        );
+        assert_eq!(
+            eval(&source),
+            Ok(Value::Number(f64::from(count * (count - 1) / 2))),
+            "{count} captured cells"
+        );
+    }
+}
+
+#[test]
 fn cloning_function_reuses_the_backing_allocation() {
     let domain = crate::property::atom::AtomDomain::new();
     let function = Function::new_native_in_domain(
@@ -31,12 +52,12 @@ fn ordinary_function_header_keeps_cold_identity_state_out_of_line() {
     let function_data_size = mem::size_of::<FunctionData>();
     eprintln!("S2 sizes: FunctionData={function_data_size} auxiliary={auxiliary_size}");
     assert_eq!(
-        mem::size_of::<super::NativeContext>(),
+        mem::size_of::<Option<Rc<crate::function::NativeCaptures>>>(),
         mem::size_of::<Rc<()>>(),
-        "lazy native context must remain pointer-sized"
+        "optional native payload must remain pointer-sized"
     );
     assert_eq!(
-        mem::size_of::<super::ModuleImports>(),
+        mem::size_of::<crate::function::ModuleImports>(),
         mem::size_of::<Rc<()>>(),
         "shared module imports must remain pointer-sized"
     );
@@ -55,41 +76,32 @@ fn ordinary_function_header_keeps_cold_identity_state_out_of_line() {
 }
 
 #[test]
-fn user_functions_keep_empty_function_maps_unallocated() {
+fn user_functions_and_plain_natives_keep_capture_payloads_unallocated() {
     let domain = crate::property::atom::AtomDomain::new();
     let value = eval("function make() { return function value() {}; } make();")
         .expect("function expression should evaluate");
     let Value::Function(function) = value else {
         panic!("expected function value");
     };
-    assert!(!function.native_context.is_allocated());
+    assert!(function.native_captures.is_none());
     assert!(function.named.borrow().store().is_none());
 
     let mut native = Function::new_native_in_domain(
         Some("capturing"),
         0,
-        NativeFunction::UninitializedLexical,
+        NativeFunction::PromisePrototypeFinallyValueThunk,
         false,
         &domain,
     );
-    assert!(native.native_context.is_allocated());
-    assert_eq!(
-        native
-            .native_context
-            .0
-            .as_ref()
-            .unwrap()
-            .bindings
-            .capacity(),
-        0
-    );
+    assert!(native.native_captures.is_none());
     assert!(native.property_domain().ptr_eq(&domain));
-    native.insert_native_context("captured".to_owned(), Value::Number(1.0));
-    assert!(native.native_context.is_allocated());
-    assert_eq!(
-        native.native_context.get("captured"),
-        Some(&Value::Number(1.0))
-    );
+    native.set_native_captures(crate::function::NativeCaptures::PromiseFinallyValue(
+        Value::Number(1.0),
+    ));
+    assert!(matches!(
+        native.native_captures(),
+        crate::function::NativeCaptures::PromiseFinallyValue(Value::Number(1.0))
+    ));
     native.define_property(
         "explicit".to_owned(),
         crate::Property::enumerable(Value::Number(2.0)),
@@ -276,28 +288,25 @@ fn native_function_retains_its_explicit_domain_without_a_dummy_prototype() {
 }
 
 #[test]
-fn empty_native_captures_share_by_domain_and_detach_before_writes() {
+fn native_captures_allocate_only_for_payload_and_preserve_domain_lifetime() {
     let domain = crate::property::atom::AtomDomain::new();
     let weak = domain.downgrade();
     let mut first =
         Function::new_native_in_domain(Some("a"), 0, NativeFunction::MathAbs, false, &domain);
     let second =
         Function::new_native_in_domain(Some("b"), 0, NativeFunction::MathAbs, false, &domain);
-    assert!(Rc::ptr_eq(
-        first.native_context.0.as_ref().unwrap(),
-        second.native_context.0.as_ref().unwrap()
+    assert!(first.native_captures.is_none());
+    assert!(second.native_captures.is_none());
+    first.set_native_captures(crate::function::NativeCaptures::PromiseFinallyValue(
+        Value::Number(1.0),
     ));
-    first.insert_native_context("capture".into(), Value::Number(1.0));
-    assert_eq!(
-        first.native_context.get("capture"),
-        Some(&Value::Number(1.0))
-    );
-    assert!(second.native_context.get("capture").is_none());
+    assert!(matches!(
+        first.native_captures(),
+        crate::function::NativeCaptures::PromiseFinallyValue(Value::Number(1.0))
+    ));
+    assert!(second.native_captures.is_none());
     let third = Function::new_native_in_domain(None, 0, NativeFunction::MathAbs, false, &domain);
-    assert!(Rc::ptr_eq(
-        second.native_context.0.as_ref().unwrap(),
-        third.native_context.0.as_ref().unwrap()
-    ));
+    assert!(third.native_captures.is_none());
     drop(domain);
     drop(first);
     drop(second);
@@ -330,6 +339,54 @@ fn unrelated_probes_leave_function_defaults_and_lazy_prototype_implicit() {
     assert!(function.named.borrow().store().is_none());
     assert!(function.auxiliary.lazy_default_prototype.get());
     assert_eq!(function.named_version(), version);
+}
+
+#[cfg(feature = "perf-counters")]
+#[test]
+fn pure_function_descriptor_walks_construct_no_execution_context() {
+    let Value::Function(function) = crate::eval("(function retained() {})").unwrap() else {
+        panic!("ordinary function");
+    };
+    crate::reset_counters();
+    assert!(function.chain_property("call").is_some());
+    assert!(function.chain_property("prototype").is_some());
+    assert!(function.chain_property("notPresent").is_none());
+    let counts = crate::counters().unwrap();
+    assert_eq!(counts.call_env_constructions, 0);
+    assert_eq!(counts.call_env_clones, 0);
+}
+
+#[cfg(feature = "perf-counters")]
+#[test]
+fn native_payload_counter_counts_allocations_without_empty_capture_state() {
+    let domain = crate::property::atom::AtomDomain::new();
+    crate::reset_counters();
+    let mut thunk = Function::new_native_in_domain(
+        None,
+        0,
+        NativeFunction::PromisePrototypeFinallyValueThunk,
+        false,
+        &domain,
+    );
+    assert_eq!(
+        crate::counters()
+            .unwrap()
+            .native_capture_payload_allocations,
+        0
+    );
+    thunk.set_native_captures(crate::function::NativeCaptures::PromiseFinallyValue(
+        Value::Number(8.0),
+    ));
+    assert_eq!(
+        crate::counters()
+            .unwrap()
+            .native_capture_payload_allocations,
+        1
+    );
+    assert_eq!(
+        crate::promise::native_promise_finally_value_thunk(&thunk),
+        Ok(Value::Number(8.0))
+    );
 }
 
 #[test]

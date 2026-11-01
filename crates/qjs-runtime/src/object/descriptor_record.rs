@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use crate::CallEnv;
 use crate::{
     ObjectRef, Property, RuntimeError, Value, has_property, is_truthy, object_prototype,
     property_value,
@@ -68,7 +67,7 @@ fn resolve_existing_property_definition(
 
 pub(crate) fn to_property_descriptor_record(
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<PropertyDescriptor, RuntimeError> {
     // Symbols are represented as `Value::Object` wrappers, but a Symbol is a
     // primitive and is not a valid property descriptor object.
@@ -169,7 +168,7 @@ pub(crate) struct PropertyDescriptor {
 /// than a record.
 pub(crate) fn property_descriptor_record_object(
     descriptor: &PropertyDescriptor,
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
 ) -> ObjectRef {
     let result =
         ObjectRef::with_prototype(HashMap::new(), object_prototype(env), env.realm().atoms());

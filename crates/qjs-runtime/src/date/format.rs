@@ -8,7 +8,6 @@ use crate::{
 };
 
 use super::value::date_value;
-use crate::CallEnv;
 
 pub(crate) fn native_date_prototype_to_iso_string(
     this_value: Value,
@@ -52,7 +51,7 @@ pub(crate) fn native_date_prototype_to_time_string(
 pub(crate) fn native_date_prototype_to_json(
     this_value: Value,
     _key: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let tv = crate::to_primitive_with_hint(
         this_value.clone(),
@@ -78,7 +77,7 @@ pub(crate) fn native_date_prototype_to_json(
 pub(crate) fn native_date_prototype_to_primitive(
     this_value: Value,
     hint: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if !matches!(
         this_value,

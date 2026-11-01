@@ -26,7 +26,7 @@ use super::{
 };
 use crate::{
     Function, ObjectRef, PropertyKey, RuntimeError, Value,
-    function::{CallEnv, Realm, Upvalue},
+    function::{BindingCell, Realm},
     is_truthy,
     property::try_to_property_key_without_coercion,
     to_property_key_value,
@@ -50,32 +50,34 @@ pub(in crate::bytecode) use wide_resume::{
 use super::frame_program::{FrameBytecode, FrameProgramView};
 use super::frame_stack::FrameExit;
 use super::operand_stack::OperandStack;
-use super::vm_call_env::{VmCallEnv, VmCallEnvOrigin};
 
 pub(super) fn eval_bytecode(bytecode: &Bytecode) -> Result<Value, RuntimeError> {
-    let mut vm = Vm::new(bytecode)?;
+    let (mut runtime, activation) = crate::context::HostRoot::script().into_parts();
+    let mut vm = Vm::new(bytecode, &mut runtime, activation)?;
     let value = vm.run()?;
-    vm.persist_global_lexical_bindings();
     vm.drain_promise_jobs()?;
     Ok(value)
 }
-pub(super) fn eval_function_bytecode<'a>(
-    bytecode: &'a Bytecode,
-    env: CallEnv,
-    upvalues: Vec<Upvalue>,
+#[allow(clippy::too_many_arguments)]
+pub(super) fn eval_function_bytecode(
+    bytecode: &Bytecode,
+    env: crate::context::ActivationContext,
+    runtime: &mut crate::context::RuntimeServices,
+    upvalues: Vec<BindingCell>,
     with_stack: Vec<Value>,
     persist_global_lexicals: bool,
     direct_call_slots: Option<DirectCallSlots<'_>>,
-    positional_arguments: Option<&[Value]>,
-) -> FunctionBytecodeResult<'a> {
-    let direct_eval_with_stack = !env.direct_eval_with_stack().is_empty();
+    call_inputs: Option<crate::function::CallInputs<'_>>,
+) -> FunctionBytecodeResult {
+    let direct_eval_with_stack = false;
     let mut vm = Vm::with_frame_bytecode(
         FrameBytecode::Borrowed(bytecode),
+        runtime,
         env,
         upvalues,
         with_stack,
         direct_call_slots,
-        positional_arguments,
+        call_inputs,
     );
     vm.persist_global_lexicals = persist_global_lexicals;
     // Ordinary functions created inside `with` are compiled with explicit
@@ -84,25 +86,12 @@ pub(super) fn eval_function_bytecode<'a>(
     // needs generic load/store ops redirected through the caller's with stack.
     vm.direct_eval_with_stack = direct_eval_with_stack;
     let value = vm.run();
-    // Move the four fields the caller needs straight out of the frame. Binding
-    // the whole `FrameState` first materializes several hundred bytes of it in
-    // this function's own frame, which a profile charges to `memmove` on every
-    // call.
-    let FrameState {
-        env,
-        locals,
-        local_upvalues,
-        cold,
-        ..
-    } = vm.current;
-    FunctionBytecodeResult {
-        value,
-        bytecode,
-        env,
-        locals,
-        local_upvalues,
-        sloppy_global_names: cold.map_or_else(Vec::new, |cold| cold.sloppy_global_names),
+    let bound_this = vm.env.derived_this_cell().and_then(|cell| cell.read().ok());
+    vm.recycle_binding_slots();
+    if let Some(cold) = vm.current.cold.take() {
+        bytecode.recycle_cold_frame(cold);
     }
+    FunctionBytecodeResult { value, bound_this }
 }
 
 /// An ordinary synchronous caller consumes only the value. Keep completed
@@ -110,24 +99,26 @@ pub(super) fn eval_function_bytecode<'a>(
 /// their shared cells, whose identities are never pooled.
 pub(super) fn eval_call_bytecode(
     bytecode: &Bytecode,
-    env: CallEnv,
-    upvalues: Vec<Upvalue>,
+    env: crate::context::ActivationContext,
+    runtime: &mut crate::context::RuntimeServices,
+    upvalues: Vec<BindingCell>,
     with_stack: Vec<Value>,
-    positional_arguments: Option<&[Value]>,
+    call_inputs: Option<crate::function::CallInputs<'_>>,
 ) -> Result<Value, RuntimeError> {
-    let direct_eval_with_stack = !env.direct_eval_with_stack().is_empty();
+    let direct_eval_with_stack = false;
     let mut vm = Vm::with_frame_bytecode(
         FrameBytecode::Borrowed(bytecode),
+        runtime,
         env,
         upvalues,
         with_stack,
         None,
-        positional_arguments,
+        call_inputs,
     );
     vm.persist_global_lexicals = true;
     vm.direct_eval_with_stack = direct_eval_with_stack;
     let value = vm.run();
-    bytecode.recycle_local_slots(std::mem::take(&mut vm.current.locals));
+    vm.recycle_binding_slots();
     if let Some(cold) = vm.current.cold.take() {
         bytecode.recycle_cold_frame(cold);
     }
@@ -135,28 +126,39 @@ pub(super) fn eval_call_bytecode(
 }
 
 /// Runs a guarded direct call and drops its completed frame in place.
+#[inline(always)]
 pub(super) fn eval_direct_call_bytecode(
     bytecode: &Bytecode,
-    env: CallEnv,
-    direct_call_slots: DirectCallSlots<'_>,
+    env: &mut Option<crate::context::ActivationContext>,
+    runtime: &mut crate::context::RuntimeServices,
+    slots: &mut Option<DirectCallSlots<'_>>,
 ) -> Result<Value, RuntimeError> {
-    // A body the compact tier admits runs without a `Vm` at all: it has no
-    // handler, cannot suspend, runs no loop plans, and keeps its operands in
-    // registers, so nothing in `FrameState` would be read. Admission
-    // is decided before `env` or the slots are consumed, so a declined body
-    // builds exactly the frame it always did.
-    let mut pending_env = Some(env);
-    let mut pending_slots = Some(direct_call_slots);
-    if let Some(result) =
-        super::compact_fn::try_run_standalone(bytecode, &mut pending_env, &mut pending_slots)
-    {
+    if let Some(result) = super::compact_fn::try_run_standalone(
+        bytecode,
+        env.as_mut().expect("prepared callee activation"),
+        runtime,
+        slots.as_mut().expect("prepared positional inputs"),
+    ) {
         return result;
     }
-    let env = pending_env.expect("a declined standalone activation consumes nothing");
-    let direct_call_slots =
-        pending_slots.expect("a declined standalone activation consumes nothing");
+    eval_direct_call_fallback(bytecode, env, runtime, slots)
+}
+
+/// Only a declined tier moves the actual callee and inputs into VM storage.
+/// The admitted path borrows the owning entry without moving large records
+/// through recursive dispatcher stack frames.
+#[inline(never)]
+fn eval_direct_call_fallback(
+    bytecode: &Bytecode,
+    entry: &mut Option<crate::context::ActivationContext>,
+    runtime: &mut crate::context::RuntimeServices,
+    slots: &mut Option<DirectCallSlots<'_>>,
+) -> Result<Value, RuntimeError> {
+    let env = entry.take().expect("prepared callee activation");
+    let direct_call_slots = slots.take().expect("prepared positional inputs");
     let mut vm = Vm::new_with_globals_upvalues_with_stack_and_direct_call_slots(
         bytecode,
+        runtime,
         env,
         Vec::new(),
         Vec::new(),
@@ -166,14 +168,27 @@ pub(super) fn eval_direct_call_bytecode(
     // The direct-slot contract excludes closures over this frame's locals, so
     // nothing outlives the call and the allocation can go back to the body's
     // pool instead of being freed and rebuilt on the next invocation.
-    bytecode.recycle_local_slots(std::mem::take(&mut vm.current.locals));
+    vm.recycle_binding_slots();
     if let Some(cold) = vm.current.cold.take() {
         bytecode.recycle_cold_frame(cold);
     }
     value
 }
 
+/// `FrameState::slow_flags` bits, set by every writer that changes what the
+/// dispatch loop must check before an op: a promotion (authority, and scope
+/// tracking once it starts) or a scope update that changes authority. The
+/// fast loop runs only while scope tracking and reference hooks are off and
+/// leaves its interval as soon as an op sets a bit.
+pub(super) const SLOW_SCOPES: u8 = 1;
+pub(super) const SLOW_AUTHORITY: u8 = 1 << 1;
+
 pub(super) struct FrameState<'a> {
+    pub(super) slow_flags: u8,
+    pub(super) reference_hooks: bool,
+    pub(super) active_reference_count: usize,
+    pub(super) binding_scope: Option<crate::binding::ScopeId>,
+    pub(super) scope_instances: RefCell<Option<Box<super::vm_scopes::ScopeInstances>>>,
     pub(super) bytecode: FrameBytecode<'a>,
     /// Whether this frame may run the lowered stream that also virtualizes
     /// function literals. It is a selection input rather than a selection:
@@ -187,7 +202,7 @@ pub(super) struct FrameState<'a> {
     pub(super) virtual_values: Vec<Value>,
     pub(super) stack: OperandStack,
     pub(super) locals: Vec<Slot>,
-    pub(super) local_upvalues: Vec<Option<Upvalue>>,
+    pub(super) local_upvalues: Vec<Option<BindingCell>>,
     /// Direct frames that only read received cells retain the source function
     /// once and resolve cells by bytecode slot. This avoids rebuilding an
     /// owned local-sized option vector for every direct invocation while
@@ -203,20 +218,21 @@ pub(super) struct FrameState<'a> {
     /// the cell's uninitialized marker still deoptimizes deleted/accessor
     /// globals through the observable global-object path.
     pub(super) realm_binding_slots: u128,
-    pub(super) upvalues: Vec<Upvalue>,
+    /// The realm binding-table generation `realm_binding_slots` was derived
+    /// at: while it is current, each such slot's cell is still the realm's
+    /// cell for its name (`binding::table::DynamicBindings::generation`).
+    pub(super) realm_binding_generation: u64,
+    pub(super) upvalues: Vec<BindingCell>,
     /// Shared realm plus this frame's internal/caller-scope bindings.
-    pub(super) env: CallEnv,
-    /// Ordinary leaf calls can keep their receiver here instead of
-    /// materializing a name-keyed frame binding. Functions that compile an
-    /// own `this` local store it in `locals` and leave this empty.
-    pub(super) direct_this: Option<Value>,
+    pub(super) env: crate::context::ActivationContext,
+    /// Indexed-entry eligibility, never receiver storage. Receiver fast paths
+    /// borrow the activation's canonical call owner through `indexed_receiver`.
+    pub(super) indexed_call: bool,
     pub(super) realm: Realm,
-    /// Dynamic-import host copied into every `CallEnv` this VM creates.
+    /// Dynamic-import host copied into every `crate::context::ActivationContext` this VM creates.
     pub(super) module_host: Option<crate::module::ModuleHostRef>,
-    /// Test262 `$262.agent` context stamped onto every `CallEnv` this VM builds
+    /// Test262 `$262.agent` context stamped onto every `crate::context::ActivationContext` this VM builds
     /// (via `attach_host`), so native `Atomics`/`$262.agent` hooks reach it.
-    #[cfg(feature = "agents")]
-    pub(super) agent_context: Option<crate::agent::AgentContextRef>,
     /// Cached realm Array.prototype for the `a[i] = x` fast path.
     pub(super) array_prototype_cache: Option<ObjectRef>,
     /// Cached intrinsic Object.prototype for object-literal construction.
@@ -251,6 +267,9 @@ pub(super) struct FrameState<'a> {
 /// until the first such operation materializes it.
 #[derive(Default)]
 pub(super) struct ColdFrame {
+    pub(super) class_regions: Vec<super::vm_class_region::ClassKeyContinuation>,
+    pub(super) active_reference_lifetimes: Vec<usize>,
+    pub(super) resolved_bindings: Vec<Option<crate::binding::ResolvedReference>>,
     /// Frame-local override of the shared numeric mutation loop plans,
     /// materialized only when a deoptimization suppresses or rewrites one for
     /// this invocation.
@@ -276,17 +295,6 @@ pub(super) struct ColdFrame {
     /// `Some(None)` while it may hand a loop back to the tier, and
     /// `Some(Some(backedge))` once it has (`vm/wide_resume.rs`).
     pub(super) wide_handback: Option<Option<usize>>,
-    /// What this frame last overlaid onto its dynamic environment
-    /// (`Vm::frame_deopt_bindings_memoized`).
-    pub(super) deopt_overlay_memo: Option<DeoptOverlayMemo>,
-}
-
-/// The environment, its generation after the overlay, and the (slot, cell)
-/// pairs overlaid, in order.
-pub(super) struct DeoptOverlayMemo {
-    pub(super) bindings: usize,
-    pub(super) generation: u64,
-    pub(super) cells: Vec<(usize, usize)>,
 }
 
 /// A per-body pool of cleared [`ColdFrame`] boxes, shared like the operand
@@ -307,7 +315,11 @@ impl ColdFramePool {
     const MAX_POOLED: usize = 8;
 
     pub(super) fn take(&self) -> Box<ColdFrame> {
-        self.0.borrow_mut().pop().unwrap_or_default()
+        crate::diagnostics::count!(cold_frame_pool_requests);
+        self.0.borrow_mut().pop().unwrap_or_else(|| {
+            crate::diagnostics::count!(cold_frame_allocations);
+            Box::default()
+        })
     }
 
     pub(super) fn recycle(&self, mut cold: Box<ColdFrame>) {
@@ -324,6 +336,9 @@ impl ColdFrame {
     /// frame that completed normally has already emptied its stacks, so this
     /// is a handful of length checks.
     pub(super) fn reset(&mut self) {
+        self.class_regions.clear();
+        self.resolved_bindings.clear();
+        self.active_reference_lifetimes.clear();
         self.numeric_mutation_loop_plans = None;
         self.sloppy_global_names.clear();
         self.try_stack.clear();
@@ -335,7 +350,6 @@ impl ColdFrame {
         self.with_stack.clear();
         self.disposable_scopes.clear();
         self.wide_handback = None;
-        self.deopt_overlay_memo = None;
     }
 }
 
@@ -425,7 +439,8 @@ impl<'a> FrameState<'a> {
     }
 }
 
-pub(super) struct Vm<'a> {
+pub(super) struct Vm<'a, 's> {
+    pub(super) runtime: &'s mut crate::context::RuntimeServices,
     pub(super) current: FrameState<'a>,
     /// Frames waiting for the one above them to finish. Empty until ordinary
     /// calls are routed onto this VM; the driver in `frame_stack` is what
@@ -436,13 +451,13 @@ pub(super) struct Vm<'a> {
     pub(super) pending_frame_entry: Option<(FrameState<'a>, super::frame_stack::FrameContinuation)>,
 }
 
-impl<'a> Vm<'a> {
+impl<'a, 's> Vm<'a, 's> {
     pub(super) fn into_frame(self) -> FrameState<'a> {
         self.current
     }
 }
 
-impl<'a> Deref for Vm<'a> {
+impl<'a, 's> Deref for Vm<'a, 's> {
     type Target = FrameState<'a>;
 
     fn deref(&self) -> &Self::Target {
@@ -450,13 +465,13 @@ impl<'a> Deref for Vm<'a> {
     }
 }
 
-impl DerefMut for Vm<'_> {
+impl DerefMut for Vm<'_, '_> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.current
     }
 }
 
-impl<'a> Vm<'a> {
+impl<'a, 's> Vm<'a, 's> {
     pub(super) fn coerce_property_key(
         &mut self,
         value: Value,
@@ -471,13 +486,12 @@ impl<'a> Vm<'a> {
             | Value::Array(_)
             | Value::Map(_)
             | Value::Set(_) => {
-                let mut key_env = self.callee_env();
+                let mut key_env = self.context();
                 let key = to_property_key_value(value, &mut key_env)?;
-                self.apply_env(key_env);
                 Ok(key)
             }
             value => {
-                let mut key_env = self.callee_env();
+                let mut key_env = self.context();
                 to_property_key_value(value, &mut key_env)
             }
         }
@@ -502,16 +516,35 @@ impl<'a> Vm<'a> {
     /// and its disassembly stays inspectable.
     #[inline(never)]
     pub(super) fn run_current_activation(&mut self) -> Result<FrameExit, RuntimeError> {
+        // Scope tracking and reference hooks are fixed for an activation
+        // except that a promotion can start scope tracking, which ends the
+        // fast loop's interval; the next one runs the checking loop.
+        self.current.slow_flags = 0;
+        if self.current.binding_scope.is_some() || self.current.reference_hooks {
+            self.dispatch::<true>()
+        } else {
+            self.dispatch::<false>()
+        }
+    }
+
+    /// The dispatch loop. `SLOW` checks scope changes, reference events and
+    /// authority before every op; the fast instance checks nothing per op
+    /// and leaves its interval after any out-of-line op that set a
+    /// `slow_flags` bit.
+    #[inline(never)]
+    fn dispatch<const SLOW: bool>(&mut self) -> Result<FrameExit, RuntimeError> {
         // One owner clone per activation, held on this stack frame. The view
         // borrows the owner rather than the VM, which is what lets the current
         // instruction stay borrowed while its handler mutates VM state -- and
         // what lets a frame own its bytecode instead of borrowing it from a
         // lifetime that outlives the whole VM.
         //
-        // Deriving here is correct because the selection inputs cannot change
-        // during an activation: `refresh_virtual_object_execution` runs only
-        // during generator setup and resume, before this loop starts.
+        // Promotion ends this dispatch interval with RefreshBindings. The next
+        // interval derives its stream from the new authority mask; no JS
+        // instruction or observable reference selection is replayed.
+        self.verify_binding_authority();
         let owner = self.current.bytecode.clone();
+        let authority_at_entry = self.current.authoritative_slots;
         let program = FrameProgramView::new(
             &owner,
             self.current.authoritative_slots,
@@ -525,7 +558,67 @@ impl<'a> Vm<'a> {
         let code = program.execution_code;
         let constants: &[Value] = &program.bytecode.constants;
         let mut pc = self.current.ip;
-        loop {
+        let references = &program.bytecode.binding_plan.references;
+        let mut event_cursor = references.events.partition_point(|event| event.pc < pc);
+        let mut expected_pc = pc;
+        // Fixed for the activation (set only at frame entry and resume).
+        let reference_hooks = self.current.reference_hooks;
+        'dispatch: loop {
+            debug_assert!(
+                SLOW || (self.current.binding_scope.is_none()
+                    && !self.current.reference_hooks
+                    && self.current.authoritative_slots == authority_at_entry),
+                "the fast dispatch loop outlived a slow-path change"
+            );
+            if SLOW {
+                if let Some(active) = self.current.binding_scope
+                    && program
+                        .bytecode
+                        .binding_plan
+                        .pc_scopes
+                        .get(pc)
+                        .is_some_and(|scope| *scope != active)
+                {
+                    self.update_binding_scope(pc);
+                    if self.current.authoritative_slots != authority_at_entry {
+                        self.current.ip = pc;
+                        return Ok(FrameExit::RefreshBindings);
+                    }
+                }
+                if reference_hooks {
+                    if pc != expected_pc {
+                        event_cursor = references.events.partition_point(|event| event.pc < pc);
+                    }
+                    expected_pc = pc + 1;
+                    if self.current.active_reference_count != 0 {
+                        self.prune_references(references, pc);
+                    }
+                    if references
+                        .events
+                        .get(event_cursor)
+                        .is_some_and(|event| event.pc == pc)
+                    {
+                        let event = &references.events[event_cursor];
+                        event_cursor += 1;
+                        self.current.ip = pc + 1;
+                        let result = self.run_reference_event(references, event, &code[pc]);
+                        match self.handle_runtime_result(result)? {
+                            Some(false) => {}
+                            _ => {
+                                pc = self.current.ip;
+                                continue;
+                            }
+                        }
+                    }
+                }
+                // Every authority writer sets `SLOW_AUTHORITY`.
+                if self.current.slow_flags & SLOW_AUTHORITY != 0
+                    && self.current.authoritative_slots != authority_at_entry
+                {
+                    self.current.ip = pc;
+                    return Ok(FrameExit::RefreshBindings);
+                }
+            }
             let Some(op) = code.get(pc) else {
                 self.current.ip = pc;
                 return Err(RuntimeError {
@@ -536,346 +629,365 @@ impl<'a> Vm<'a> {
             pc += 1;
             #[cfg(feature = "perf-counters")]
             crate::diagnostics::update(|c| c.executed_ops += 1);
-            match op {
-                Op::LoadConst(index) => {
-                    crate::diagnostics::count!(dispatched_load_const_ops);
-                    if let Some(value) = constants.get(*index) {
-                        let value = value.clone();
-                        self.current.stack.push(value);
-                        continue;
+            'out_of_line: {
+                match op {
+                    Op::LoadConst(index) => {
+                        crate::diagnostics::count!(dispatched_load_const_ops);
+                        if let Some(value) = constants.get(*index) {
+                            let value = value.clone();
+                            self.current.stack.push(value);
+                            continue 'dispatch;
+                        }
                     }
-                }
-                Op::LoadLocal(slot) => {
-                    crate::diagnostics::count!(dispatched_local_binding_ops);
-                    crate::diagnostics::count!(dispatched_load_local_ops);
-                    // The general path answers with `Result<Value,
-                    // RuntimeError>` (40 bytes) and `handle_runtime_result`
-                    // rewraps it as `Result<Option<Value>, RuntimeError>` (48).
-                    // Neither fits the two-register return, so the most
-                    // frequently dispatched opcode in the engine paid two
-                    // round trips through memory to report a success that
-                    // cannot fail. Answer the authoritative-slot case here
-                    // instead, and leave everything else out of line.
-                    if !self.current.direct_eval_with_stack
-                        && *slot < u128::BITS as usize
-                        && self.current.authoritative_slots & (1_u128 << *slot) != 0
-                        && let Some(Some(value)) = self.current.locals.get(*slot)
-                        && !value.is_uninitialized_lexical_marker()
-                    {
-                        let value = super::vm_bindings::clone_local_value(value);
-                        self.current.stack.push(value);
-                        crate::diagnostics::count!(authoritative_load_local_hits);
-                        continue;
+                    Op::LoadLocal(slot) => {
+                        crate::diagnostics::count!(dispatched_local_binding_ops);
+                        crate::diagnostics::count!(dispatched_load_local_ops);
+                        // The general path answers with `Result<Value,
+                        // RuntimeError>` (40 bytes) and `handle_runtime_result`
+                        // rewraps it as `Result<Option<Value>, RuntimeError>` (48).
+                        // Neither fits the two-register return, so the most
+                        // frequently dispatched opcode in the engine paid two
+                        // round trips through memory to report a success that
+                        // cannot fail. Answer the authoritative-slot case here
+                        // instead, and leave everything else out of line.
+                        if !self.current.direct_eval_with_stack
+                            && *slot < u128::BITS as usize
+                            && self.current.authoritative_slots & (1_u128 << *slot) != 0
+                            && let Some(Some(value)) = self.current.locals.get(*slot)
+                        {
+                            let value = super::vm_bindings::clone_local_value(value);
+                            self.current.stack.push(value);
+                            crate::diagnostics::count!(authoritative_load_local_hits);
+                            continue 'dispatch;
+                        }
+                        self.current.ip = pc;
+                        self.op_load_local(*slot)?;
+                        pc = self.current.ip;
+                        break 'out_of_line;
                     }
-                    self.current.ip = pc;
-                    self.op_load_local(*slot)?;
-                    pc = self.current.ip;
-                    continue;
-                }
-                Op::StoreLocal(slot) => {
-                    crate::diagnostics::count!(dispatched_local_binding_ops);
-                    crate::diagnostics::count!(dispatched_store_local_ops);
-                    // Same rationale as `LoadLocal`: keep the
-                    // authoritative-slot write off the memory-returned
-                    // `Result` path. Falling through when the stack is empty is
-                    // deliberate -- the general path raises the underflow.
-                    let slot = *slot;
-                    if slot < u128::BITS as usize
-                        && self.current.authoritative_slots & (1_u128 << slot) != 0
-                        && self
-                            .current
-                            .bytecode
-                            .locals
-                            .get(slot)
-                            .is_some_and(|local| local.mutable)
-                        && let Some(value) = self.current.stack.pop()
-                    {
-                        self.current.locals[slot] = Some(value);
-                        crate::diagnostics::count!(authoritative_store_local_hits);
-                        continue;
+                    Op::StoreLocal(slot) => {
+                        crate::diagnostics::count!(dispatched_local_binding_ops);
+                        crate::diagnostics::count!(dispatched_store_local_ops);
+                        // Same rationale as `LoadLocal`: keep the
+                        // authoritative-slot write off the memory-returned
+                        // `Result` path. Falling through when the stack is empty is
+                        // deliberate -- the general path raises the underflow.
+                        let slot = *slot;
+                        if slot < u128::BITS as usize
+                            && self.current.authoritative_slots & (1_u128 << slot) != 0
+                            && self
+                                .current
+                                .bytecode
+                                .locals
+                                .get(slot)
+                                .is_some_and(|local| local.mutable)
+                            && let Some(value) = self.current.stack.pop()
+                        {
+                            self.current.locals[slot] = Some(value);
+                            crate::diagnostics::count!(authoritative_store_local_hits);
+                            continue 'dispatch;
+                        }
+                        self.current.ip = pc;
+                        self.op_store_local(slot)?;
+                        pc = self.current.ip;
+                        break 'out_of_line;
                     }
-                    self.current.ip = pc;
-                    self.op_store_local(slot)?;
-                    pc = self.current.ip;
-                    continue;
-                }
-                Op::AssignLocal(slot) => {
-                    crate::diagnostics::count!(dispatched_local_binding_ops);
-                    crate::diagnostics::count!(dispatched_assign_local_ops);
-                    // Mirrors `assign_local`'s own fast path, so an assignment
-                    // to an initialized mutable slot never builds a `Result` to
-                    // report that it succeeded.
-                    let slot = *slot;
-                    if !self.current.direct_eval_with_stack
-                        && slot < u128::BITS as usize
-                        && self.current.authoritative_slots & (1_u128 << slot) != 0
-                        && self
-                            .current
-                            .bytecode
-                            .locals
-                            .get(slot)
-                            .is_some_and(|local| local.mutable)
-                        && self.current.locals.get(slot).is_some_and(|local| {
-                            local
-                                .as_ref()
-                                .is_some_and(|local| !local.is_uninitialized_lexical_marker())
-                        })
-                        && let Some(value) = self.current.stack.pop()
-                    {
-                        self.current.locals[slot] = Some(value);
-                        crate::diagnostics::count!(authoritative_assign_local_hits);
-                        continue;
+                    Op::AssignLocal(slot) => {
+                        crate::diagnostics::count!(dispatched_local_binding_ops);
+                        crate::diagnostics::count!(dispatched_assign_local_ops);
+                        // Mirrors `assign_local`'s own fast path, so an assignment
+                        // to an initialized mutable slot never builds a `Result` to
+                        // report that it succeeded.
+                        let slot = *slot;
+                        if !self.current.direct_eval_with_stack
+                            && slot < u128::BITS as usize
+                            && self.current.authoritative_slots & (1_u128 << slot) != 0
+                            && self
+                                .current
+                                .bytecode
+                                .locals
+                                .get(slot)
+                                .is_some_and(|local| local.mutable)
+                            && self.current.locals.get(slot).is_some_and(Option::is_some)
+                            && let Some(value) = self.current.stack.pop()
+                        {
+                            self.current.locals[slot] = Some(value);
+                            crate::diagnostics::count!(authoritative_assign_local_hits);
+                            continue 'dispatch;
+                        }
+                        self.current.ip = pc;
+                        self.op_assign_local(slot)?;
+                        pc = self.current.ip;
+                        break 'out_of_line;
                     }
-                    self.current.ip = pc;
-                    self.op_assign_local(slot)?;
-                    pc = self.current.ip;
-                    continue;
-                }
-                Op::LoadGlobal(name) => {
-                    crate::diagnostics::count!(dispatched_global_binding_ops);
-                    self.current.ip = pc;
-                    self.op_load_global(name)?;
-                    pc = self.current.ip;
-                    continue;
-                }
-                Op::StoreGlobalStrict(name) => {
-                    crate::diagnostics::count!(dispatched_global_binding_ops);
-                    self.current.ip = pc;
-                    self.op_store_global_strict(name)?;
-                    pc = self.current.ip;
-                    continue;
-                }
-                Op::StoreGlobalSloppy { slot, name } => {
-                    crate::diagnostics::count!(dispatched_global_binding_ops);
-                    self.current.ip = pc;
-                    self.op_store_global_sloppy(*slot, name)?;
-                    pc = self.current.ip;
-                    continue;
-                }
-                Op::GetPropNamed { name, cache, .. } => {
-                    crate::diagnostics::count!(dispatched_named_property_ops);
-                    crate::diagnostics::count!(named_property_reads);
-                    self.current.ip = pc;
-                    self.op_get_prop_named(program.bytecode, *name, cache)?;
-                    pc = self.current.ip;
-                    continue;
-                }
-                Op::GetPropIndex(index) => {
-                    crate::diagnostics::count!(dispatched_computed_property_ops);
-                    crate::diagnostics::count!(computed_property_reads);
-                    self.current.ip = pc;
-                    self.op_get_prop_index(*index)?;
-                    pc = self.current.ip;
-                    continue;
-                }
-                Op::GetProp => {
-                    crate::diagnostics::count!(dispatched_computed_property_ops);
-                    crate::diagnostics::count!(computed_property_reads);
-                    self.current.ip = pc;
-                    self.op_get_prop()?;
-                    pc = self.current.ip;
-                    continue;
-                }
-                Op::SetProp { is_strict } => {
-                    crate::diagnostics::count!(dispatched_computed_property_ops);
-                    crate::diagnostics::count!(computed_property_writes);
-                    self.current.ip = pc;
-                    self.op_set_prop(*is_strict)?;
-                    pc = self.current.ip;
-                    continue;
-                }
-                Op::SetPropIndex { index, is_strict } => {
-                    crate::diagnostics::count!(dispatched_computed_property_ops);
-                    crate::diagnostics::count!(computed_property_writes);
-                    self.current.ip = pc;
-                    self.op_set_prop_index(*index, *is_strict)?;
-                    pc = self.current.ip;
-                    continue;
-                }
-                Op::SetPropNamed {
-                    name,
-                    cache,
-                    is_strict,
-                    ..
-                } => {
-                    crate::diagnostics::count!(dispatched_named_property_ops);
-                    crate::diagnostics::count!(named_property_writes);
-                    self.current.ip = pc;
-                    self.op_set_prop_named(program.bytecode, *name, cache.as_ref(), *is_strict)?;
-                    pc = self.current.ip;
-                    continue;
-                }
-                Op::Call(argc) => {
-                    crate::diagnostics::count!(dispatched_call_construct_ops);
-                    self.current.ip = pc;
-                    self.call(*argc)?;
-                    pc = self.current.ip;
-                    continue;
-                }
-                Op::CallResolved(argc) => {
-                    crate::diagnostics::count!(dispatched_call_construct_ops);
-                    self.current.ip = pc;
-                    self.call_resolved(*argc)?;
-                    pc = self.current.ip;
-                    continue;
-                }
-                Op::CallResolvedGuardedMathUnary => {
-                    crate::diagnostics::count!(dispatched_call_construct_ops);
-                    self.current.ip = pc;
-                    self.call_resolved_guarded_math_unary()?;
-                    pc = self.current.ip;
-                    continue;
-                }
-                Op::New(argc) => {
-                    crate::diagnostics::count!(dispatched_call_construct_ops);
-                    self.current.ip = pc;
-                    self.construct(*argc)?;
-                    pc = self.current.ip;
-                    continue;
-                }
-                Op::Unary(op) => {
-                    crate::diagnostics::count!(dispatched_numeric_ops);
-                    self.current.ip = pc;
-                    self.op_unary(*op)?;
-                    pc = self.current.ip;
-                    continue;
-                }
-                Op::Return => {
-                    crate::diagnostics::count!(dispatched_branch_return_ops);
-                    self.current.ip = pc;
-                    if let Some(value) = self.op_return()? {
-                        return Ok(FrameExit::Completed(Completion::Return(value)));
+                    Op::LoadGlobal(name) => {
+                        crate::diagnostics::count!(dispatched_global_binding_ops);
+                        self.current.ip = pc;
+                        self.op_load_global(name)?;
+                        pc = self.current.ip;
+                        break 'out_of_line;
                     }
-                    pc = self.current.ip;
-                    continue;
-                }
-                Op::Pop => {
-                    crate::diagnostics::count!(dispatched_stack_ops);
-                    if self.current.stack.pop().is_some() {
-                        continue;
+                    Op::StoreGlobalStrict(name) => {
+                        crate::diagnostics::count!(dispatched_global_binding_ops);
+                        self.current.ip = pc;
+                        self.op_store_global_strict(name)?;
+                        pc = self.current.ip;
+                        break 'out_of_line;
                     }
-                    self.current.ip = pc;
-                    return Err(stack_underflow());
-                }
-                Op::Dup => {
-                    crate::diagnostics::count!(dispatched_stack_ops);
-                    let stack = &mut *self.current.stack;
-                    let Some(value) = stack.last() else {
+                    Op::StoreGlobalSloppy { slot, name } => {
+                        crate::diagnostics::count!(dispatched_global_binding_ops);
+                        self.current.ip = pc;
+                        self.op_store_global_sloppy(*slot, name)?;
+                        pc = self.current.ip;
+                        break 'out_of_line;
+                    }
+                    Op::GetPropNamed { name, cache, .. } => {
+                        crate::diagnostics::count!(dispatched_named_property_ops);
+                        crate::diagnostics::count!(named_property_reads);
+                        self.current.ip = pc;
+                        self.op_get_prop_named(program.bytecode, *name, cache)?;
+                        pc = self.current.ip;
+                        break 'out_of_line;
+                    }
+                    Op::GetPropIndex(index) => {
+                        crate::diagnostics::count!(dispatched_computed_property_ops);
+                        crate::diagnostics::count!(computed_property_reads);
+                        self.current.ip = pc;
+                        self.op_get_prop_index(*index)?;
+                        pc = self.current.ip;
+                        break 'out_of_line;
+                    }
+                    Op::GetProp => {
+                        crate::diagnostics::count!(dispatched_computed_property_ops);
+                        crate::diagnostics::count!(computed_property_reads);
+                        self.current.ip = pc;
+                        self.op_get_prop()?;
+                        pc = self.current.ip;
+                        break 'out_of_line;
+                    }
+                    Op::SetProp { is_strict } => {
+                        crate::diagnostics::count!(dispatched_computed_property_ops);
+                        crate::diagnostics::count!(computed_property_writes);
+                        self.current.ip = pc;
+                        self.op_set_prop(*is_strict)?;
+                        pc = self.current.ip;
+                        break 'out_of_line;
+                    }
+                    Op::SetPropIndex { index, is_strict } => {
+                        crate::diagnostics::count!(dispatched_computed_property_ops);
+                        crate::diagnostics::count!(computed_property_writes);
+                        self.current.ip = pc;
+                        self.op_set_prop_index(*index, *is_strict)?;
+                        pc = self.current.ip;
+                        break 'out_of_line;
+                    }
+                    Op::SetPropNamed {
+                        name,
+                        cache,
+                        is_strict,
+                        ..
+                    } => {
+                        crate::diagnostics::count!(dispatched_named_property_ops);
+                        crate::diagnostics::count!(named_property_writes);
+                        self.current.ip = pc;
+                        self.op_set_prop_named(
+                            program.bytecode,
+                            *name,
+                            cache.as_ref(),
+                            *is_strict,
+                        )?;
+                        pc = self.current.ip;
+                        break 'out_of_line;
+                    }
+                    Op::Call(argc) => {
+                        crate::diagnostics::count!(dispatched_call_construct_ops);
+                        self.current.ip = pc;
+                        self.call(*argc)?;
+                        pc = self.current.ip;
+                        break 'out_of_line;
+                    }
+                    Op::CallResolved(argc) => {
+                        crate::diagnostics::count!(dispatched_call_construct_ops);
+                        self.current.ip = pc;
+                        self.call_resolved(*argc)?;
+                        pc = self.current.ip;
+                        break 'out_of_line;
+                    }
+                    Op::CallResolvedGuardedMathUnary => {
+                        crate::diagnostics::count!(dispatched_call_construct_ops);
+                        self.current.ip = pc;
+                        self.call_resolved_guarded_math_unary()?;
+                        pc = self.current.ip;
+                        break 'out_of_line;
+                    }
+                    Op::New(argc) => {
+                        crate::diagnostics::count!(dispatched_call_construct_ops);
+                        self.current.ip = pc;
+                        self.construct(*argc)?;
+                        pc = self.current.ip;
+                        break 'out_of_line;
+                    }
+                    Op::Unary(op) => {
+                        crate::diagnostics::count!(dispatched_numeric_ops);
+                        self.current.ip = pc;
+                        self.op_unary(*op)?;
+                        pc = self.current.ip;
+                        break 'out_of_line;
+                    }
+                    Op::Return => {
+                        crate::diagnostics::count!(dispatched_branch_return_ops);
+                        self.current.ip = pc;
+                        if let Some(value) = self.op_return()? {
+                            return Ok(FrameExit::Completed(Completion::Return(value)));
+                        }
+                        pc = self.current.ip;
+                        break 'out_of_line;
+                    }
+                    Op::Pop => {
+                        crate::diagnostics::count!(dispatched_stack_ops);
+                        if self.current.stack.pop().is_some() {
+                            continue 'dispatch;
+                        }
                         self.current.ip = pc;
                         return Err(stack_underflow());
-                    };
-                    let value = super::vm_bindings::clone_local_value(value);
-                    stack.push(value);
-                    continue;
-                }
-                Op::ToNumeric => {
-                    crate::diagnostics::count!(dispatched_numeric_ops);
-                    // `eval_to_numeric` is the identity on a number, so the
-                    // general path pops and re-pushes the same value through
-                    // two memory-sized results to change nothing.
-                    if matches!(self.current.stack.last(), Some(Value::Number(_))) {
-                        continue;
                     }
-                    self.current.ip = pc;
-                    self.op_to_numeric()?;
-                    pc = self.current.ip;
-                    continue;
-                }
-                Op::Update(op) => {
-                    crate::diagnostics::count!(dispatched_numeric_ops);
-                    if let Some(Value::Number(number)) = self.current.stack.last_mut() {
-                        *number = match op {
-                            qjs_ast::UpdateOp::Increment => *number + 1.0,
-                            qjs_ast::UpdateOp::Decrement => *number - 1.0,
+                    Op::Dup => {
+                        crate::diagnostics::count!(dispatched_stack_ops);
+                        let stack = &mut *self.current.stack;
+                        let Some(value) = stack.last() else {
+                            self.current.ip = pc;
+                            return Err(stack_underflow());
                         };
-                        continue;
+                        let value = super::vm_bindings::clone_local_value(value);
+                        stack.push(value);
+                        continue 'dispatch;
                     }
-                    self.current.ip = pc;
-                    self.op_update(*op)?;
-                    pc = self.current.ip;
-                    continue;
-                }
-                Op::Binary(op) => {
-                    crate::diagnostics::count!(dispatched_numeric_ops);
-                    // Number-number arithmetic rewrites the operand stack in
-                    // place. The general path pops twice, calls
-                    // `fast_number_binary`, and returns a memory-sized
-                    // `Result`, which `handle_runtime_result` then rewraps --
-                    // four values crossing a call boundary to add two floats
-                    // that are already adjacent on the stack.
-                    let stack = &mut *self.current.stack;
-                    let len = stack.len();
-                    if len >= 2
-                        && let (Value::Number(left), Value::Number(right)) =
-                            (&stack[len - 2], &stack[len - 1])
-                        && let Some(value) =
-                            super::vm_props::fast_number_binary_numbers(*left, *op, *right)
-                    {
-                        stack.truncate(len - 1);
-                        stack[len - 2] = value;
-                        continue;
-                    }
-                    self.current.ip = pc;
-                    self.op_binary(*op)?;
-                    pc = self.current.ip;
-                    continue;
-                }
-                Op::Jump(target) => {
-                    crate::diagnostics::count!(dispatched_branch_return_ops);
-                    // A forward jump is the `if`/`else` and loop-exit shape and
-                    // carries no accelerator; only a backward edge consults the
-                    // loop plans, and that decision is out of line.
-                    if *target >= pc - 1 {
-                        pc = *target;
-                        continue;
-                    }
-                    self.current.ip = pc;
-                    if let Some(exit) = self.op_jump(&program, *target) {
-                        return Ok(exit);
-                    }
-                    pc = self.current.ip;
-                    continue;
-                }
-                Op::JumpIfFalse(target) => {
-                    crate::diagnostics::count!(dispatched_branch_return_ops);
-                    let Some(value) = self.current.stack.last() else {
+                    Op::ToNumeric => {
+                        crate::diagnostics::count!(dispatched_numeric_ops);
+                        // `eval_to_numeric` is the identity on a number, so the
+                        // general path pops and re-pushes the same value through
+                        // two memory-sized results to change nothing.
+                        if matches!(self.current.stack.last(), Some(Value::Number(_))) {
+                            continue 'dispatch;
+                        }
                         self.current.ip = pc;
-                        return Err(stack_underflow());
-                    };
-                    if !is_truthy(value) {
-                        pc = *target;
+                        self.op_to_numeric()?;
+                        pc = self.current.ip;
+                        break 'out_of_line;
                     }
-                    continue;
-                }
-                Op::JumpIfTrue(target) => {
-                    crate::diagnostics::count!(dispatched_branch_return_ops);
-                    let Some(value) = self.current.stack.last() else {
+                    Op::Update(op) => {
+                        crate::diagnostics::count!(dispatched_numeric_ops);
+                        if let Some(Value::Number(number)) = self.current.stack.last_mut() {
+                            *number = match op {
+                                qjs_ast::UpdateOp::Increment => *number + 1.0,
+                                qjs_ast::UpdateOp::Decrement => *number - 1.0,
+                            };
+                            continue 'dispatch;
+                        }
                         self.current.ip = pc;
-                        return Err(stack_underflow());
-                    };
-                    if is_truthy(value) {
-                        pc = *target;
+                        self.op_update(*op)?;
+                        pc = self.current.ip;
+                        break 'out_of_line;
                     }
-                    continue;
-                }
-                Op::JumpIfNotNullish(target) => {
-                    crate::diagnostics::count!(dispatched_branch_return_ops);
-                    if !matches!(
-                        self.current.stack.last(),
-                        Some(Value::Null | Value::Undefined)
-                    ) {
-                        pc = *target;
+                    Op::Binary(op) => {
+                        crate::diagnostics::count!(dispatched_numeric_ops);
+                        // Number-number arithmetic rewrites the operand stack in
+                        // place. The general path pops twice, calls
+                        // `fast_number_binary`, and returns a memory-sized
+                        // `Result`, which `handle_runtime_result` then rewraps --
+                        // four values crossing a call boundary to add two floats
+                        // that are already adjacent on the stack.
+                        let stack = &mut *self.current.stack;
+                        let len = stack.len();
+                        if len >= 2
+                            && let (Value::Number(left), Value::Number(right)) =
+                                (&stack[len - 2], &stack[len - 1])
+                            && let Some(value) =
+                                super::vm_props::fast_number_binary_numbers(*left, *op, *right)
+                        {
+                            stack.truncate(len - 1);
+                            stack[len - 2] = value;
+                            continue 'dispatch;
+                        }
+                        self.current.ip = pc;
+                        self.op_binary(*op)?;
+                        pc = self.current.ip;
+                        break 'out_of_line;
                     }
-                    continue;
+                    Op::Jump(target) => {
+                        crate::diagnostics::count!(dispatched_branch_return_ops);
+                        // A forward jump is the `if`/`else` and loop-exit shape and
+                        // carries no accelerator; only a backward edge consults the
+                        // loop plans, and that decision is out of line.
+                        if *target >= pc - 1 {
+                            pc = *target;
+                            continue 'dispatch;
+                        }
+                        self.current.ip = pc;
+                        if let Some(exit) = self.op_jump(&program, *target) {
+                            return Ok(exit);
+                        }
+                        pc = self.current.ip;
+                        break 'out_of_line;
+                    }
+                    Op::JumpIfFalse(target) => {
+                        crate::diagnostics::count!(dispatched_branch_return_ops);
+                        let Some(value) = self.current.stack.last() else {
+                            self.current.ip = pc;
+                            return Err(stack_underflow());
+                        };
+                        if !is_truthy(value) {
+                            pc = *target;
+                        }
+                        continue 'dispatch;
+                    }
+                    Op::JumpIfTrue(target) => {
+                        crate::diagnostics::count!(dispatched_branch_return_ops);
+                        let Some(value) = self.current.stack.last() else {
+                            self.current.ip = pc;
+                            return Err(stack_underflow());
+                        };
+                        if is_truthy(value) {
+                            pc = *target;
+                        }
+                        continue 'dispatch;
+                    }
+                    Op::JumpIfNotNullish(target) => {
+                        crate::diagnostics::count!(dispatched_branch_return_ops);
+                        if !matches!(
+                            self.current.stack.last(),
+                            Some(Value::Null | Value::Undefined)
+                        ) {
+                            pc = *target;
+                        }
+                        continue 'dispatch;
+                    }
+                    _ => {
+                        crate::diagnostics::count!(dispatched_general_ops);
+                    }
                 }
-                _ => {
-                    crate::diagnostics::count!(dispatched_general_ops);
+                self.current.ip = pc;
+                match self.run_general_op(op, &program)? {
+                    Some(exit) => return Ok(exit),
+                    None => pc = self.current.ip,
+                }
+                self.verify_binding_authority();
+                if SLOW && self.current.authoritative_slots != authority_at_entry {
+                    return Ok(FrameExit::RefreshBindings);
                 }
             }
-            self.current.ip = pc;
-            match self.run_general_op(op, &program)? {
-                Some(exit) => return Ok(exit),
-                None => pc = self.current.ip,
+            // Only out-of-line work can promote a binding or start scope
+            // tracking; the inline arms continue above. A promotion that
+            // leaves authority unchanged and starts no scope tracking needs
+            // no new interval.
+            if !SLOW && self.current.slow_flags != 0 {
+                if self.current.binding_scope.is_some()
+                    || self.current.authoritative_slots != authority_at_entry
+                {
+                    self.current.ip = pc;
+                    return Ok(FrameExit::RefreshBindings);
+                }
+                self.current.slow_flags = 0;
             }
         }
     }
@@ -960,10 +1072,9 @@ impl<'a> Vm<'a> {
         {
             result?
         } else {
-            let mut env = self.callee_env();
-            let value = get_property_key(object, &key, &mut env)?;
-            self.apply_env(env);
-            value
+            let mut env = self.context();
+
+            get_property_key(object, &key, &mut env)?
         };
         self.stack.push(value);
         Ok(())
@@ -978,17 +1089,36 @@ impl<'a> Vm<'a> {
         let object = if let Some(slot) = cache.local_slot() {
             let direct_eval_lookup =
                 self.direct_eval_with_stack && self.bytecode.local_is_from_env(slot);
-            if self.slot_is_authoritative(slot)
-                && !direct_eval_lookup
-                && let Some(Some(object)) = self.locals.get(slot)
-                && !matches!(
-                    object,
-                    Value::Function(function) if function.is_uninitialized_lexical_marker()
-                )
-                && let Some(value) = self.try_cached_get_named(object, name, cache)
-            {
-                self.stack.push(value);
-                return Ok(());
+            if self.slot_is_authoritative(slot) && !direct_eval_lookup {
+                let cached = {
+                    let frame = &mut self.current;
+                    match frame.locals.get(slot).and_then(Option::as_ref) {
+                        Some(object) => {
+                            if let Some(value) = object.unconditional_named_hook(name.as_str()) {
+                                Some(value)
+                            } else if let Value::Object(receiver) = object
+                                && receiver.is_typed_array_exotic()
+                                && name.as_str() == "length"
+                            {
+                                Self::cached_typed_array_length(object, receiver, cache)
+                            } else {
+                                let context = crate::context::Context {
+                                    runtime: self.runtime,
+                                    activation: &mut frame.env,
+                                    native: None,
+                                };
+                                cache
+                                    .get_value(object, Some(&context))
+                                    .or_else(|| cache.read_value(object, name, Some(&context)))
+                            }
+                        }
+                        _ => None,
+                    }
+                };
+                if let Some(value) = cached {
+                    self.stack.push(value);
+                    return Ok(());
+                }
             }
             self.load_local(slot)?
         } else {
@@ -1010,18 +1140,15 @@ impl<'a> Vm<'a> {
         let value = if let Some(value) = self.try_cached_get_named(&object, name, cache) {
             value
         } else if let Some(property) = cache.accessor(&object) {
-            let mut env = self.callee_env();
-            let value =
-                crate::property::property_descriptor_value(Some(property), object, &mut env)?;
-            self.apply_env(env);
-            value
+            let mut env = self.context();
+
+            crate::property::property_descriptor_value(Some(property), object, &mut env)?
         } else if let Some(result) = self.try_direct_leaf_getter(&object, key) {
             result?
         } else {
-            let mut env = self.callee_env();
-            let value = get_property(object, key, &mut env)?;
-            self.apply_env(env);
-            value
+            let mut env = self.context();
+
+            get_property(object, key, &mut env)?
         };
         self.stack.push(value);
         Ok(())
@@ -1083,10 +1210,9 @@ impl<'a> Vm<'a> {
         let value = if let Some(value) = self.try_direct_get(&object, &key) {
             value
         } else {
-            let mut env = self.callee_env();
-            let value = get_property_key(object, &key, &mut env)?;
-            self.apply_env(env);
-            value
+            let mut env = self.context();
+
+            get_property_key(object, &key, &mut env)?
         };
         self.stack.push(value);
         Ok(())
@@ -1231,15 +1357,14 @@ impl<'a> Vm<'a> {
         ) {
             Some(written) => written,
             None => {
-                let mut env = self.callee_env();
-                let written = crate::typed_array::set_integer_indexed_element(
+                let mut env = self.context();
+
+                crate::typed_array::set_integer_indexed_element(
                     object,
                     index,
                     value.clone(),
                     &mut env,
-                )?;
-                self.apply_env(env);
-                written
+                )?
             }
         };
         if !written && is_strict {
@@ -1295,9 +1420,8 @@ impl<'a> Vm<'a> {
                 OwnDataPropertyWrite::NeedsSlowPath => {}
             }
         }
-        let mut env = self.callee_env();
+        let mut env = self.context();
         let wrote_data = set_property_key(object, key.clone(), value.clone(), &mut env)?;
-        self.apply_env(env);
         if !wrote_data && is_strict {
             return Err(RuntimeError {
                 thrown: None,
@@ -1307,8 +1431,19 @@ impl<'a> Vm<'a> {
         if updates_global_binding
             && wrote_data
             && let crate::PropertyKey::String(key) = key
+            && !self.env.is_global_lexical_binding(&key)
         {
-            self.env.insert_realm(key, value.clone());
+            // [[Set]] success also includes calling a setter. Only the
+            // resulting own data descriptor can supply a realm cell value;
+            // a setter may redefine/delete the property or change its value.
+            match self.global_this_own_property(&key) {
+                Some(property) if !property.is_accessor() => {
+                    self.env.insert_realm(key, property.value);
+                }
+                _ => {
+                    self.env.remove_realm(&key);
+                }
+            }
         }
         self.stack.push(value);
         Ok(())
@@ -1361,7 +1496,7 @@ impl<'a> Vm<'a> {
                 Value::Function(function) if function.native_kind() == Some(crate::NativeFunction::Date)
             )
         {
-            let mut env = self.realm_env();
+            let mut env = self.context();
             let result =
                 crate::date::fast_construct_date_from_number(callee.clone(), *date_value, &mut env);
             return result;
@@ -1369,43 +1504,16 @@ impl<'a> Vm<'a> {
         // An ordinary bytecode constructor admitted by the direct-leaf
         // predicate builds its receiver and runs on a slot-seeded frame, the
         // same activation an ordinary call gets, instead of the general
-        // construct path's name-keyed compatibility frame.
+        // construct path; both borrow the same runtime services.
         if let Some(result) = crate::function::try_construct_direct_leaf_function(
             &callee,
             arguments,
-            &self.env,
-            self.module_host.clone(),
-            #[cfg(feature = "agents")]
-            self.agent_context.clone(),
+            &mut self.context(),
         ) {
             return result;
         }
-        // A native constructor, like a native call, does not inherit the
-        // caller's lexical environment. Any coercion hooks or callbacks it
-        // invokes carry their own closure cells, while realm writes are shared
-        // directly. Avoid materializing and writing back a dynamic caller
-        // frame solely because construction happened beneath direct eval or a
-        // closure-creating function.
-        let frame_independent_native = matches!(
-            &callee,
-            Value::Function(function) if function.native.is_some() && function.bound.is_none()
-        );
-        let mut env = if frame_independent_native {
-            VmCallEnv {
-                env: self.realm_env(),
-                origin: VmCallEnvOrigin::RealmOnly,
-            }
-        } else {
-            self.call_env(&callee)
-        };
-        let result = crate::function::construct_function_slice(
-            callee.clone(),
-            callee,
-            arguments,
-            &mut env.env,
-        );
-        self.apply_call_env(env);
-        result
+        let mut env = self.context();
+        crate::function::construct_function_slice(callee.clone(), callee, arguments, &mut env)
     }
 
     pub(super) fn pop_arguments(&mut self, argc: usize) -> Result<Vec<Value>, RuntimeError> {
@@ -1421,56 +1529,12 @@ impl<'a> Vm<'a> {
         let value = self.pop()?;
         // Spreading walks the iterable's own iterator protocol, so it runs on
         // the callee's behalf rather than in the caller's lexical scope.
-        let mut env = self.callee_env();
+        let mut env = self.context();
         let arguments = crate::array::array_like_values_with_env(value, context, &mut env)?;
-        self.apply_env(env);
         Ok(arguments)
-    }
-
-    pub(super) fn refresh_realm_backed_locals_from_realm(&mut self) {
-        for position in 0..self.bytecode.frame_init_plan.sloppy_global_slots.len() {
-            let index = self.bytecode.frame_init_plan.sloppy_global_slots[position];
-            let Some(name) = self.current.bytecode.local_name_at(index) else {
-                continue;
-            };
-            if !self
-                .sloppy_global_names()
-                .iter()
-                .any(|candidate| candidate == name)
-            {
-                continue;
-            }
-            let value = if let Some(value) = self.realm.get_value(name) {
-                value
-            } else if let Some(property) = self.global_this_own_property(name)
-                && !property.is_accessor()
-            {
-                property.value
-            } else {
-                continue;
-            };
-            self.current.locals[index] = Some(value.clone());
-            if let Some(binding) = self.current.env.module_live_binding_cell(name) {
-                binding.set(value);
-            }
-        }
     }
 
     pub(super) fn pop(&mut self) -> Result<Value, RuntimeError> {
         self.stack.pop().ok_or_else(stack_underflow)
-    }
-
-    fn captured_immutable_function_name(
-        &self,
-        bytecode: &Bytecode,
-        local_names: &[String],
-    ) -> Option<String> {
-        let name = self.env.immutable_function_name()?;
-        if local_names.iter().any(|local| local == name) {
-            return None;
-        }
-        let references_name = bytecode.local_slot(name).is_some()
-            || bytecode.global_names().iter().any(|global| global == name);
-        references_name.then(|| name.to_owned())
     }
 }

@@ -18,8 +18,17 @@ use super::ir::{ObjectRestExclusion, Op};
 
 /// A member-target reference evaluated ahead of the value read.
 enum MemberReference {
-    Ordinary { object_slot: usize, key_slot: usize },
-    Private { object_slot: usize, name: String },
+    Identifier {
+        site: super::reference_plan::ReferenceId,
+    },
+    Ordinary {
+        object_slot: usize,
+        key_slot: usize,
+    },
+    Private {
+        object_slot: usize,
+        name: String,
+    },
 }
 
 impl Compiler {
@@ -152,6 +161,11 @@ impl Compiler {
         &mut self,
         target: &AssignmentTarget,
     ) -> Result<Option<MemberReference>, RuntimeError> {
+        if let AssignmentTarget::Identifier { name, .. } = target {
+            return Ok(Some(MemberReference::Identifier {
+                site: self.begin_reference(name),
+            }));
+        }
         let AssignmentTarget::Member {
             object, property, ..
         } = target
@@ -187,6 +201,9 @@ impl Compiler {
         match target {
             AssignmentTarget::Identifier { name, .. } => {
                 self.emit_pattern_identifier_store(name);
+                if let Some(MemberReference::Identifier { site }) = reference {
+                    self.finish_reference(*site, None, self.code.len() - 1);
+                }
                 Ok(())
             }
             AssignmentTarget::Member { .. } => {
@@ -221,6 +238,9 @@ impl Compiler {
 
     fn emit_pattern_member_store(&mut self, reference: &MemberReference, value_slot: usize) {
         match reference {
+            MemberReference::Identifier { .. } => {
+                unreachable!("identifier store has its own route")
+            }
             MemberReference::Ordinary {
                 object_slot,
                 key_slot,

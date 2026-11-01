@@ -8,17 +8,10 @@ use std::{
     rc::Rc,
 };
 
-use qjs_ast::{FunctionParams, Stmt};
+use qjs_ast::FunctionParams;
 
-use crate::CallEnv;
-use crate::function::{DynamicBindings, ModuleImports, Realm, Upvalue};
-use crate::module::ModuleHostRef;
-use crate::{
-    Bytecode, NativeFunction, ObjectRef, Property, PropertyKey, Prototype, Value,
-    bytecode::compile_function_body,
-    function::{collect_function_local_names, is_strict_function_body},
-    object_prototype,
-};
+use crate::function::{BindingCell, Realm};
+use crate::{Bytecode, NativeFunction, ObjectRef, Property, PropertyKey, Prototype, Value};
 
 const DYNAMIC_FUNCTION_REALM_GLOBAL: &str = "__quickjsRustDynamicFunctionRealm";
 
@@ -144,9 +137,6 @@ impl fmt::Debug for FunctionWeakRef {
 }
 
 impl Function {
-    pub(crate) fn immutable_env_binding(&self) -> Option<&str> {
-        self.immutable_env_binding.as_deref().map(String::as_str)
-    }
     pub(crate) fn is_last_reference(&self) -> bool {
         Rc::strong_count(&self.0) == 1
     }
@@ -175,22 +165,6 @@ pub struct FunctionData {
     /// Whether `name` also creates the function body's internal name binding.
     /// Method definitions have a name property but no inner binding.
     pub(crate) has_name_binding: bool,
-    /// Whether the internal name binding is the *immutable* binding of a named
-    /// function expression (`var f = function g() {}`). Assigning to `g` inside
-    /// the body is a silent no-op in sloppy mode and a TypeError in strict mode.
-    /// False for function declarations (whose name is an ordinary mutable outer
-    /// binding) and for methods.
-    pub(crate) immutable_name_binding: bool,
-    /// An immutable binding supplied through the captured environment rather
-    /// than the function's own name, currently used for class inner names.
-    // Absent from ordinary closures; indirection keeps their Rc allocation
-    // within the 320-byte CLI size class. The binding cell remains separate.
-    #[allow(clippy::box_collection)]
-    immutable_env_binding: Option<Box<String>>,
-    /// Value for the rare immutable outer name that is not represented by a
-    /// compiler-generated received-upvalue slot (notably the self binding of a
-    /// named function expression referenced only by a nested function).
-    pub(crate) immutable_env_value: Option<Upvalue>,
     /// Parameter names. Held behind `Rc` so the frequent `Function` value
     /// clones (every property read, capture sync, and call setup) only bump a
     /// refcount instead of deep-cloning the parameter AST, which dominated call
@@ -199,12 +173,12 @@ pub struct FunctionData {
     pub params: Rc<FunctionParams>,
     /// Opaque state carried by native closure-like functions (promise
     /// reactions, async helpers, RegExp accessors, ...). User bytecode functions
-    /// keep this empty: lexical captures live in indexed [`Upvalue`] cells and
+    /// keep this empty: lexical captures live in indexed [`BindingCell`] cells and
     /// globals live in the shared `realm` cell below.
-    pub(crate) native_context: NativeContext,
+    native_captures: Option<Rc<crate::function::NativeCaptures>>,
     /// Stable creation realm for bytecode and native functions; intrinsic
     /// prototypes never resolve through mutable global constructor bindings.
-    pub(crate) realm: Option<Realm>,
+    pub(crate) creation: Option<Rc<crate::context::CreationContext>>,
     /// Whether this function was created while the host's temporary dynamic
     /// realm marker was active. The marker object remains live realm state;
     /// this bit only keeps ordinary calls off that cold lookup path.
@@ -218,6 +192,11 @@ pub struct FunctionData {
     /// fixed once this function is created, so recomputing it — including an
     /// O(parameter count) scan — on every single call is pure waste.
     pub(crate) direct_leaf_call_eligible: Cell<Option<bool>>,
+    /// For a function that retains a lexical scope: the holder epoch (plus
+    /// one, shifted) at which `ScopeCursor::resolves_globally` was last
+    /// decided, and its answer in bit 0; 1 before the first proof. Zero when
+    /// an indexed entry needs no scope proof (`function::call`).
+    pub(crate) lexical_scope_proof: Cell<u64>,
     /// Memoized: whether `new` on this base class constructor may run on the
     /// direct-leaf frame with its instance fields installed by the fast field
     /// loop. Resolved on the first construction, after class definition has
@@ -232,16 +211,7 @@ pub struct FunctionData {
     /// The compact tier's counterpart: whether its admission proof, as far as
     /// it depends on the function alone, holds, and the register count.
     pub(crate) compact_inline_facts: Cell<u32>,
-    pub(crate) deopt_bindings: Option<DynamicBindings>,
-    /// Whether calls may ignore `deopt_bindings`: set when the closure was
-    /// created resolving none of that scope's names, and revoked by the scope
-    /// itself as soon as a name is added, removed or remapped there
-    /// (`DynamicBindings::bypass`).
-    pub(crate) scope_bypassed: Cell<bool>,
-    pub(crate) module_host: Option<ModuleHostRef>,
-    pub(crate) module_imports: ModuleImports,
-    pub(crate) with_stack: Vec<Value>,
-    pub(crate) upvalues: Vec<Upvalue>,
+    pub(crate) upvalues: Vec<BindingCell>,
     /// Received-upvalue slots backed by the function creation realm. The cells
     /// stay live; this mask only avoids rediscovering their identity by name on
     /// every direct call.
@@ -259,10 +229,6 @@ pub struct FunctionData {
     pub(crate) is_strict: bool,
     pub(crate) lexical_this: bool,
     pub(crate) lexical_arguments: bool,
-    /// `new.target` captured when an arrow is created. Unlike `this` and
-    /// `arguments`, bytecode reads this through a dedicated opcode, so it is
-    /// retained explicitly rather than as an ordinary received upvalue.
-    pub(crate) lexical_new_target: Option<Upvalue>,
     /// Whether this is a generator function (`function*` / `*m()`), which
     /// returns a generator object when called instead of running its body.
     pub(crate) is_generator: bool,
@@ -275,10 +241,8 @@ pub struct FunctionData {
     /// Whether this is a derived (extends) class constructor, whose `this` is
     /// uninitialized until `super(...)` runs.
     pub(crate) is_derived_constructor: bool,
-    /// Whether this function is the implicit thunk for a class field
-    /// initializer. Direct eval inside such a thunk gets initializer-specific
-    /// early errors.
-    pub(crate) is_field_initializer: bool,
+    /// Call-owner restrictions for an ordinary body, field or static block.
+    pub(crate) owner_kind: crate::context::OwnerKind,
     /// The method/constructor [[HomeObject]] used to resolve `super.x`. For an
     /// instance method this is the class prototype; for a static method it is
     /// the constructor; for a derived constructor it is the prototype.
@@ -311,11 +275,12 @@ pub struct FunctionAuxiliaryState {
 }
 
 struct FunctionColdState {
+    lexical_scope: Option<crate::binding::ScopeCursor>,
     receiver_layout: Option<Rc<crate::value::layout::Layout>>,
     constructor_prototype_slot: Option<(crate::value::layout::LayoutVersion, usize)>,
     home_object: Option<Value>,
-    /// An arrow's retained derived activation: binding authority and field owner.
-    lexical_derived_this: Option<(Upvalue, Function)>,
+    /// An arrow's lexical receiver, target, home and restriction owner.
+    lexical_call: Option<Rc<crate::context::CallOwner>>,
     /// For a derived constructor, the parent constructor invoked by `super()`.
     super_constructor: Option<Value>,
     /// For a class constructor, the instance-field initializers run when a new
@@ -325,83 +290,6 @@ struct FunctionColdState {
     /// Explicit [[Prototype]] override. `None` means "use the default
     /// %Function.prototype% intrinsic"; `Some(None)` means it is null.
     private_state: crate::private::PrivateState,
-}
-
-/// Lazily allocated state captured by native closure-like functions.
-///
-/// User bytecode functions use their creation realm and keep this absent.
-/// Native functions share one empty context per domain through a weak attachment;
-/// the HashMap allocates buckets only on insertion and mutations copy on write. Native
-/// capture COW never detaches function identity or the property domain.
-#[derive(Clone, Default)]
-pub(crate) struct NativeContext(Option<Rc<NativeContextData>>);
-
-#[derive(Clone)]
-pub(crate) struct NativeContextData {
-    bindings: HashMap<String, Value>,
-    domain: crate::property::atom::AtomDomain,
-}
-
-impl NativeContext {
-    fn from_map(
-        map: HashMap<String, Value>,
-        domain: Option<&crate::property::atom::AtomDomain>,
-    ) -> Self {
-        match domain {
-            Some(domain) => {
-                if map.is_empty() {
-                    if let Some(context) = domain.empty_native_context().borrow().upgrade() {
-                        return Self(Some(context));
-                    }
-                    let context = Rc::new(NativeContextData {
-                        bindings: map,
-                        domain: domain.clone(),
-                    });
-                    *domain.empty_native_context().borrow_mut() = Rc::downgrade(&context);
-                    Self(Some(context))
-                } else {
-                    Self(Some(Rc::new(NativeContextData {
-                        bindings: map,
-                        domain: domain.clone(),
-                    })))
-                }
-            }
-            None => {
-                debug_assert!(map.is_empty());
-                Self::default()
-            }
-        }
-    }
-
-    pub(crate) fn get(&self, key: &str) -> Option<&Value> {
-        self.0
-            .as_deref()
-            .and_then(|context| context.bindings.get(key))
-    }
-
-    pub(crate) fn keys(&self) -> impl Iterator<Item = &String> {
-        self.0.iter().flat_map(|context| context.bindings.keys())
-    }
-
-    fn insert(&mut self, key: String, value: Value) {
-        let context = self
-            .0
-            .as_mut()
-            .expect("native captures require an explicit domain");
-        Rc::make_mut(context).bindings.insert(key, value);
-    }
-
-    pub(crate) fn clone_map(&self) -> HashMap<String, Value> {
-        self.0
-            .as_deref()
-            .map(|context| context.bindings.clone())
-            .unwrap_or_default()
-    }
-
-    #[cfg(test)]
-    fn is_allocated(&self) -> bool {
-        self.0.is_some()
-    }
 }
 
 impl FunctionAuxiliaryState {
@@ -431,13 +319,23 @@ impl FunctionAuxiliaryState {
     }
 }
 
+/// See `Function::call_owner_inputs`.
+pub(crate) enum CallOwnerInputs {
+    Lexical(Rc<crate::context::CallOwner>),
+    Root {
+        home: Option<Value>,
+        super_constructor: Option<Value>,
+    },
+}
+
 impl FunctionColdState {
     fn new(home_object: Option<Value>, super_constructor: Option<Value>) -> Self {
         Self {
+            lexical_scope: None,
             home_object,
             receiver_layout: None,
             constructor_prototype_slot: None,
-            lexical_derived_this: None,
+            lexical_call: None,
             super_constructor,
             instance_elements: Rc::new(Vec::new()),
             private_state: crate::private::PrivateState::default(),
@@ -464,13 +362,8 @@ pub(crate) struct BoundFunction {
 pub(crate) struct CompiledUserFunction {
     pub(crate) name: Option<String>,
     pub(crate) has_name_binding: bool,
-    pub(crate) immutable_name_binding: bool,
-    pub(crate) immutable_env_binding: Option<String>,
-    pub(crate) immutable_env_value: Option<Upvalue>,
     pub(crate) params: Rc<FunctionParams>,
-    pub(crate) realm: Realm,
-    pub(crate) module_host: Option<ModuleHostRef>,
-    pub(crate) module_imports: ModuleImports,
+    pub(crate) creation: Rc<crate::context::CreationContext>,
     pub(crate) bytecode: Rc<Bytecode>,
     pub(crate) source_text: Option<Rc<str>>,
     pub(crate) local_names: Rc<Vec<String>>,
@@ -478,32 +371,16 @@ pub(crate) struct CompiledUserFunction {
     pub(crate) is_strict: bool,
     pub(crate) lexical_this: bool,
     pub(crate) lexical_arguments: bool,
-    pub(crate) lexical_new_target: Option<Upvalue>,
+    pub(crate) lexical_call: Option<Rc<crate::context::CallOwner>>,
     pub(crate) is_generator: bool,
     pub(crate) is_async: bool,
     pub(crate) is_class_constructor: bool,
     pub(crate) is_derived_constructor: bool,
-    pub(crate) is_field_initializer: bool,
+    pub(crate) owner_kind: crate::context::OwnerKind,
     pub(crate) home_object: Option<Value>,
     pub(crate) super_constructor: Option<Value>,
-    pub(crate) deopt_bindings: Option<DynamicBindings>,
-    pub(crate) with_stack: Vec<Value>,
-    pub(crate) upvalues: Vec<Upvalue>,
-}
-
-#[derive(Clone, Copy)]
-struct LexicalBindings {
-    this: bool,
-    arguments: bool,
-}
-
-struct UserFunctionOptions {
-    /// The atom domain of the realm whose scope `env` snapshots.
-    atoms: crate::property::atom::AtomDomain,
-    bytecode: Option<Rc<Bytecode>>,
-    constructable: bool,
-    source_text: Rc<str>,
-    lexical_bindings: LexicalBindings,
+    pub(crate) lexical_scope: Option<crate::binding::ScopeCursor>,
+    pub(crate) upvalues: Vec<BindingCell>,
 }
 
 impl fmt::Debug for Function {
@@ -525,188 +402,39 @@ impl fmt::Debug for Function {
 }
 
 impl Function {
-    /// Inserts a binding into the function's creation environment. Used to seed
-    /// a freshly created native reaction's captured state; `Rc::make_mut` is
-    /// cheap here because the `Rc` is uniquely held immediately after creation.
-    pub(crate) fn insert_native_context(&mut self, key: String, value: Value) {
-        let data = Rc::get_mut(&mut self.0)
-            .expect("native context must be populated before sharing the function");
-        data.native_context.insert(key, value);
+    pub(crate) fn native_captures(&self) -> &crate::function::NativeCaptures {
+        self.native_captures
+            .as_deref()
+            .unwrap_or(&crate::function::NativeCaptures::None)
+    }
+    pub(crate) fn set_native_captures(&mut self, captures: crate::function::NativeCaptures) {
+        let data =
+            Rc::get_mut(&mut self.0).expect("capture payload is installed before function sharing");
+        crate::diagnostics::count!(native_capture_payload_allocations);
+        data.native_captures = Some(Rc::new(captures));
     }
 
     /// Adds an indexed capture while constructing a fresh internal native
     /// function. Keeping this mutation behind the handle prevents general
     /// copy-on-write detachment of JavaScript function identity.
-    pub(crate) fn push_upvalue(&mut self, upvalue: Upvalue) {
+    pub(crate) fn push_upvalue(&mut self, upvalue: BindingCell) {
         Rc::get_mut(&mut self.0)
             .expect("upvalues must be populated before sharing the function")
             .upvalues
             .push(upvalue);
     }
 
-    pub(crate) fn new_user(
-        name: Option<String>,
-        params: FunctionParams,
-        body: Vec<Stmt>,
-        env: HashMap<String, Value>,
-        atoms: crate::property::atom::AtomDomain,
-        source_text: Rc<str>,
-    ) -> Result<Self, crate::RuntimeError> {
-        Self::new_user_with_constructable(name, params, body, env, atoms, true, source_text)
-    }
-
-    pub(crate) fn new_user_with_constructable(
-        name: Option<String>,
-        params: FunctionParams,
-        body: Vec<Stmt>,
-        env: HashMap<String, Value>,
-        atoms: crate::property::atom::AtomDomain,
-        constructable: bool,
-        source_text: Rc<str>,
-    ) -> Result<Self, crate::RuntimeError> {
-        Self::new_user_with_bytecode(
-            name,
-            params,
-            body,
-            env,
-            atoms,
-            None,
-            constructable,
-            source_text,
-        )
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) fn new_user_with_bytecode(
-        name: Option<String>,
-        params: FunctionParams,
-        body: Vec<Stmt>,
-        env: HashMap<String, Value>,
-        atoms: crate::property::atom::AtomDomain,
-        bytecode: Option<Rc<Bytecode>>,
-        constructable: bool,
-        source_text: Rc<str>,
-    ) -> Result<Self, crate::RuntimeError> {
-        Self::new_user_with_options(
-            name,
-            params,
-            body,
-            env,
-            UserFunctionOptions {
-                atoms,
-                bytecode,
-                constructable,
-                source_text,
-                lexical_bindings: LexicalBindings {
-                    this: false,
-                    arguments: false,
-                },
-            },
-        )
-    }
-
-    fn new_user_with_options(
-        name: Option<String>,
-        params: FunctionParams,
-        body: Vec<Stmt>,
-        env: HashMap<String, Value>,
-        options: UserFunctionOptions,
-    ) -> Result<Self, crate::RuntimeError> {
-        let UserFunctionOptions {
-            atoms,
-            bytecode,
-            constructable,
-            source_text,
-            lexical_bindings,
-        } = options;
-        let realm = super::env::new_realm_sharing_atoms(env, atoms);
-        let has_dynamic_function_realm = realm.has_dynamic_function_realm_global();
-        let prototype = ObjectRef::with_prototype(
-            HashMap::new(),
-            object_prototype(&crate::CallEnv::new(Rc::clone(&realm))),
-            realm.atoms(),
-        );
-        let local_names = collect_function_local_names(
-            name.as_ref(),
-            &params,
-            &body,
-            !lexical_bindings.arguments,
-        );
-        let is_strict = is_strict_function_body(&body);
-        let bytecode = match bytecode {
-            Some(bytecode) => bytecode,
-            None => Rc::new(compile_function_body(&params, &body)?),
-        };
-        let auxiliary = FunctionAuxiliaryState::new(None, None);
-        let function = Self(Rc::new(FunctionData {
-            has_name_binding: name.is_some(),
-            immutable_name_binding: false,
-            immutable_env_binding: None,
-            immutable_env_value: None,
-            name,
-            params: Rc::new(params),
-            native_context: NativeContext::default(),
-            realm: Some(realm),
-            has_dynamic_function_realm,
-            has_dynamic_function_realm_override: Cell::new(false),
-            direct_leaf_call_eligible: Cell::new(None),
-            direct_construct_eligible: Cell::new(None),
-            wide_inline_facts: Cell::new(0),
-            compact_inline_facts: Cell::new(0),
-            scope_bypassed: Cell::new(false),
-            deopt_bindings: None,
-            module_host: None,
-            module_imports: Default::default(),
-            with_stack: Vec::new(),
-            upvalues: Vec::new(),
-            realm_upvalue_slots: 0,
-            local_names: Rc::new(local_names),
-            bytecode: Some(bytecode),
-            source_text: Some(source_text),
-            native: None,
-            native_entry: None,
-            constructable,
-            is_strict,
-            lexical_this: lexical_bindings.this,
-            lexical_arguments: lexical_bindings.arguments,
-            lexical_new_target: None,
-            is_generator: false,
-            is_async: false,
-            is_class_constructor: false,
-            is_derived_constructor: false,
-            is_field_initializer: false,
-            auxiliary,
-            bound: None,
-            named: RefCell::new(crate::value::layout::NamedStorage::Sentinel),
-        }));
-        function.initialize_named();
-        function.define_length_property();
-        function.define_name_property();
-        if constructable {
-            prototype
-                .define_non_enumerable("constructor".to_owned(), Value::Function(function.clone()));
-            function.define_property(
-                "prototype".to_owned(),
-                // A function's `prototype` is writable and non-enumerable but
-                // non-configurable (a class constructor's is also non-writable,
-                // wired separately by the class builder).
-                Property::data(Value::Object(prototype), false, true, false),
-            );
-        }
-        Ok(function)
+    pub(crate) fn lexical_scope(&self) -> Option<crate::binding::ScopeCursor> {
+        self.auxiliary
+            .with_cold(|cold| cold.and_then(|cold| cold.lexical_scope.clone()))
     }
 
     pub(crate) fn new_user_compiled(compiled: CompiledUserFunction) -> Self {
         let CompiledUserFunction {
             name,
             has_name_binding,
-            immutable_name_binding,
-            immutable_env_binding,
-            immutable_env_value,
             params,
-            realm,
-            module_host,
-            module_imports,
+            creation,
             bytecode,
             source_text,
             local_names,
@@ -714,52 +442,66 @@ impl Function {
             is_strict,
             lexical_this,
             lexical_arguments,
-            lexical_new_target,
+            lexical_call,
             is_generator,
             is_async,
             is_class_constructor,
             is_derived_constructor,
-            is_field_initializer,
+            owner_kind,
             home_object,
             super_constructor,
-            deopt_bindings,
-            with_stack,
+            lexical_scope,
             upvalues,
         } = compiled;
+        let self_name = has_name_binding.then(|| {
+            BindingCell::with_metadata(
+                bytecode
+                    .self_name_binding()
+                    .expect("compiled self-name metadata")
+                    .binding
+                    .clone(),
+                None,
+            )
+        });
+        let lexical_scope = if let Some(cell) = &self_name {
+            Some(crate::binding::ScopeCursor::with_function_name(
+                lexical_scope,
+                cell.clone(),
+                bytecode.self_name_binding().expect("self name plan"),
+            ))
+        } else {
+            lexical_scope
+        };
+        let needs_scope_proof = lexical_scope.is_some();
+        let realm = &creation.realm;
         let realm_upvalue_slots = bytecode
             .received_upvalue_slots()
             .iter()
             .zip(&upvalues)
-            .filter_map(|(slot, cell)| {
-                (*slot < u128::BITS as usize
+            .filter(|&(slot, cell)| {
+                *slot < u128::BITS as usize
                     && bytecode
                         .local_name_at(*slot)
-                        .is_some_and(|name| realm.is_binding_cell(name, cell)))
-                .then_some(1_u128 << *slot)
+                        .is_some_and(|name| realm.is_binding_cell(name, cell))
             })
+            .map(|(slot, _)| 1_u128 << *slot)
             .fold(0, |slots, slot| slots | slot);
-        let has_dynamic_function_realm = realm.has_dynamic_function_realm_global();
+        let has_dynamic_function_realm = realm.has_dynamic_function_realm_global()
+            || !matches!(creation.global, crate::context::GlobalSelection::Default);
         let auxiliary = FunctionAuxiliaryState::new(home_object, super_constructor);
         let function = Self(Rc::new(FunctionData {
             has_name_binding,
-            immutable_name_binding,
-            immutable_env_binding: immutable_env_binding.map(Box::new),
-            immutable_env_value,
             name,
             params,
-            native_context: NativeContext::default(),
-            realm: Some(realm),
+            native_captures: None,
+            creation: Some(creation),
             has_dynamic_function_realm,
             has_dynamic_function_realm_override: Cell::new(false),
             direct_leaf_call_eligible: Cell::new(None),
+            lexical_scope_proof: Cell::new(u64::from(needs_scope_proof)),
             direct_construct_eligible: Cell::new(None),
             wide_inline_facts: Cell::new(0),
             compact_inline_facts: Cell::new(0),
-            scope_bypassed: Cell::new(false),
-            deopt_bindings,
-            module_host,
-            module_imports,
-            with_stack,
             upvalues,
             realm_upvalue_slots,
             local_names,
@@ -771,16 +513,30 @@ impl Function {
             is_strict,
             lexical_this,
             lexical_arguments,
-            lexical_new_target,
             is_generator,
             is_async,
             is_class_constructor,
             is_derived_constructor,
-            is_field_initializer,
+            owner_kind,
             auxiliary,
             bound: None,
             named: RefCell::new(crate::value::layout::NamedStorage::Sentinel),
         }));
+        if let Some(cell) = self_name {
+            cell.initialize(Value::Function(function.clone()))
+                .expect("fresh self binding");
+        }
+        if let Some(scope) = lexical_scope {
+            crate::diagnostics::count!(function_scope_retentions);
+            function
+                .auxiliary
+                .with_cold_mut(|cold| cold.lexical_scope = Some(scope));
+        }
+        if let Some(owner) = lexical_call {
+            function
+                .auxiliary
+                .with_cold_mut(|cold| cold.lexical_call = Some(owner));
+        }
         function.initialize_named();
         function.define_length_property();
         function.define_name_property();
@@ -819,17 +575,26 @@ impl Function {
         Self::new(
             name.map(str::to_owned),
             vec![String::new(); length],
-            HashMap::new(),
             Some(native),
             constructable,
             Some(realm.atoms()),
             Some(realm.clone()),
         )
     }
+    pub(crate) fn creation_context(&self) -> &Rc<crate::context::CreationContext> {
+        self.creation.as_ref().expect("callable creation context")
+    }
+    pub(crate) fn realm(&self) -> Option<&Realm> {
+        self.creation.as_ref().map(|creation| &creation.realm)
+    }
     pub(crate) fn creation_realm(&self) -> &Realm {
-        self.realm
+        &self.creation_context().realm
+    }
+
+    pub(crate) fn has_module_imports(&self) -> bool {
+        self.creation
             .as_ref()
-            .expect("native creation requires its realm")
+            .is_some_and(|creation| !creation.imports().is_empty())
     }
     #[cfg(test)]
     pub(crate) fn new_native_in_domain(
@@ -842,11 +607,13 @@ impl Function {
         Self::new(
             name.map(str::to_owned),
             vec![String::new(); length],
-            HashMap::new(),
             Some(native),
             constructable,
             Some(domain),
-            None,
+            Some(crate::context::new_realm_sharing_atoms(
+                HashMap::new(),
+                domain.clone(),
+            )),
         )
     }
 
@@ -855,7 +622,6 @@ impl Function {
         Self::new(
             Some("\0\0uninitialized_lexical".to_owned()),
             Vec::new(),
-            HashMap::new(),
             Some(NativeFunction::UninitializedLexical),
             false,
             None,
@@ -864,35 +630,14 @@ impl Function {
     }
 
     pub(crate) fn property_domain(&self) -> &crate::property::atom::AtomDomain {
-        if let Some(realm) = &self.realm {
+        if let Some(realm) = self.realm() {
             return realm.atoms();
         }
-        &self
-            .native_context
-            .0
-            .as_ref()
-            .expect("TDZ sentinel has no property domain")
-            .domain
+        panic!("TDZ sentinel has no property domain")
     }
 
     pub(crate) fn downgrade(&self) -> FunctionWeakRef {
         FunctionWeakRef(Rc::downgrade(&self.0))
-    }
-
-    /// Whether this function's calls may run without its dynamic scope.
-    pub(crate) fn dynamic_scope_bypassed(&self) -> bool {
-        self.deopt_bindings.is_none() || self.scope_bypassed.get()
-    }
-
-    /// Ends a bypass of the dynamic scope, forgetting every call-path fact
-    /// derived while it held.
-    pub(crate) fn revoke_scope_bypass(&self) {
-        if self.scope_bypassed.replace(false) {
-            self.direct_leaf_call_eligible.set(None);
-            self.direct_construct_eligible.set(None);
-            self.wide_inline_facts.set(0);
-            self.compact_inline_facts.set(0);
-        }
     }
 
     pub(crate) fn is_uninitialized_lexical_marker(&self) -> bool {
@@ -908,7 +653,7 @@ impl Function {
         this_value: Value,
         arguments: Vec<Value>,
         length: usize,
-        domain: &crate::property::atom::AtomDomain,
+        _domain: &crate::property::atom::AtomDomain,
     ) -> Self {
         let constructable = match &target {
             Value::Function(function) => function.constructable,
@@ -919,29 +664,19 @@ impl Function {
         let function = Self(Rc::new(FunctionData {
             name: Some(name),
             has_name_binding: false,
-            immutable_name_binding: false,
-            immutable_env_binding: None,
-            immutable_env_value: None,
             params: Rc::new(FunctionParams::positional(vec![String::new(); length])),
-            native_context: NativeContext::from_map(HashMap::new(), Some(domain)),
-            realm: match &target {
-                Value::Function(function) => function.realm.clone(),
-                _ => None,
-            },
+            native_captures: None,
+            creation: callable_creation(&target),
             has_dynamic_function_realm: match &target {
                 Value::Function(function) => function.has_dynamic_function_realm,
                 _ => false,
             },
             has_dynamic_function_realm_override: Cell::new(false),
             direct_leaf_call_eligible: Cell::new(None),
+            lexical_scope_proof: Cell::new(0),
             direct_construct_eligible: Cell::new(None),
             wide_inline_facts: Cell::new(0),
             compact_inline_facts: Cell::new(0),
-            scope_bypassed: Cell::new(false),
-            deopt_bindings: None,
-            module_host: None,
-            module_imports: Default::default(),
-            with_stack: Vec::new(),
             upvalues: Vec::new(),
             realm_upvalue_slots: 0,
             local_names: Rc::new(Vec::new()),
@@ -953,12 +688,11 @@ impl Function {
             is_strict: false,
             lexical_this: false,
             lexical_arguments: false,
-            lexical_new_target: None,
             is_generator: false,
             is_async: false,
             is_class_constructor: false,
             is_derived_constructor: false,
-            is_field_initializer: false,
+            owner_kind: crate::context::OwnerKind::Function,
             auxiliary,
             bound: Some(Box::new(BoundFunction {
                 target,
@@ -976,7 +710,6 @@ impl Function {
     fn new(
         name: Option<String>,
         params: Vec<String>,
-        env: HashMap<String, Value>,
         native: Option<NativeFunction>,
         constructable: bool,
         domain: Option<&crate::property::atom::AtomDomain>,
@@ -991,24 +724,17 @@ impl Function {
         let auxiliary = FunctionAuxiliaryState::new(None, None);
         let function = Self(Rc::new(FunctionData {
             has_name_binding: false,
-            immutable_name_binding: false,
-            immutable_env_binding: None,
-            immutable_env_value: None,
             name,
             params: Rc::new(FunctionParams::positional(params)),
-            native_context: NativeContext::from_map(env, domain),
-            realm: creation_realm,
+            native_captures: None,
+            creation: creation_realm.map(crate::context::CreationContext::root),
             has_dynamic_function_realm: false,
             has_dynamic_function_realm_override: Cell::new(false),
             direct_leaf_call_eligible: Cell::new(None),
+            lexical_scope_proof: Cell::new(0),
             direct_construct_eligible: Cell::new(None),
             wide_inline_facts: Cell::new(0),
             compact_inline_facts: Cell::new(0),
-            scope_bypassed: Cell::new(false),
-            deopt_bindings: None,
-            module_host: None,
-            module_imports: Default::default(),
-            with_stack: Vec::new(),
             upvalues: Vec::new(),
             realm_upvalue_slots: 0,
             local_names: Rc::new(Vec::new()),
@@ -1020,12 +746,11 @@ impl Function {
             is_strict: false,
             lexical_this: false,
             lexical_arguments: false,
-            lexical_new_target: None,
             is_generator: false,
             is_async: false,
             is_class_constructor: false,
             is_derived_constructor: false,
-            is_field_initializer: false,
+            owner_kind: crate::context::OwnerKind::Function,
             auxiliary,
             bound: None,
             named: RefCell::new(crate::value::layout::NamedStorage::Sentinel),
@@ -1073,9 +798,13 @@ impl Function {
         )
     }
 
-    pub(crate) fn symbol_property(&self, symbol: &ObjectRef, env: &CallEnv) -> Option<Property> {
-        self.own_symbol_property(symbol).or_else(|| {
-            match self.effective_internal_prototype_with_env(env) {
+    pub(crate) fn symbol_property(
+        &self,
+        symbol: &ObjectRef,
+        _env: &crate::context::Context<'_>,
+    ) -> Option<Property> {
+        self.own_symbol_property(symbol)
+            .or_else(|| match self.effective_internal_prototype() {
                 Some(Prototype::Object(prototype)) => prototype.symbol_property(symbol),
                 Some(Prototype::Array(array)) => array.symbol_property(symbol),
                 Some(Prototype::Function(parent)) => parent.chain_symbol_property(symbol),
@@ -1093,48 +822,24 @@ impl Function {
                     let prototype = _carrier.object();
                     prototype.symbol_property(symbol)
                 }
-            }
-        })
+            })
     }
 
-    /// The function's resolved [[Prototype]] slot, resolving the implicit
-    /// default to %Function.prototype% via the function's captured environment.
-    /// Returns `None` only when the prototype is explicitly `null` or the
-    /// intrinsic cannot be resolved (for example a native function with no
-    /// captured globals).
+    /// The selected [[Prototype]] identity; construction installed the intrinsic
+    /// default once. Pure descriptor walking requires no execution context.
     pub(crate) fn effective_internal_prototype(&self) -> Option<Prototype> {
         self.named.borrow().prototype()
-    }
-    fn effective_internal_prototype_with_env(&self, _env: &CallEnv) -> Option<Prototype> {
-        self.effective_internal_prototype()
     }
 
     /// Walks this function's own properties, then its [[Prototype]] chain, for a
     /// string-keyed property. Used when a function sits inside another value's
     /// prototype chain.
     pub(crate) fn chain_property(&self, key: &str) -> Option<Property> {
-        let env = self.creation_env();
-        self.chain_property_with_env(key, &env)
-    }
-
-    fn creation_env(&self) -> crate::CallEnv {
-        self.realm.as_ref().map_or_else(
-            || {
-                crate::CallEnv::new(super::env::new_realm_sharing_atoms(
-                    self.native_context.clone_map(),
-                    self.property_domain().clone(),
-                ))
-            },
-            |realm| crate::CallEnv::new(Rc::clone(realm)),
-        )
-    }
-
-    pub(crate) fn chain_property_with_env(&self, key: &str, env: &CallEnv) -> Option<Property> {
         self.own_property(key)
-            .or_else(|| match self.effective_internal_prototype_with_env(env) {
+            .or_else(|| match self.effective_internal_prototype() {
                 Some(Prototype::Object(prototype)) => prototype.property(key),
                 Some(Prototype::Array(array)) => array.property(key),
-                Some(Prototype::Function(parent)) => parent.chain_property_with_env(key, env),
+                Some(Prototype::Function(parent)) => parent.chain_property(key),
                 Some(Prototype::Proxy(proxy)) => proxy
                     .target_result()
                     .ok()
@@ -1186,16 +891,10 @@ impl Function {
         })
     }
 
-    /// Sets the private environment carried by a class constructor.
-    pub(crate) fn set_private_environment(&self, environment: crate::private::PrivateEnvironment) {
-        self.auxiliary
-            .with_cold_mut(|cold| cold.private_state.environment = Some(environment));
-    }
-
-    /// Returns the private environment carried by this constructor, if any.
     pub(crate) fn private_environment(&self) -> Option<crate::private::PrivateEnvironment> {
-        self.auxiliary
-            .with_cold(|cold| cold.and_then(|cold| cold.private_state.environment.clone()))
+        self.creation
+            .as_ref()
+            .and_then(|creation| creation.private.clone())
     }
 
     /// Records an instance private element (a field initializer or a
@@ -1266,11 +965,16 @@ impl Function {
     /// `RefCell` borrows and two clones -- one of them a full `Value` -- to
     /// discover, on essentially every call, that both are absent.
     pub(crate) fn has_cold_lexical_state(&self) -> bool {
-        self.auxiliary.with_cold(|cold| {
-            cold.is_some_and(|cold| {
-                cold.private_state.environment.is_some() || cold.home_object.is_some()
+        self.creation
+            .as_ref()
+            .is_some_and(|creation| creation.private.is_some())
+            || self.auxiliary.with_cold(|cold| {
+                cold.is_some_and(|cold| {
+                    cold.home_object.is_some()
+                        || cold.lexical_scope.is_some()
+                        || cold.lexical_call.is_some()
+                })
             })
-        })
     }
 
     pub(crate) fn home_object(&self) -> Option<Value> {
@@ -1288,19 +992,103 @@ impl Function {
             .with_cold(|cold| cold.and_then(|cold| cold.super_constructor.clone()))
     }
 
-    pub(crate) fn lexical_derived_this(&self) -> Option<(Upvalue, Function)> {
+    pub(crate) fn lexical_call(&self) -> Option<Rc<crate::context::CallOwner>> {
         self.auxiliary
-            .with_cold(|cold| cold.and_then(|cold| cold.lexical_derived_this.clone()))
+            .with_cold(|cold| cold.and_then(|cold| cold.lexical_call.clone()))
     }
 
-    pub(crate) fn set_lexical_derived_this(&self, cell: Upvalue, constructor: Function) {
-        self.auxiliary
-            .with_cold_mut(|cold| cold.lexical_derived_this = Some((cell, constructor)));
+    /// Makes a released root owner's class state what an indexed entry of
+    /// this function binds (`call_owner_inputs`, compared under one borrow):
+    /// its home object and super constructor, reusing the owner's class
+    /// record. False, changing nothing, when the entry needs a retained
+    /// lexical owner instead.
+    #[inline]
+    pub(crate) fn rebind_class_state(
+        &self,
+        class: &mut Option<Box<crate::context::ClassOwner>>,
+    ) -> bool {
+        // An ordinary function without cold state binds none.
+        if class.is_none() && self.auxiliary.with_cold(|cold| cold.is_none()) {
+            return true;
+        }
+        self.rebind_method_class_state(class)
+    }
+
+    #[inline(never)]
+    fn rebind_method_class_state(
+        &self,
+        class: &mut Option<Box<crate::context::ClassOwner>>,
+    ) -> bool {
+        fn same(left: Option<&Value>, right: Option<&Value>) -> bool {
+            match (left, right) {
+                (None, None) => true,
+                (Some(left), Some(right)) => left.same_value(right),
+                _ => false,
+            }
+        }
+        self.auxiliary.with_cold(|cold| {
+            let (home, super_constructor) = match cold {
+                None => (None, None),
+                Some(cold) if cold.lexical_call.is_none() => {
+                    (cold.home_object.as_ref(), cold.super_constructor.as_ref())
+                }
+                Some(_) => return false,
+            };
+            match class {
+                None if home.is_none() && super_constructor.is_none() => {}
+                Some(_) if home.is_none() && super_constructor.is_none() => *class = None,
+                Some(state)
+                    if same(home, state.home.as_ref())
+                        && same(super_constructor, state.super_constructor.as_ref()) => {}
+                Some(state) => {
+                    state.home = home.cloned();
+                    state.super_constructor = super_constructor.cloned();
+                }
+                None => {
+                    *class = Some(Box::new(crate::context::ClassOwner {
+                        home: home.cloned(),
+                        super_constructor: super_constructor.cloned(),
+                        active_constructor: None,
+                    }))
+                }
+            }
+            true
+        })
+    }
+
+    /// The call-owner inputs an indexed entry needs, under one borrow: a
+    /// retained lexical owner, else the home object and super constructor.
+    /// A function without cold state answers without cloning anything.
+    pub(crate) fn call_owner_inputs(&self) -> CallOwnerInputs {
+        self.auxiliary.with_cold(|cold| match cold {
+            None => CallOwnerInputs::Root {
+                home: None,
+                super_constructor: None,
+            },
+            Some(cold) => match &cold.lexical_call {
+                Some(owner) => CallOwnerInputs::Lexical(owner.clone()),
+                None => CallOwnerInputs::Root {
+                    home: cold.home_object.clone(),
+                    super_constructor: cold.super_constructor.clone(),
+                },
+            },
+        })
     }
 
     #[cfg(test)]
     fn property_order(&self) -> Vec<String> {
         self.with_named(|s| s.map_or_else(Vec::new, |s| s.text_keys()))
+    }
+}
+
+fn callable_creation(value: &Value) -> Option<Rc<crate::context::CreationContext>> {
+    match value {
+        Value::Function(function) => function.creation.clone(),
+        Value::Proxy(proxy) => proxy
+            .target_result()
+            .ok()
+            .and_then(|value| callable_creation(&value)),
+        _ => None,
     }
 }
 

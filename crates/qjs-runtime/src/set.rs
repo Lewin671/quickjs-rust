@@ -6,7 +6,6 @@ use crate::{
 };
 
 mod composition;
-use crate::CallEnv;
 use composition::SetRecord;
 
 const SET_ITERATOR: &str = "\0set_iterator";
@@ -16,7 +15,11 @@ const SET_ITERATOR_KIND: &str = "\0set_iterator_kind";
 const SET_ITERATOR_KIND_VALUE: &str = "value";
 const SET_ITERATOR_KIND_KEY_VALUE: &str = "key+value";
 
-pub(crate) fn install_set(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
+pub(crate) fn install_set(
+    env: &mut crate::context::Context<'_>,
+    global_this: &Value,
+    object_prototype: ObjectRef,
+) {
     let set_prototype =
         ObjectRef::with_prototype(HashMap::new(), Some(object_prototype), env.realm().atoms());
     set_prototype.set_to_string_tag("Set");
@@ -159,7 +162,7 @@ pub(crate) fn native_set(
     function: &Function,
     argument_values: &[Value],
     is_construct: bool,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if !is_construct {
         return Err(RuntimeError {
@@ -222,7 +225,7 @@ pub(crate) fn native_set_prototype_delete(
 
 pub(crate) fn native_set_prototype_entries(
     this_value: Value,
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     set_iterator(this_value, env, SET_ITERATOR_KIND_KEY_VALUE)
 }
@@ -230,7 +233,7 @@ pub(crate) fn native_set_prototype_entries(
 pub(crate) fn native_set_prototype_union(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let set = this_set(this_value)?;
     let other = SetRecord::from_arguments(argument_values, env)?;
@@ -248,7 +251,7 @@ pub(crate) fn native_set_prototype_union(
 pub(crate) fn native_set_prototype_intersection(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let set = this_set(this_value)?;
     let other = SetRecord::from_arguments(argument_values, env)?;
@@ -273,7 +276,7 @@ pub(crate) fn native_set_prototype_intersection(
 pub(crate) fn native_set_prototype_difference(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let set = this_set(this_value)?;
     let other = SetRecord::from_arguments(argument_values, env)?;
@@ -300,7 +303,7 @@ pub(crate) fn native_set_prototype_difference(
 pub(crate) fn native_set_prototype_symmetric_difference(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let set = this_set(this_value)?;
     let other = SetRecord::from_arguments(argument_values, env)?;
@@ -322,7 +325,7 @@ pub(crate) fn native_set_prototype_symmetric_difference(
 pub(crate) fn native_set_prototype_is_subset_of(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let set = this_set(this_value)?;
     let other = SetRecord::from_arguments(argument_values, env)?;
@@ -341,7 +344,7 @@ pub(crate) fn native_set_prototype_is_subset_of(
 pub(crate) fn native_set_prototype_is_superset_of(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let set = this_set(this_value)?;
     let other = SetRecord::from_arguments(argument_values, env)?;
@@ -354,7 +357,7 @@ pub(crate) fn native_set_prototype_is_superset_of(
 pub(crate) fn native_set_prototype_is_disjoint_from(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let set = this_set(this_value)?;
     let other = SetRecord::from_arguments(argument_values, env)?;
@@ -379,7 +382,7 @@ pub(crate) fn native_set_prototype_is_disjoint_from(
 pub(crate) fn native_set_prototype_for_each(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let set = this_set(this_value.clone())?;
     let callback = argument_values.first().cloned().unwrap_or(Value::Undefined);
@@ -420,7 +423,7 @@ pub(crate) fn native_set_prototype_has(
 
 pub(crate) fn native_set_prototype_values(
     this_value: Value,
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     set_iterator(this_value, env, SET_ITERATOR_KIND_VALUE)
 }
@@ -495,11 +498,11 @@ fn this_set(this_value: Value) -> Result<SetRef, RuntimeError> {
     }
 }
 
-fn new_composition_result_set(env: &CallEnv) -> SetRef {
+fn new_composition_result_set(env: &crate::context::Context<'_>) -> SetRef {
     SetRef::new(set_prototype(env), env.realm().atoms())
 }
 
-fn set_prototype(env: &CallEnv) -> Option<ObjectRef> {
+fn set_prototype(env: &crate::context::Context<'_>) -> Option<ObjectRef> {
     let Some(Value::Function(set_function)) = env.get("Set") else {
         return None;
     };
@@ -522,7 +525,11 @@ where
     Ok(true)
 }
 
-fn set_iterator(this_value: Value, env: &CallEnv, kind: &str) -> Result<Value, RuntimeError> {
+fn set_iterator(
+    this_value: Value,
+    env: &crate::context::Context<'_>,
+    kind: &str,
+) -> Result<Value, RuntimeError> {
     this_set(this_value.clone())?;
     let prototype =
         crate::iterator::builtin_iterator_prototype(env, crate::iterator::BuiltinIteratorKind::Set);

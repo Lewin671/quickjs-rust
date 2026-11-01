@@ -1,0 +1,46 @@
+{
+  "source": "8413f925963f42e65c0d972756fe3762659dbfff",
+  "base": "3cc12c6f8d93ffd6eae91d1bd44efe74134ae195",
+  "removed_identifiers_checked": [
+    "CallEnv",
+    "FrameBindings",
+    "FrameBindingValue",
+    "VmCallEnv",
+    "OwnedCallInputs",
+    "NativeContext",
+    "binding_snapshot",
+    "snapshot_locals",
+    "visible_local_entries",
+    "fork_current_frame_values",
+    "fork_deopt_bindings",
+    "apply_env",
+    "apply_call_env",
+    "creation_env",
+    "new_function_frame_with_capacity",
+    "new_direct_leaf_function_frame",
+    "empty_frame",
+    "shares_caller_environment",
+    "try_run_in_caller_env",
+    "environment_is_slot_only"
+  ],
+  "execution_identifier_hits": {},
+  "unchanged_against_main": [
+    "Cargo.toml",
+    "Cargo.lock",
+    "rust-toolchain.toml",
+    ".gitmodules",
+    "third_party",
+    "crates/qjs-runtime/src/value/layout",
+    "crates/qjs-runtime/src/bytecode/named_property_cache"
+  ],
+  "native_bound_variant_arms": 592,
+  "native_entry_source_sha256": "2850b6f382efade3ef6111e52682582163db7f1ef8675853adea4ae1305237db",
+  "runtime_revision": "e1405670495aa0e75829996d51b797e211f16242",
+  "historical_counter_description_hits": {
+    "CallEnv": [
+      "crates/qjs-runtime/src/diagnostics.rs:116:    /// Retired CallEnv construction event; no counting site remains.",
+      "crates/qjs-runtime/src/diagnostics.rs:118:    /// Retired CallEnv Clone event; no counting site remains."
+    ]
+  },
+  "native_entry_path": "crates/qjs-runtime/src/native/entry.rs"
+}

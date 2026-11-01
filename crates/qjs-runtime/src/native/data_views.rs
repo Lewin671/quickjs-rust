@@ -1,10 +1,10 @@
 //! Operation entries for data views; bound once when a native is created.
 
 use super::CallInfo;
-use crate::{CallEnv, NativeFunction, RuntimeError, Value, data_view};
+use crate::{NativeFunction, RuntimeError, Value, data_view};
 
 pub(super) fn data_view(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -18,7 +18,7 @@ pub(super) fn data_view(
 }
 
 pub(super) fn data_view_prototype_buffer(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -26,7 +26,7 @@ pub(super) fn data_view_prototype_buffer(
 }
 
 pub(super) fn data_view_prototype_byte_length(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -34,7 +34,7 @@ pub(super) fn data_view_prototype_byte_length(
 }
 
 pub(super) fn data_view_prototype_byte_offset(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     _argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -42,7 +42,7 @@ pub(super) fn data_view_prototype_byte_offset(
 }
 
 pub(super) fn data_view_prototype_get_int8(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -55,7 +55,7 @@ pub(super) fn data_view_prototype_get_int8(
 }
 
 pub(super) fn data_view_prototype_get_uint8(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -68,7 +68,7 @@ pub(super) fn data_view_prototype_get_uint8(
 }
 
 pub(super) fn data_view_prototype_get_int16(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -81,7 +81,7 @@ pub(super) fn data_view_prototype_get_int16(
 }
 
 pub(super) fn data_view_prototype_get_uint16(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -94,7 +94,7 @@ pub(super) fn data_view_prototype_get_uint16(
 }
 
 pub(super) fn data_view_prototype_get_int32(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -107,7 +107,7 @@ pub(super) fn data_view_prototype_get_int32(
 }
 
 pub(super) fn data_view_prototype_get_uint32(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -120,7 +120,7 @@ pub(super) fn data_view_prototype_get_uint32(
 }
 
 pub(super) fn data_view_prototype_get_float16(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -133,7 +133,7 @@ pub(super) fn data_view_prototype_get_float16(
 }
 
 pub(super) fn data_view_prototype_get_float32(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -146,7 +146,7 @@ pub(super) fn data_view_prototype_get_float32(
 }
 
 pub(super) fn data_view_prototype_get_float64(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -159,7 +159,7 @@ pub(super) fn data_view_prototype_get_float64(
 }
 
 pub(super) fn data_view_prototype_get_big_int64(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -172,7 +172,7 @@ pub(super) fn data_view_prototype_get_big_int64(
 }
 
 pub(super) fn data_view_prototype_get_big_uint64(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -185,7 +185,7 @@ pub(super) fn data_view_prototype_get_big_uint64(
 }
 
 pub(super) fn data_view_prototype_set_int8(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -198,7 +198,7 @@ pub(super) fn data_view_prototype_set_int8(
 }
 
 pub(super) fn data_view_prototype_set_uint8(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -211,7 +211,7 @@ pub(super) fn data_view_prototype_set_uint8(
 }
 
 pub(super) fn data_view_prototype_set_int16(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -224,7 +224,7 @@ pub(super) fn data_view_prototype_set_int16(
 }
 
 pub(super) fn data_view_prototype_set_uint16(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -237,7 +237,7 @@ pub(super) fn data_view_prototype_set_uint16(
 }
 
 pub(super) fn data_view_prototype_set_int32(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -250,7 +250,7 @@ pub(super) fn data_view_prototype_set_int32(
 }
 
 pub(super) fn data_view_prototype_set_uint32(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -263,7 +263,7 @@ pub(super) fn data_view_prototype_set_uint32(
 }
 
 pub(super) fn data_view_prototype_set_float16(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -276,7 +276,7 @@ pub(super) fn data_view_prototype_set_float16(
 }
 
 pub(super) fn data_view_prototype_set_float32(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -289,7 +289,7 @@ pub(super) fn data_view_prototype_set_float32(
 }
 
 pub(super) fn data_view_prototype_set_float64(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -302,7 +302,7 @@ pub(super) fn data_view_prototype_set_float64(
 }
 
 pub(super) fn data_view_prototype_set_big_int64(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -315,7 +315,7 @@ pub(super) fn data_view_prototype_set_big_int64(
 }
 
 pub(super) fn data_view_prototype_set_big_uint64(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {

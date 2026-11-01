@@ -1,10 +1,10 @@
 //! Operation entries for weak maps; bound once when a native is created.
 
 use super::CallInfo;
-use crate::{CallEnv, RuntimeError, Value, weak_map};
+use crate::{RuntimeError, Value, weak_map};
 
 pub(super) fn weak_map(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -12,7 +12,7 @@ pub(super) fn weak_map(
 }
 
 pub(super) fn weak_map_prototype_delete(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -20,7 +20,7 @@ pub(super) fn weak_map_prototype_delete(
 }
 
 pub(super) fn weak_map_prototype_get(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -28,7 +28,7 @@ pub(super) fn weak_map_prototype_get(
 }
 
 pub(super) fn weak_map_prototype_get_or_insert(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -36,7 +36,7 @@ pub(super) fn weak_map_prototype_get_or_insert(
 }
 
 pub(super) fn weak_map_prototype_get_or_insert_computed(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -48,7 +48,7 @@ pub(super) fn weak_map_prototype_get_or_insert_computed(
 }
 
 pub(super) fn weak_map_prototype_has(
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {
@@ -56,7 +56,7 @@ pub(super) fn weak_map_prototype_has(
 }
 
 pub(super) fn weak_map_prototype_set(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     info: CallInfo<'_>,
     argument_values: &[Value],
 ) -> Result<Value, RuntimeError> {

@@ -1,4 +1,3 @@
-use crate::CallEnv;
 use std::collections::HashMap;
 
 use crate::{
@@ -18,7 +17,7 @@ pub(crate) fn native_date(
     this_value: Value,
     argument_values: &[Value],
     is_construct: bool,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if !is_construct {
         return Ok(Value::String(
@@ -40,7 +39,7 @@ pub(crate) fn native_date(
 pub(crate) fn fast_construct_date_from_number(
     constructor: Value,
     date_value: f64,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let prototype = match property_value(constructor, "prototype", env)? {
         Value::Object(prototype) => Some(prototype),
@@ -57,7 +56,7 @@ pub(crate) fn native_date_now() -> Result<Value, RuntimeError> {
 
 pub(crate) fn native_date_parse(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     match argument_values.first() {
         Some(Value::String(source)) => Ok(Value::Number(parse_date_string(source))),
@@ -70,7 +69,7 @@ pub(crate) fn native_date_parse(
 
 pub(crate) fn native_date_utc(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     Ok(Value::Number(time_clip(date_utc_from_arguments(
         argument_values,
@@ -78,7 +77,10 @@ pub(crate) fn native_date_utc(
     )?)))
 }
 
-fn construct_date_value(argument_values: &[Value], env: &mut CallEnv) -> Result<f64, RuntimeError> {
+fn construct_date_value(
+    argument_values: &[Value],
+    env: &mut crate::context::Context<'_>,
+) -> Result<f64, RuntimeError> {
     if argument_values.is_empty() {
         return Ok(current_time_ms());
     }
@@ -104,7 +106,7 @@ fn construct_date_value(argument_values: &[Value], env: &mut CallEnv) -> Result<
 
 fn date_utc_from_arguments(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<f64, RuntimeError> {
     let values = [
         optional_utc_number(argument_values, 0, f64::NAN, env)?,
@@ -134,7 +136,7 @@ fn optional_utc_number(
     argument_values: &[Value],
     index: usize,
     default: f64,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<f64, RuntimeError> {
     argument_values
         .get(index)

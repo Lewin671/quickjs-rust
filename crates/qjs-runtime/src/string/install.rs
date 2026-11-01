@@ -1,4 +1,3 @@
-use crate::CallEnv;
 use std::collections::HashMap;
 
 use crate::{Function, NativeFunction, ObjectRef, Property, Value, string_prototype, symbol};
@@ -74,7 +73,11 @@ const STRING_PROTOTYPE_METHODS: &[(&str, usize, NativeFunction)] = &[
     ("valueOf", 0, NativeFunction::StringPrototypeValueOf),
 ];
 
-pub(crate) fn install_string(env: &mut CallEnv, global_this: &Value, object_prototype: ObjectRef) {
+pub(crate) fn install_string(
+    env: &mut crate::context::Context<'_>,
+    global_this: &Value,
+    object_prototype: ObjectRef,
+) {
     let string_prototype = ObjectRef::with_prototype(
         HashMap::new(),
         Some(object_prototype.clone()),
@@ -118,7 +121,7 @@ pub(crate) fn install_string(env: &mut CallEnv, global_this: &Value, object_prot
     }
 }
 
-pub(crate) fn install_string_well_known_symbols(env: &CallEnv) {
+pub(crate) fn install_string_well_known_symbols(env: &crate::context::Context<'_>) {
     let Some(prototype) = string_prototype(env) else {
         return;
     };

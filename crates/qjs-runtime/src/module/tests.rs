@@ -1633,3 +1633,63 @@ fn await_as_binding_is_a_module_error() {
         EvalErrorKind::Parse | EvalErrorKind::Early
     ));
 }
+
+#[test]
+fn private_class_keys_preserve_module_receiver_and_absent_arguments() {
+    let namespace = run(
+        r#"class C { #p; [(#p in {}, eval('1'))]() {} }
+        const direct = typeof arguments;
+        const fromEval = eval('typeof arguments');
+        const fromArrow = (() => {
+            class D { #p; [(#p in {}, eval('1'))]() {} }
+            return typeof arguments;
+        })();
+        class Outer { static { class D { #p; [(#p in {}, eval('1'))]() {} } } }
+        class Receiver { #p; [(#p in {}, String(this))]() {} }
+        class ArrowReceiver { #p; [(#p in {}, (() => String(this))())]() {} }
+        export const result = [direct, fromEval, fromArrow, typeof arguments,
+            typeof new Receiver().undefined, typeof new ArrowReceiver().undefined].join(':');"#,
+        &[],
+    )
+    .expect("module class keys complete");
+    assert_eq!(
+        export(&namespace, "result"),
+        Value::String("undefined:undefined:undefined:undefined:function:function".into())
+    );
+}
+
+#[test]
+fn mutable_parameter_capture_shadows_an_import_with_the_same_name() {
+    let namespace = run("import { x } from 'dep'; function outer(x) { return () => ++x; } const write = outer(8); export const result = write() + ':' + write() + ':' + x;", &[("dep", "export let x = 1;")]).unwrap();
+    assert_eq!(export(&namespace, "result"), Value::String("9:10:1".into()));
+}
+
+#[test]
+fn imports_do_not_publish_into_function_or_indirect_eval_globals() {
+    let namespace = run(
+        "import {value as hidden} from 'dep'; let Object; export {Object}; \
+         export const result = [hidden, Function('return typeof hidden')(), (0,eval)('typeof hidden')].join(':');",
+        &[("dep", "export const value = 7;")],
+    ).unwrap();
+    assert_eq!(
+        export(&namespace, "result"),
+        Value::String("7:undefined:undefined".into())
+    );
+    assert_eq!(export(&namespace, "Object"), Value::Undefined);
+}
+
+#[test]
+fn namespace_reexports_are_imported_as_canonical_namespace_bindings() {
+    let namespace = run(
+        "import {ns} from 'bridge'; import * as direct from 'dep'; \
+         export const result = (ns === direct) + ':' + ns.value;",
+        &[
+            ("bridge", "export * as ns from 'dep';"),
+            ("dep", "export let value = 8;"),
+        ],
+    )
+    .unwrap();
+    assert_eq!(export(&namespace, "result"), Value::String("true:8".into()));
+}
+
+mod binding_scopes;

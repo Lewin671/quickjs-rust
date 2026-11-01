@@ -1,0 +1,21 @@
+   Compiling qjs-runtime v0.1.0 (/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/crates/qjs-runtime)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 7.82s
+     Running unittests src/lib.rs (target/debug/deps/qjs_runtime-75a63d361e38909b)
+
+running 1 test
+
+thread 'bytecode::typed_loop::helper_graph::numeric::effect_tests::loop_preparation_and_deoptimization_never_replay_captured_writes' (423598500) panicked at crates/qjs-runtime/src/bytecode/typed_loop/helper_graph/numeric/effect_tests.rs:216:13:
+assertion `left == right` failed: (function(){var n=0,s=0;var obj={get v(){return 0;}}; function h(x){n++;return x;}for(var i=0;i<100;i++){s+=h(i);}return n;})()
+  left: Ok(Number(101.0))
+ right: Ok(Number(100.0))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test bytecode::typed_loop::helper_graph::numeric::effect_tests::loop_preparation_and_deoptimization_never_replay_captured_writes ... FAILED
+
+failures:
+
+failures:
+    bytecode::typed_loop::helper_graph::numeric::effect_tests::loop_preparation_and_deoptimization_never_replay_captured_writes
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 2671 filtered out; finished in 0.05s
+
+error: test failed, to rerun pass `-p qjs-runtime --lib`

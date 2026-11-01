@@ -29,13 +29,16 @@ never freed.
 ## What a suspended frame owns
 
 `GeneratorSnapshot` owns the `Rc<Bytecode>`, `ip`, operand stack, `locals`,
-`local_upvalues`, received `upvalues`, `CallEnv`, `with_stack`, the immutable
-function name, the try stack, disposable scopes, the pending
+`local_upvalues`, received `upvalues`, owned ActivationContext/creation and lexical owner,
+retained scope instances/holders,
+selected binding references, partial class-definition regions/private overlays,
+active own `with_stack`, function-name cells in leases, the try stack, disposable scopes,
+the pending
 throw/return/jump of an in-flight `finally`, and the suspension kind. Resume
-builds a fresh `Vm` over the held bytecode, moves these back, and recomputes
+borrows RuntimeServices, builds a `Vm` over the held bytecode, restores state, and recomputes
 the derived slot masks (`refresh_authoritative_slots`).
 
-1. **Cell identity survives.** The snapshot holds the same `Upvalue` cells
+1. **Cell identity survives.** The snapshot holds the same `BindingCell` cells
    as the closures and declaring frames. Suspend and resume copy no binding
    value, run no refresh or write-back, and do not consult the resuming
    caller's environment ([env-model-rewrite.md](env-model-rewrite.md)). Tests:
@@ -43,7 +46,13 @@ the derived slot masks (`refresh_authoritative_slots`).
    `async_functions.rs::await_resume_observes_sibling_closure_capture_writes`.
 2. **Try state survives.** Test:
    `frame_cold_state.rs::a_generator_carries_its_try_state_across_suspension`.
-3. **Nothing scalar-replaced crosses a suspension.** Virtual-object lowering
+3. **Class keys suspend the enclosing frame.** Computed keys are ordinary IR,
+   including private-name keys. The snapshot moves each partial class and its
+   lexical cell/private environment; no key function call is reconstructed.
+   Abrupt handlers truncate regions to their saved class depth. Tests:
+   `class_keys.rs::private_key_yield_resumes_the_enclosing_generator`,
+   `::private_key_await_resumes_the_enclosing_async_function`.
+4. **Nothing scalar-replaced crosses a suspension.** Virtual-object lowering
    treats a suspension point as an escape (`EscapeReason::Suspension`,
    `bytecode/virtual_object.rs`), so a snapshot carries no virtual state.
 

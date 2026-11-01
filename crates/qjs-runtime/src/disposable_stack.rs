@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use crate::{
-    ArrayRef, CallEnv, Function, NativeFunction, ObjectRef, Property, PropertyKey, RuntimeError,
-    Value, call_function, property_value_key, symbol,
+    ArrayRef, Function, NativeFunction, ObjectRef, Property, PropertyKey, RuntimeError, Value,
+    call_function, property_value_key, symbol,
 };
 
 const DISPOSABLE_STACK_DISPOSED: &str = "\0DisposableStackDisposed";
@@ -20,7 +20,7 @@ enum DisposableResourceKind {
 }
 
 pub(crate) fn install_disposable_stack(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     global_this: &Value,
     object_prototype: ObjectRef,
 ) {
@@ -109,7 +109,7 @@ pub(crate) fn install_disposable_stack(
 }
 
 fn install_async_disposable_stack(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     global_this: &Value,
     object_prototype: ObjectRef,
 ) {
@@ -199,7 +199,7 @@ fn install_async_disposable_stack(
 pub(crate) fn native_async_disposable_stack(
     function: &Function,
     is_construct: bool,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if !is_construct {
         return Err(RuntimeError {
@@ -227,7 +227,7 @@ pub(crate) fn native_async_disposable_stack(
 pub(crate) fn native_disposable_stack(
     function: &Function,
     is_construct: bool,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if !is_construct {
         return Err(RuntimeError {
@@ -307,7 +307,7 @@ pub(crate) fn native_async_disposable_stack_prototype_disposed(
 
 pub(crate) fn native_async_disposable_stack_prototype_dispose_async(
     this_value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let promise = crate::promise::new_pending_promise(env);
     let object = match async_disposable_stack_object(&this_value) {
@@ -345,7 +345,7 @@ pub(crate) fn native_async_disposable_stack_prototype_dispose_async(
 
 pub(crate) fn native_async_disposable_stack_prototype_move(
     this_value: Value,
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let object = async_disposable_stack_object(&this_value)?;
     ensure_async_pending(&object)?;
@@ -376,7 +376,7 @@ pub(crate) fn native_async_disposable_stack_prototype_move(
 pub(crate) fn native_async_disposable_stack_prototype_use(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let object = async_disposable_stack_object(&this_value)?;
     ensure_async_pending(&object)?;
@@ -495,7 +495,7 @@ pub(crate) fn native_disposable_stack_prototype_disposed(
 
 pub(crate) fn native_disposable_stack_prototype_dispose(
     this_value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let object = disposable_stack_object(&this_value)?;
     if is_disposed(&object) {
@@ -524,7 +524,7 @@ pub(crate) fn native_disposable_stack_prototype_dispose(
 
 pub(crate) fn native_disposable_stack_prototype_move(
     this_value: Value,
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let object = disposable_stack_object(&this_value)?;
     ensure_pending(&object)?;
@@ -555,7 +555,7 @@ pub(crate) fn native_disposable_stack_prototype_move(
 pub(crate) fn native_disposable_stack_prototype_use(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let object = disposable_stack_object(&this_value)?;
     ensure_pending(&object)?;
@@ -720,7 +720,10 @@ fn resource_record(
     Value::Object(record)
 }
 
-fn dispose_resource(resource: Value, env: &mut CallEnv) -> Result<Value, RuntimeError> {
+fn dispose_resource(
+    resource: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<Value, RuntimeError> {
     let Value::Object(record) = resource else {
         return Ok(Value::Undefined);
     };
@@ -756,7 +759,7 @@ fn dispose_resource(resource: Value, env: &mut CallEnv) -> Result<Value, Runtime
 
 fn dispose_async_resources(
     resources: ArrayRef,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Option<RuntimeError>, RuntimeError> {
     let mut completion: Option<RuntimeError> = None;
     while let Some(resource) = resources.pop() {
@@ -796,7 +799,7 @@ fn async_dispose_rejection(value: Value) -> Option<RuntimeError> {
 fn suppressed_error(
     error: RuntimeError,
     suppressed: RuntimeError,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<RuntimeError, RuntimeError> {
     let error_value = crate::error::runtime_error_to_value(error, env);
     let suppressed_value = crate::error::runtime_error_to_value(suppressed, env);

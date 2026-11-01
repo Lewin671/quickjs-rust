@@ -312,6 +312,7 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
     let Some(entry_depth) = propagate_depths(code) else {
         return decline(trace, None, "inconsistent operand-stack depth");
     };
+    let references = &bytecode.binding_plan.references;
     let has_exit = exit_backedges || code.iter().any(is_exit_safe);
     // Nothing in an admitted body -- a function body -- observes a statement
     // completion value, but the interpreter's loop accelerators type-guard
@@ -430,6 +431,17 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
     let mut aliases: Vec<Option<u16>> = vec![None; stack_registers];
 
     for (ip, op) in code.iter().enumerate() {
+        // The reference event whose checked global starts begin here.
+        let checkpoint = references
+            .events
+            .binary_search_by_key(&ip, |event| event.pc)
+            .ok()
+            .filter(|&event| {
+                references.events[event]
+                    .starts
+                    .iter()
+                    .any(|&site| references.sites[site].checked)
+            });
         if jump_targets[ip] {
             materialize(&mut ops, &mut aliases, &register);
         }
@@ -455,6 +467,13 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
                 backedge: u32::try_from(backedge).ok()?,
             });
             compact_index[ip] = u32::try_from(ops.len()).ok()?;
+        }
+        // After any header exit, so a backedge to `ip` checks again, and
+        // before the instruction's own operations: the RHS starts here.
+        if let Some(event) = checkpoint {
+            ops.push(WideOp::ReferenceCheck {
+                event: u32::try_from(event).ok()?,
+            });
         }
         if fused_pops[ip] {
             continue;
@@ -1129,6 +1148,12 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
         requires_this,
         global_reads: global_names.iter().map(|_| Default::default()).collect(),
         global_names,
+        global_writes: code
+            .iter()
+            .enumerate()
+            .filter(|(_, op)| matches!(op, Op::StoreLocalOrGlobalSloppy { .. }))
+            .filter_map(|(ip, _)| Some((u32::try_from(ip).ok()?, Default::default())))
+            .collect(),
         lexical_slots,
         tdz_marker: crate::Value::Function(crate::Function::uninitialized_lexical_marker()),
         local_registers: u16::try_from(local_registers).ok()?,

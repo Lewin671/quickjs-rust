@@ -3,7 +3,7 @@
 //! decode temporary unit buffers. Repeated byte matches advance one unit cursor.
 
 use super::kmp::UnitPattern;
-use super::{CallEnv, JsString, Replacement, RuntimeError, StringMatch, Value};
+use super::{JsString, Replacement, RuntimeError, StringMatch, Value};
 use crate::string::{
     code_units, string_code_unit_len, string_code_units, string_from_code_unit,
     string_from_code_units, surrogate_escape_code_unit,
@@ -158,7 +158,7 @@ pub(super) fn replace_matches(
     input: JsString,
     matches: Vec<StringMatch>,
     replacement: Replacement,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let units = string_code_units(&input);
     if let Replacement::String(replacement) = &replacement

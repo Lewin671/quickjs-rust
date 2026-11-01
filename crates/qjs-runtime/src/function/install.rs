@@ -1,8 +1,7 @@
-use crate::CallEnv;
 use crate::{Function, NativeFunction, ObjectRef, Property, Prototype, Value};
 
 pub(crate) fn install_function(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     global_this: &Value,
     object_prototype: ObjectRef,
 ) {

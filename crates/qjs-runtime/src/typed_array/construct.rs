@@ -10,7 +10,6 @@ use super::{
     MAX_TYPED_ARRAY_LENGTH, TypedArraySlots, bytes_per_element, coerce_element, is_big_int_kind,
     is_typed_array_object, to_typed_array_length, typed_array_kind, typed_array_name,
 };
-use crate::CallEnv;
 
 pub(crate) fn native_typed_array(
     function: &Function,
@@ -18,7 +17,7 @@ pub(crate) fn native_typed_array(
     this_value: Value,
     argument_values: &[Value],
     is_construct: bool,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     // %TypedArray% itself is abstract: never callable or constructable.
     if matches!(native, NativeFunction::TypedArray) {
@@ -86,7 +85,7 @@ pub(crate) fn native_typed_array(
 fn typed_array_allocation_object(
     function: &Function,
     this_value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<ObjectRef, RuntimeError> {
     match this_value {
         Value::Object(object) => Ok(object),
@@ -103,7 +102,7 @@ fn initialize_from_length(
     object: &ObjectRef,
     native: NativeFunction,
     length: usize,
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
 ) -> Result<(), RuntimeError> {
     let element = bytes_per_element(native);
     let byte_length = length
@@ -125,7 +124,7 @@ fn initialize_from_typed_array(
     object: &ObjectRef,
     native: NativeFunction,
     source: &ObjectRef,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<(), RuntimeError> {
     let (_, length) = super::validate_typed_array(&Value::Object(source.clone()))?;
     let source_kind = typed_array_kind(source);
@@ -152,7 +151,7 @@ fn initialize_from_buffer(
     native: NativeFunction,
     buffer: ObjectRef,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<(), RuntimeError> {
     let element = bytes_per_element(native);
     let offset = to_index(
@@ -213,7 +212,7 @@ fn initialize_from_object(
     object: &ObjectRef,
     native: NativeFunction,
     source: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<(), RuntimeError> {
     let iterator_method = match crate::symbol::iterator_symbol(env) {
         Some(symbol) => {
@@ -263,7 +262,7 @@ fn initialize_from_object(
 
 /// Allocates the backing buffer for a freshly created typed array, inheriting
 /// `%ArrayBuffer.prototype%`.
-fn array_buffer_for(byte_length: usize, env: &CallEnv) -> ObjectRef {
+fn array_buffer_for(byte_length: usize, env: &crate::context::Context<'_>) -> ObjectRef {
     array_buffer::new_array_buffer(env, byte_length)
 }
 
@@ -274,7 +273,7 @@ fn array_buffer_for(byte_length: usize, env: &CallEnv) -> ObjectRef {
 pub(crate) fn create_with_values(
     native: NativeFunction,
     values: Vec<Value>,
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
 ) -> ObjectRef {
     let prototype = concrete_prototype(native, env);
     let object = ObjectRef::with_prototype(HashMap::new(), prototype, env.realm().atoms());
@@ -286,7 +285,10 @@ pub(crate) fn create_with_values(
 
 /// The `%TA.prototype%` object for `native`, looked up through the global
 /// constructor.
-fn concrete_prototype(native: NativeFunction, env: &CallEnv) -> Option<ObjectRef> {
+fn concrete_prototype(
+    native: NativeFunction,
+    env: &crate::context::Context<'_>,
+) -> Option<ObjectRef> {
     let constructor = env.get(typed_array_name(native))?;
     match constructor {
         Value::Function(function) => match function.own_property("prototype") {
@@ -358,7 +360,7 @@ fn install_view_slots(
 pub(crate) fn native_typed_array_of(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let length = argument_values.len();
     let result = typed_array_create(this_value, length, true, env)?;
@@ -375,7 +377,7 @@ pub(crate) fn native_typed_array_of(
 pub(crate) fn native_typed_array_from(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     crate::ensure_constructor(&this_value)?;
     let source = argument_values.first().cloned().unwrap_or(Value::Undefined);
@@ -435,7 +437,7 @@ fn mapped_typed_array_from_value(
     mapping: bool,
     map_fn: &Value,
     this_arg: &Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if mapping {
         crate::call_function(
@@ -454,7 +456,7 @@ fn typed_array_create(
     constructor: Value,
     length: usize,
     reject_immutable_buffer: bool,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     crate::ensure_constructor(&constructor)?;
     let result = crate::construct_function(
@@ -489,7 +491,7 @@ fn set_result_element(
     result: &Value,
     index: usize,
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<(), RuntimeError> {
     crate::bytecode::set_object_property(result.clone(), index.to_string(), value, env)?;
     Ok(())
@@ -498,7 +500,7 @@ fn set_result_element(
 // --- helpers -----------------------------------------------------------------
 
 /// ToIndex: a non-negative integer, throwing RangeError otherwise.
-fn to_index(value: Value, env: &mut CallEnv) -> Result<usize, RuntimeError> {
+fn to_index(value: Value, env: &mut crate::context::Context<'_>) -> Result<usize, RuntimeError> {
     let number = to_number_with_env(value, env)?;
     let integer = if number.is_nan() { 0.0 } else { number.trunc() };
     if integer < 0.0 || !integer.is_finite() {

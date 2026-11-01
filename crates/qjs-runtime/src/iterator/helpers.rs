@@ -18,7 +18,6 @@ use crate::{
 };
 
 use super::protocol::{iterator_close_on_throw, iterator_step, iterator_value};
-use crate::CallEnv;
 
 const HELPER_KIND: &str = "\0iterator_helper_kind";
 const HELPER_UNDERLYING: &str = "\0iterator_helper_underlying";
@@ -79,7 +78,7 @@ impl HelperKind {
 /// `Iterator.concat(...items)`.
 pub(super) fn native_iterator_concat(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let helper = ObjectRef::with_prototype(
         HashMap::new(),
@@ -150,7 +149,7 @@ pub(super) fn native_lazy_helper(
     native: NativeFunction,
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let (kind, method) = match native {
         NativeFunction::IteratorPrototypeMap => (HelperKind::Map, "map"),
@@ -241,7 +240,10 @@ pub(super) fn native_lazy_helper(
 
 /// ToIntegerOrInfinity for the take/drop limit, surfacing NaN as a distinct
 /// value so the caller can raise the RangeError the proposal requires.
-fn number_to_integer_or_infinity(value: Value, env: &mut CallEnv) -> Result<f64, RuntimeError> {
+fn number_to_integer_or_infinity(
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<f64, RuntimeError> {
     let number = to_number_with_env(value, env)?;
     if number.is_nan() {
         return Ok(f64::NAN);
@@ -299,7 +301,7 @@ fn set_done(helper: &ObjectRef) {
 fn iterator_result(
     value: Value,
     done: bool,
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
     domain: &crate::property::atom::AtomDomain,
 ) -> Value {
     let object = ObjectRef::with_prototype(HashMap::new(), object_prototype(env), domain);
@@ -314,7 +316,7 @@ fn iterator_result(
 /// `%IteratorHelperPrototype%.next`.
 pub(super) fn native_helper_next(
     this_value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let Value::Object(helper) = this_value else {
         return Err(not_a_helper());
@@ -378,7 +380,7 @@ fn advance(
     helper: &ObjectRef,
     iterator: &Value,
     next: &Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Option<Value>, RuntimeError> {
     match kind {
         HelperKind::Concat | HelperKind::Zip => advance_static_helper(kind, helper, env),
@@ -436,7 +438,7 @@ fn clear_active_concat_iterator(helper: &ObjectRef) {
 fn open_concat_iterator(
     helper: &ObjectRef,
     index: usize,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<(), RuntimeError> {
     let iterable = helper_slot(helper, &format!("{CONCAT_ITERABLE_PREFIX}{index}"))
         .unwrap_or(Value::Undefined);
@@ -459,7 +461,7 @@ fn open_concat_iterator(
 fn advance_static_helper(
     kind: HelperKind,
     helper: &ObjectRef,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Option<Value>, RuntimeError> {
     match kind {
         HelperKind::Concat => advance_concat(helper, env),
@@ -468,7 +470,10 @@ fn advance_static_helper(
     }
 }
 
-fn advance_concat(helper: &ObjectRef, env: &mut CallEnv) -> Result<Option<Value>, RuntimeError> {
+fn advance_concat(
+    helper: &ObjectRef,
+    env: &mut crate::context::Context<'_>,
+) -> Result<Option<Value>, RuntimeError> {
     loop {
         if let Some((iterator, next)) = active_concat_iterator(helper) {
             match iterator_step(&iterator, &next, env)? {
@@ -513,7 +518,7 @@ fn advance_map(
     helper: &ObjectRef,
     iterator: &Value,
     next: &Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Option<Value>, RuntimeError> {
     let Some(result) = iterator_step(iterator, next, env)? else {
         return Ok(None);
@@ -537,7 +542,7 @@ fn advance_filter(
     helper: &ObjectRef,
     iterator: &Value,
     next: &Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Option<Value>, RuntimeError> {
     loop {
         let Some(result) = iterator_step(iterator, next, env)? else {
@@ -567,7 +572,7 @@ fn advance_take(
     helper: &ObjectRef,
     iterator: &Value,
     next: &Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Option<Value>, RuntimeError> {
     let remaining = match helper_slot(helper, HELPER_REMAINING) {
         Some(Value::Number(n)) => n,
@@ -591,7 +596,7 @@ fn advance_drop(
     helper: &ObjectRef,
     iterator: &Value,
     next: &Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Option<Value>, RuntimeError> {
     let mut remaining = match helper_slot(helper, HELPER_REMAINING) {
         Some(Value::Number(n)) => n,
@@ -615,7 +620,7 @@ fn advance_flat_map(
     helper: &ObjectRef,
     iterator: &Value,
     next: &Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Option<Value>, RuntimeError> {
     loop {
         // Drain the in-progress inner iterator first.
@@ -667,7 +672,10 @@ fn advance_flat_map(
 /// reads `Symbol.iterator` (falling back to treating `obj` itself as the
 /// iterator when absent) and returns an inner record packaged as an object
 /// carrying the iterator and its `next` method.
-fn get_iterator_flattenable(value: Value, env: &mut CallEnv) -> Result<Value, RuntimeError> {
+fn get_iterator_flattenable(
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<Value, RuntimeError> {
     if !matches!(
         value,
         Value::Object(_) | Value::Array(_) | Value::Function(_) | Value::Map(_) | Value::Set(_)
@@ -715,7 +723,7 @@ fn get_iterator_flattenable(value: Value, env: &mut CallEnv) -> Result<Value, Ru
 /// in-progress inner iterator for `flatMap`) and marks the helper done.
 pub(super) fn native_helper_return(
     this_value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let Value::Object(helper) = this_value else {
         return Err(not_a_helper());
@@ -754,7 +762,7 @@ pub(super) fn native_helper_return(
 fn close_helper_iterators(
     kind: HelperKind,
     helper: &ObjectRef,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<(), RuntimeError> {
     if let Some(Value::Object(inner_state)) = helper_slot(helper, HELPER_INNER)
         && let Some(inner) = helper_slot(&inner_state, HELPER_UNDERLYING)

@@ -1,0 +1,20 @@
+{
+  "runtime_revision": "73c93d8feb3b0e46b8aee581cf293ed2a6d953c8",
+  "binary_sha256": "0902b12ded5450db5bb09d9d43405d34940eabbce599966e71c49a6042b0b124",
+  "test262_pin": "4249661388e5d3f92a85186213da140a6481490f",
+  "ng_pin": "f7830186043e4488f2998759d60a514faf07cbc9",
+  "command": "./scripts/find-qjsng-gaps.sh --exact --all --no-recommend --out-dir target/s3b-73c-exact-cached",
+  "environment": {
+    "QJS_AGENTS": "1",
+    "QJS_CLI_PROFILE": "release",
+    "QJS_CLI_BIN": "target/s3b-73c-agents/release/qjs",
+    "TEST262_BASELINE_JOBS": "6",
+    "TEST262_TIMEOUT_RETRIES": "1",
+    "TEST262_CASE_TIMEOUT_SECONDS": "20"
+  },
+  "hashes": {
+    "summary.json": "4f446234b1000c7feee83a574fb35a5f0f92beb44dd656e12b1a1ab4f05e0515",
+    "cases.jsonl": "afd923bf51116f2179b9f81276679ac3a7b76e2e4ca66641c68f4b864933ceb7",
+    "baseline.log": "4a566e5f897aa41c1bdbf3bbe69a4e4bedad38a81b47f8b4ec2241a076915f9c"
+  }
+}

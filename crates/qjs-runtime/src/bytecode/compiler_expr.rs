@@ -62,11 +62,15 @@ impl Compiler {
                 self.emit_load_undefined();
                 return Ok(());
             }
-            return self.with_lexical_scope(|compiler| {
-                compiler
-                    .with_annex_b_blocked_function_names(std::slice::from_ref(name), |compiler| {
-                        compiler.compile_function_decl(stmt)
-                    })
+            return self.with_scope_kind(crate::binding::ScopeKind::Block, |compiler| {
+                compiler.with_annex_b_blocked_function_names(
+                    std::slice::from_ref(name),
+                    |compiler| {
+                        compiler.compile_function_decl(stmt)?;
+                        compiler.emit_annex_b_function_copy(stmt);
+                        Ok(())
+                    },
+                )
             });
         }
         // Where nothing observes the `if` statement's value, a clause is a
@@ -137,9 +141,15 @@ impl Compiler {
     /// clone on the hot path.
     fn loop_body_needs_iteration_scope(&self, body: &Stmt, body_start: usize) -> bool {
         stmt_declares_capturable_lexical(body)
-            && self.code[body_start..]
-                .iter()
-                .any(|op| matches!(op, Op::NewFunction { .. } | Op::NewClass { .. }))
+            && self.code[body_start..].iter().any(|op| {
+                matches!(
+                    op,
+                    Op::NewFunction { .. }
+                        | Op::NewClass { .. }
+                        | Op::CallDirectEval { .. }
+                        | Op::CallDirectEvalSpread { .. }
+                )
+            })
     }
 
     pub(super) fn compile_do_while(
@@ -187,7 +197,7 @@ impl Compiler {
                 ..
             })
         ) {
-            return self.with_lexical_scope(|compiler| {
+            return self.with_scope_kind(crate::binding::ScopeKind::Loop, |compiler| {
                 compiler.compile_for_scoped(init, test, update, body)
             });
         }
@@ -208,9 +218,15 @@ impl Compiler {
         if let Some(init) = init {
             let init_start = self.code.len();
             self.compile_for_init(init)?;
-            init_created_closure = self.code[init_start..]
-                .iter()
-                .any(|op| matches!(op, Op::NewFunction { .. } | Op::NewClass { .. }));
+            init_created_closure = self.code[init_start..].iter().any(|op| {
+                matches!(
+                    op,
+                    Op::NewFunction { .. }
+                        | Op::NewClass { .. }
+                        | Op::CallDirectEval { .. }
+                        | Op::CallDirectEvalSpread { .. }
+                )
+            });
             self.emit(Op::Pop);
         }
         self.compile_for_loop_after_init(init, test, update, body, init_created_closure)
@@ -239,9 +255,15 @@ impl Compiler {
             if let Some(init) = init {
                 let init_start = self.code.len();
                 self.compile_for_init(init)?;
-                let init_created_closure = self.code[init_start..]
-                    .iter()
-                    .any(|op| matches!(op, Op::NewFunction { .. } | Op::NewClass { .. }));
+                let init_created_closure = self.code[init_start..].iter().any(|op| {
+                    matches!(
+                        op,
+                        Op::NewFunction { .. }
+                            | Op::NewClass { .. }
+                            | Op::CallDirectEval { .. }
+                            | Op::CallDirectEvalSpread { .. }
+                    )
+                });
                 self.emit(Op::Pop);
                 self.compile_for_loop_after_init_with_result(
                     Some(init),
@@ -450,6 +472,17 @@ impl Compiler {
                             });
                             continue;
                         }
+                        let reference = if *kind == VarKind::Var {
+                            if let qjs_ast::BindingPattern::Identifier { name, .. } =
+                                &declaration.binding
+                            {
+                                Some(self.begin_reference(name))
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        };
                         self.compile_declaration_init(&declaration.binding, init)?;
                         if self.disposable_scope_depth > 0 {
                             match kind {
@@ -463,6 +496,9 @@ impl Compiler {
                             }
                         }
                         self.compile_binding_initializer(&declaration.binding, *kind)?;
+                        if let Some(reference) = reference {
+                            self.finish_reference(reference, None, self.code.len() - 1);
+                        }
                     } else {
                         self.compile_binding_uninitialized(&declaration.binding, *kind)?;
                     }
@@ -571,50 +607,35 @@ impl Compiler {
             } => {
                 let source_text = self.function_source_text(*span);
                 let is_strict = self.strict || is_strict_function_body(body);
-                let mut local_names =
+                let local_names =
                     collect_function_local_names(name.as_ref(), params, body, !lexical_arguments);
-                if *lexical_arguments && !self.global_scope {
-                    self.own_call_frame_slot("arguments");
-                }
-                let (mut bytecode, mut lexical_captures) = self.compile_nested_function_body(
+                let (mut bytecode, lexical_captures) = self.compile_nested_function_body(
                     params,
                     body,
                     is_strict,
                     *is_generator,
                     *is_async,
                     &local_names,
+                    !*lexical_arguments,
+                    name.as_deref(),
                 )?;
-                if *lexical_this && bytecode.needs_call_receiver() && !self.global_scope {
-                    self.own_call_frame_slot("this");
-                    local_names.retain(|name| name != "this");
-                    (bytecode, lexical_captures) = self.compile_nested_function_body(
-                        params,
-                        body,
-                        is_strict,
-                        *is_generator,
-                        *is_async,
-                        &local_names,
-                    )?;
-                }
-                // A named function expression's inner name binding is
-                // immutable, and it only exists for a body that can reach the
-                // name. Carrying an unused one excludes the function from the
-                // slot-seeded direct call path, which made a named function
-                // expression measurably slower than the identical anonymous
-                // one. A body that creates a closure, runs a direct `eval`, or
-                // has a `with` can reach the name by a route the compiler does
-                // not record, and such a body is declined by that path anyway.
+
+                // A self binding is retained for a direct/static descendant
+                // reference or potential dynamic resolution. Merely creating
+                // an unrelated closure does not expose that name.
                 let needs_name_binding = name.as_deref().is_some_and(|name| {
-                    bytecode.creates_closures()
-                        || bytecode.contains_direct_eval()
-                        || bytecode.contains_with()
+                    bytecode.has_dynamic_scope_tree()
                         || bytecode.uses_local_binding(name)
-                        || bytecode.global_names().iter().any(|global| global == name)
+                        || bytecode.references_free_name_tree(name)
                 });
+                if needs_name_binding {
+                    bytecode.binding_plan.self_name = name
+                        .as_ref()
+                        .map(|name| crate::binding::FunctionNamePlan::compile(name.clone()));
+                }
                 self.emit(Op::NewFunction {
                     name: name.clone(),
                     has_name_binding: needs_name_binding,
-                    immutable_name_binding: needs_name_binding,
                     params: Rc::new(params.clone()),
                     local_names: Rc::new(local_names),
                     lexical_captures,
@@ -753,35 +774,22 @@ impl Compiler {
             } => {
                 let source_text = self.function_source_text(*span);
                 let is_strict = self.strict || is_strict_function_body(body);
-                let mut local_names =
+                let local_names =
                     collect_function_local_names(None, params, body, !lexical_arguments);
-                if *lexical_arguments && !self.global_scope {
-                    self.own_call_frame_slot("arguments");
-                }
-                let (mut bytecode, mut lexical_captures) = self.compile_nested_function_body(
+                let (bytecode, lexical_captures) = self.compile_nested_function_body(
                     params,
                     body,
                     is_strict,
                     *is_generator,
                     *is_async,
                     &local_names,
+                    !*lexical_arguments,
+                    None,
                 )?;
-                if *lexical_this && bytecode.needs_call_receiver() && !self.global_scope {
-                    self.own_call_frame_slot("this");
-                    local_names.retain(|name| name != "this");
-                    (bytecode, lexical_captures) = self.compile_nested_function_body(
-                        params,
-                        body,
-                        is_strict,
-                        *is_generator,
-                        *is_async,
-                        &local_names,
-                    )?;
-                }
+
                 self.emit(Op::NewFunction {
                     name: Some(name.to_owned()),
                     has_name_binding: false,
-                    immutable_name_binding: false,
                     params: Rc::new(params.clone()),
                     local_names: Rc::new(local_names),
                     lexical_captures,
@@ -824,34 +832,21 @@ impl Compiler {
         };
         let source_text = self.function_source_text(*span);
         let is_strict = self.strict || is_strict_function_body(body);
-        let mut local_names = collect_function_local_names(None, params, body, !lexical_arguments);
-        if *lexical_arguments && !self.global_scope {
-            self.own_call_frame_slot("arguments");
-        }
-        let (mut bytecode, mut lexical_captures) = self.compile_nested_function_body(
+        let local_names = collect_function_local_names(None, params, body, !lexical_arguments);
+        let (bytecode, lexical_captures) = self.compile_nested_function_body(
             params,
             body,
             is_strict,
             *is_generator,
             *is_async,
             &local_names,
+            !*lexical_arguments,
+            None,
         )?;
-        if *lexical_this && bytecode.needs_call_receiver() && !self.global_scope {
-            self.own_call_frame_slot("this");
-            local_names.retain(|name| name != "this");
-            (bytecode, lexical_captures) = self.compile_nested_function_body(
-                params,
-                body,
-                is_strict,
-                *is_generator,
-                *is_async,
-                &local_names,
-            )?;
-        }
+
         self.emit(Op::NewFunction {
             name: Some(display_name.to_owned()),
             has_name_binding: false,
-            immutable_name_binding: false,
             params: Rc::new(params.clone()),
             local_names: Rc::new(local_names),
             lexical_captures,
@@ -938,6 +933,12 @@ impl Compiler {
             && let OptionalChainStep::Call(arguments) = &first.kind
         {
             self.compile_super_method(property)?;
+            self.compile_optional_resolved_call(first.optional, arguments, &mut end_jumps)?;
+            index = 1;
+        } else if let Some(first) = chain.first()
+            && let OptionalChainStep::Call(arguments) = &first.kind
+            && self.compile_with_callee_reference(base)
+        {
             self.compile_optional_resolved_call(first.optional, arguments, &mut end_jumps)?;
             index = 1;
         } else {
@@ -1263,7 +1264,10 @@ impl Compiler {
             return Ok(());
         }
 
-        self.compile_expr(tag)?;
+        let resolved = self.compile_with_callee_reference(tag);
+        if !resolved {
+            self.compile_expr(tag)?;
+        }
         self.emit(Op::RequireCallable);
         self.emit(Op::NewTemplateObject {
             site,
@@ -1273,7 +1277,11 @@ impl Compiler {
         for expression in expressions {
             self.compile_expr(expression)?;
         }
-        self.emit(Op::Call(expressions.len() + 1));
+        self.emit(if resolved {
+            Op::CallResolved(expressions.len() + 1)
+        } else {
+            Op::Call(expressions.len() + 1)
+        });
         Ok(())
     }
 

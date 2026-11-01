@@ -1,0 +1,32 @@
+[
+ {
+  "configuration": "default",
+  "target": "x86_64-apple-darwin",
+  "build_exit": 0,
+  "binary_sha256": "63c682dd923948c361c75ee16c594bc8e2d6d780322eb4cc5b2feb94a3ec5110",
+  "file": "Mach-O 64-bit executable x86_64",
+  "smoke_exit": 0,
+  "smoke_stdout_first_line": "3",
+  "source": "8abd4c69"
+ },
+ {
+  "configuration": "agents",
+  "target": "x86_64-apple-darwin",
+  "build_exit": 0,
+  "binary_sha256": "7c0d200bf3e288fd3b4bccee0ff4818d4c5172e3b7e3a7474319d346c5c20145",
+  "file": "Mach-O 64-bit executable x86_64",
+  "smoke_exit": 0,
+  "smoke_stdout_first_line": "3",
+  "source": "8abd4c69"
+ },
+ {
+  "configuration": "perf-counters",
+  "target": "x86_64-apple-darwin",
+  "build_exit": 0,
+  "binary_sha256": "232e7d7337e7446a45dca7673b616d30e53d9501c5c6ba3ea497529a437f8b60",
+  "file": "Mach-O 64-bit executable x86_64",
+  "smoke_exit": 0,
+  "smoke_stdout_first_line": "3",
+  "source": "8abd4c69"
+ }
+]

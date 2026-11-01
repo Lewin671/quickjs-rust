@@ -40,12 +40,11 @@ impl Compiler {
         self.with_lexical_scope(|compiler| {
             let blocked = annex_b_blocked_names(body, compiler.strict);
             compiler.with_annex_b_blocked_function_names(&blocked, |compiler| {
-                compiler.predeclare_current_scope_lexicals(body);
+                compiler.instantiate_block_declarations(body, &blocked)?;
                 if body.is_empty() {
                     compiler.emit_load_undefined();
                     return Ok(());
                 }
-                compiler.compile_hoisted_function_decls(body)?;
                 let result_slot = compiler.temp_local("block_result");
                 if compiler.tracks_completion_values {
                     compiler.emit_load_undefined();
@@ -74,6 +73,27 @@ impl Compiler {
                 Ok(())
             })
         })
+    }
+
+    /// Each entry creates fresh lexical locations, even if an abrupt jump
+    /// skipped the previous instance's normal-exit cleanup. Emit this at the
+    /// block entry, before any reference/closure or function initialization;
+    /// clearing on continue itself would incorrectly precede finally handlers.
+    fn instantiate_block_declarations(
+        &mut self,
+        body: &[Stmt],
+        names: &[String],
+    ) -> Result<(), RuntimeError> {
+        self.predeclare_current_scope_lexicals(body);
+        for stmt in body {
+            if let Stmt::FunctionDecl { name, .. } = stmt {
+                self.declare_lexical_slot(name, true);
+            }
+        }
+        for slot in self.current_lexical_slots_for_names(names) {
+            self.emit(Op::ClearLocal(slot));
+        }
+        self.compile_hoisted_function_decls(body)
     }
 
     /// Compiles a block that declares `using` resources: opens a disposal scope,
@@ -194,7 +214,7 @@ impl Compiler {
             catch_scope: None,
             cleanup_slots: Vec::new(),
         });
-        let cleanup_start = self.locals.len();
+        let cleanup_start = self.scope_plan.scopes.len();
         let mut cleanup_slots = Vec::new();
         if block_has_using(block) {
             self.compile_disposable_block(block)?;
@@ -240,25 +260,27 @@ impl Compiler {
     }
 
     fn compile_try_body(&mut self, body: &[Stmt], result_slot: usize) -> Result<(), RuntimeError> {
-        for stmt in body {
-            self.compile_stmt(stmt)?;
-            self.emit(Op::StoreLocal(result_slot));
-        }
-        Ok(())
+        let blocked = annex_b_blocked_names(body, self.strict);
+        self.with_annex_b_blocked_function_names(&blocked, |compiler| {
+            compiler.instantiate_block_declarations(body, &blocked)?;
+            for stmt in body {
+                compiler.compile_stmt(stmt)?;
+                compiler.emit(Op::StoreLocal(result_slot));
+            }
+            Ok(())
+        })
     }
 
     fn lexical_cleanup_slots_since(&self, start: usize) -> Vec<usize> {
-        self.locals
+        self.scope_plan
+            .declarations
             .iter()
-            .enumerate()
-            .skip(start)
-            .filter(|(_, local)| {
-                !local.name.starts_with("\0\0")
-                    && !local.hoisted
-                    && !local.parameter
-                    && !local.sloppy_global_fallback
+            .filter(|(_, slot, scope)| {
+                scope.0 >= start
+                    && !self.locals[slot.0].is_received_upvalue()
+                    && !self.locals[slot.0].compiler_temporary
             })
-            .map(|(slot, _)| slot)
+            .map(|(_, slot, _)| slot.0)
             .collect()
     }
 
@@ -276,7 +298,7 @@ impl Compiler {
         self.emit_load_undefined();
         self.emit(Op::StoreLocal(result_slot));
         if let Some(param) = &handler.param {
-            let slots = self.with_lexical_scope(|compiler| {
+            let slots = self.with_scope_kind(crate::binding::ScopeKind::Catch, |compiler| {
                 let slots = compiler.compile_catch_param(param)?;
                 let blocked = catch_param_annex_b_blocked_names(Some(param));
                 compiler.with_annex_b_blocked_function_names(&blocked, |compiler| {
@@ -326,11 +348,7 @@ impl Compiler {
         self.emit_load_undefined();
         self.emit(Op::StoreLocal(finally_result_slot));
         self.with_lexical_scope(|compiler| {
-            for stmt in finalizer {
-                compiler.compile_stmt(stmt)?;
-                compiler.emit(Op::StoreLocal(finally_result_slot));
-            }
-            Ok(())
+            compiler.compile_try_body(finalizer, finally_result_slot)
         })?;
 
         self.pop_try_result_slot();

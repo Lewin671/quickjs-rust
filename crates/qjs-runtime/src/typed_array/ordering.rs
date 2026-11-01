@@ -22,14 +22,13 @@ use super::{
     typed_array_is_out_of_bounds, typed_array_kind, typed_array_length, validate_typed_array,
     validate_typed_array_write,
 };
-use crate::CallEnv;
 
 // --- set --------------------------------------------------------------------
 
 pub(crate) fn native_typed_array_prototype_set(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let (object, _) = validate_typed_array_write(&this_value)?;
     let native = typed_array_kind(&object);
@@ -46,7 +45,10 @@ pub(crate) fn native_typed_array_prototype_set(
     Ok(Value::Undefined)
 }
 
-fn set_offset(value: Option<Value>, env: &mut CallEnv) -> Result<usize, RuntimeError> {
+fn set_offset(
+    value: Option<Value>,
+    env: &mut crate::context::Context<'_>,
+) -> Result<usize, RuntimeError> {
     let number = to_number_with_env(value.unwrap_or(Value::Undefined), env)?;
     let integer = if number.is_nan() { 0.0 } else { number.trunc() };
     if integer < 0.0 {
@@ -61,7 +63,7 @@ fn set_from_typed_array(
     length: usize,
     source: &ObjectRef,
     offset: usize,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<(), RuntimeError> {
     if super::typed_array_buffer_detached(source) {
         return Err(array_buffer::detached_error());
@@ -102,7 +104,7 @@ fn set_from_array_like(
     length: usize,
     source: Value,
     offset: usize,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<(), RuntimeError> {
     if let Some(values) = dense_primitive_array_values(&source, native, env) {
         if offset
@@ -137,7 +139,7 @@ fn set_from_array_like(
 fn dense_primitive_array_values(
     source: &Value,
     native: NativeFunction,
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
 ) -> Option<Vec<Value>> {
     let Value::Array(array) = source else {
         return None;
@@ -159,7 +161,7 @@ fn dense_primitive_array_values(
 pub(crate) fn native_typed_array_prototype_fill(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let (object, length) = validate_typed_array_write(&this_value)?;
     let native = typed_array_kind(&object);
@@ -192,7 +194,7 @@ pub(crate) fn native_typed_array_prototype_fill(
 pub(crate) fn native_typed_array_prototype_copy_within(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let (object, initial_length) = validate_typed_array_write(&this_value)?;
     let target = relative_integer(
@@ -228,7 +230,7 @@ pub(crate) fn native_typed_array_prototype_copy_within(
 pub(crate) fn native_typed_array_prototype_reverse(
     this_value: Value,
     _argument_values: &[Value],
-    _env: &mut CallEnv,
+    _env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let (object, length) = validate_typed_array_write(&this_value)?;
     let mut values: Vec<Value> = read_view_elements(&object, 0, length);
@@ -240,7 +242,7 @@ pub(crate) fn native_typed_array_prototype_reverse(
 pub(crate) fn native_typed_array_prototype_to_reversed(
     this_value: Value,
     _argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let (object, length) = validate_typed_array(&this_value)?;
     let native = typed_array_kind(&object);
@@ -256,7 +258,7 @@ pub(crate) fn native_typed_array_prototype_to_reversed(
 pub(crate) fn native_typed_array_prototype_sort(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let (object, length) = validate_typed_array_write(&this_value)?;
     let comparator = sort_comparator(argument_values, "sort")?;
@@ -269,7 +271,7 @@ pub(crate) fn native_typed_array_prototype_sort(
 pub(crate) fn native_typed_array_prototype_to_sorted(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let (object, length) = validate_typed_array(&this_value)?;
     let native = typed_array_kind(&object);
@@ -302,7 +304,7 @@ fn sort_comparator(
 fn sort_values(
     values: &mut [Value],
     comparator: Option<&Function>,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<(), RuntimeError> {
     if values.len() < 2 {
         return Ok(());
@@ -324,7 +326,7 @@ fn sort_values(
 fn values_are_sorted(
     values: &[Value],
     comparator: &Function,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<bool, RuntimeError> {
     for window in values.windows(2) {
         if compare(&window[0], &window[1], Some(comparator), env)? == Ordering::Greater {
@@ -337,7 +339,7 @@ fn values_are_sorted(
 fn values_are_strictly_reversed(
     values: &[Value],
     comparator: &Function,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<bool, RuntimeError> {
     for window in values.windows(2) {
         if compare(&window[0], &window[1], Some(comparator), env)? != Ordering::Greater {
@@ -350,7 +352,7 @@ fn values_are_strictly_reversed(
 fn merge_sort_values(
     mut values: Vec<Value>,
     comparator: Option<&Function>,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Vec<Value>, RuntimeError> {
     if values.len() < 2 {
         return Ok(values);
@@ -365,7 +367,7 @@ fn merge_sorted_values(
     left: Vec<Value>,
     right: Vec<Value>,
     comparator: Option<&Function>,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Vec<Value>, RuntimeError> {
     let mut merged = Vec::with_capacity(left.len() + right.len());
     let mut left = left.into_iter().peekable();
@@ -388,7 +390,7 @@ fn compare(
     left: &Value,
     right: &Value,
     comparator: Option<&Function>,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Ordering, RuntimeError> {
     if let Some(function) = comparator {
         let result = call_function(
@@ -448,7 +450,7 @@ fn number_order(a: f64, b: f64) -> Ordering {
 pub(crate) fn native_typed_array_prototype_with(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let (object, length) = validate_typed_array(&this_value)?;
     let native = typed_array_kind(&object);
@@ -497,7 +499,7 @@ pub(crate) fn native_typed_array_prototype_with(
 
 pub(crate) fn native_uint8_array_from_hex(
     argument_values: &[Value],
-    env: &CallEnv,
+    env: &crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let source = hex_source(argument_values.first(), "Uint8Array.fromHex")?;
     let bytes = decode_hex_string(&source, MAX_TYPED_ARRAY_LENGTH)?;
@@ -533,7 +535,7 @@ pub(crate) fn native_uint8_array_prototype_to_hex(
 pub(crate) fn native_uint8_array_prototype_set_from_hex(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let (object, length) = validate_typed_array_write(&this_value)?;
     if typed_array_kind(&object) != NativeFunction::Uint8Array {
@@ -636,7 +638,7 @@ fn number_byte(value: u8) -> Value {
     Value::Number(value as f64)
 }
 
-fn set_from_hex_result(read: usize, written: usize, env: &CallEnv) -> Value {
+fn set_from_hex_result(read: usize, written: usize, env: &crate::context::Context<'_>) -> Value {
     let result =
         ObjectRef::with_prototype(HashMap::new(), object_prototype(env), env.realm().atoms());
     result.define_property(
@@ -663,13 +665,17 @@ fn relative_index(
     value: Value,
     length: usize,
     default: i64,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<usize, RuntimeError> {
     let relative = relative_integer(value, default as f64, env)?;
     Ok(relative_index_from_integer(relative, length))
 }
 
-fn relative_integer(value: Value, default: f64, env: &mut CallEnv) -> Result<f64, RuntimeError> {
+fn relative_integer(
+    value: Value,
+    default: f64,
+    env: &mut crate::context::Context<'_>,
+) -> Result<f64, RuntimeError> {
     Ok(match value {
         Value::Undefined => default,
         other => {

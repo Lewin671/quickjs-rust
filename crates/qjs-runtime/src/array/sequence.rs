@@ -12,7 +12,6 @@ use super::{
         validate_array_species_constructor,
     },
 };
-use crate::CallEnv;
 
 const MAX_ARRAY_LENGTH: usize = u32::MAX as usize;
 const MAX_SAFE_LENGTH: usize = (1usize << 53) - 1;
@@ -20,7 +19,7 @@ const MAX_SAFE_LENGTH: usize = (1usize << 53) - 1;
 pub(crate) fn native_array_prototype_concat(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let receiver = array_like_length(this_value, "Array.prototype.concat", env)?.receiver;
     let result = array_species_create(receiver.clone(), 0, "concat", env)?;
@@ -37,7 +36,7 @@ pub(crate) fn native_array_prototype_concat(
 pub(crate) fn native_array_prototype_slice(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let array_like = array_like_length(this_value, "Array.prototype.slice", env)?;
     let length = array_like.length;
@@ -84,7 +83,7 @@ pub(crate) fn native_array_prototype_slice(
 
 pub(crate) fn native_array_prototype_to_reversed(
     this_value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let source = array_like_length(this_value, "Array.prototype.toReversed", env)?;
     if source.length > MAX_ARRAY_LENGTH {
@@ -108,7 +107,7 @@ pub(crate) fn native_array_prototype_to_reversed(
 pub(crate) fn native_array_prototype_to_spliced(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let source = array_like_length(this_value, "Array.prototype.toSpliced", env)?;
     let length = source.length;
@@ -166,7 +165,7 @@ pub(crate) fn native_array_prototype_to_spliced(
 pub(crate) fn native_array_prototype_with(
     this_value: Value,
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let source = array_like_length(this_value, "Array.prototype.with", env)?;
     if source.length > MAX_ARRAY_LENGTH {
@@ -204,7 +203,7 @@ fn concat_array_item(
     result: Value,
     next_index: usize,
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<usize, RuntimeError> {
     if is_concat_spreadable(value.clone(), env)? {
         return concat_spread_array(result, next_index, value, env);
@@ -213,7 +212,10 @@ fn concat_array_item(
     Ok(next_index + 1)
 }
 
-fn is_concat_spreadable(value: Value, env: &mut CallEnv) -> Result<bool, RuntimeError> {
+fn is_concat_spreadable(
+    value: Value,
+    env: &mut crate::context::Context<'_>,
+) -> Result<bool, RuntimeError> {
     if !is_object_like(&value) {
         return Ok(false);
     }
@@ -248,7 +250,7 @@ fn concat_spread_array(
     result: Value,
     next_index: usize,
     value: Value,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<usize, RuntimeError> {
     let length = to_length_with_env(property_value(value.clone(), "length", env)?, env)?;
     let new_length = next_index

@@ -3,7 +3,7 @@
 //! A [`ModuleHost`] bundles the per-realm module graph, the owned host
 //! [`ModuleResolver`], and the active referrer key (the canonical key of the
 //! script or module whose code is running). It is shared by `Rc::clone` into
-//! every call frame's [`crate::CallEnv`] and into the promise job queue, so a
+//! every call frame's [`crate::context::ActivationContext`] and into the promise job queue, so a
 //! dynamic `import()` reached from any depth — including a `.then` callback run
 //! during job draining — can resolve a specifier against the running referrer
 //! and reuse the realm's single module graph.

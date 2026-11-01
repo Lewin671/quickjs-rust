@@ -1,160 +1,160 @@
-# Binding Model Invariants
+# Environment and binding model
 
-What binding identities must any implementation preserve, and where do they
-live today? This describes the code, not a plan; the T016 migration record is
-[design-env-model-migration.md](../../tasks/archive/design-env-model-migration.md).
-Source paths are relative to `crates/qjs-runtime/src/`; tests are named
-`tests/<file>.rs::<test>`.
+The runtime uses slot-indexed locals and shared cells, a protected boundary:
+ordinary calls must not copy a name-to-value environment. Paths are under
+`crates/qjs-runtime/src/`, tests under `tests/` there ([T077 S3b](../../tasks/proposals/T077-s3b-brief.md)).
+## Compiled authority
 
-## The rule
+`bytecode/binding_plan.rs` owns one immutable BindingPlan per body. The existing
+compiler records declarations and parameter/body/block/catch/loop/class-name/with
+boundaries. Scope IDs and binding IDs belong to the retained metadata owner;
+descriptors contain names, declaration attributes and routes, never live values.
+The PC map identifies the active lexical chain after normal or abrupt control
+flow, including future TDZ declarations and excluding exited sibling scopes.
 
-One JavaScript binding has exactly one storage location for its whole life.
-Everything that can observe the binding reads and writes that location.
+Parameter inputs and capture inputs are positional. Capture linking follows the
+callee's received-slot order, using ParentLocal or ParentUpvalue routes. Compiler
+inputs and temporaries are excluded from exposed descriptors. Destructured
+parameter leaf bindings are parameters too; raw pattern inputs are not bindings.
 
-`AGENTS.md` protects this as an architectural boundary: never reintroduce a
-per-call name-keyed snapshot. A snapshot gives one binding two locations, so
-every call, closure creation, loop iteration, suspension and `eval` needs a
-refresh and write-back pass, and any path that misses one reads a stale
-value. It also makes every call build a name map the callee may never use.
+## Live locations and invariants
 
-## Where a binding lives
+1. **Private locals use slots.** `FrameState.locals[slot]` is an Option<Value>;
+   None is uninitialized. The authoritative-slot mask selects direct indexed
+   access. Capture/eval exposure moves value or TDZ into its cell and clears the slot.
+2. **Captured bindings share identity.** `binding/cell.rs::BindingCell` owns
+   immutable declaration metadata and Uninitialized/Initialized state. The
+   declaring frame, sibling closures and descendants retain the same Rc cell.
+   Init differs from Assign; Delete checks presence without reading TDZ values.
+   Tests: `binding::cell::policy_tests`, `closure_state.rs` captured/shadowed cells.
+3. **Capture order is exact.** Producers and consumers use the same received
+   classification; adding one accidental input must not shift subsequent cells.
+   Tests: `bytecode/binding_plan/tests.rs`, `bytecode/upvalue_resolver.rs`.
+4. **Fresh lexical entry preserves metadata.** Loop/catch re-entry replaces the
+   frame's cell handle without modifying escaped cells. Fresh cells retain the
+   declaration's policy and TDZ state. Per-iteration copying reads the current
+   cell, never a slot copy. Scope re-entry also separates escaped TDZ cells. Tests: `closure_state.rs` loop cells.
+5. **Arguments is a lexical binding.** Its parameter descriptor owns an initialized
+   lazy recipe, including eval demand; first read creates the object, assignment
+   can discard it unread. Arrows inherit the binding; parameters/lexicals shadow
+   it. Absent arguments is unresolvable, not a TDZ cell.
+6. **Mapped indices alias parameter cells.** Supplied simple-sloppy indices use
+   the last duplicate position; descriptors/delete/freeze sever mappings; seal retains them.
+   Strict/non-simple is unmapped. Parameter/body cells can share one lazy object.
+   Tests: `parameters.rs`, `binding/cell.rs`, `function/call_activation_tests.rs`.
+7. **Parameter/body targets are distinct where needed.** Parameter expressions
+   require a separate body variable target; same-named body vars copy parameters.
+   Parameter-created closures retain parameter/enclosing cells outside body declarations.
+   Expression-free rest/pattern lists share the parameter/body variable target.
+8. **Global lexicals are canonical cells.** Realm binding storage holds their
+   metadata/state; there is no copied lexical value projection or mutability side
+   set. A global property of the same name remains independent. Ordinary global
+   data routes synchronize with the global object; delete/accessor definition
+   invalidates a data route and restores semantic Get, without inventing lexical
+   TDZ. ObjectStorage publishers cannot mutate declaratives; invalidation has a
+   separate typed state. Tests: `global.rs`, `closure_state.rs`, `binding/cell.rs`.
+9. **Intrinsics are not mutable global bindings.** Set-once realm intrinsic fields
+   own Object/Array/Function, primitive/error prototypes and well-known symbols.
+   Internal errors capture their originating callee realm before unwinding.
+10. **Modules retain live cells.** Import routes attach exporting cells and reject
+    writes through import access policy. Top-level slots, hoists and namespaces
+    share cells established before linking; no settled import/export copies.
+11. **Suspension retains locations.** Snapshots own the same cells, scope leases,
+    holders and selected references across yield/await, not copies of their values.
+    See [generator suspension](generator-suspension.md).
 
-- A local nothing else can reach: `FrameState.locals[slot]`
-  (`bytecode/vm.rs`), seen by its frame only.
-- A captured local: an `Upvalue` in `FrameState.local_upvalues[slot]`. Each
-  closure receives it as `Function.upvalues[index]` and attaches it to its
-  own slot at frame entry, so the declaring frame, sibling closures and
-  nested closures hold the same cell.
-- A realm binding (global `var`, function, builtin): the cell for its name in
-  `RealmState.bindings` (`function/env.rs`), shared by the whole realm.
-- A script's top-level `let`/`const`/`class`: a slot of the script frame,
-  captured like any other local.
-- A module's top-level binding: a cell created at module instantiation,
-  shared by the module body, its functions and its importers.
+## Dynamic scope and declarations
 
-An `Upvalue` (`function/upvalue.rs`) is `Rc<RefCell<Value>>`: cloning shares
-the cell, and identity is `Upvalue::ptr_eq`. The compiler assigns slots and
-upvalue indices, so shadowed names are different slots and different cells.
+`binding/scope.rs::ScopeLease` retains an immutable descriptor, positional cells,
+parent leases, optional with object and optional own VarHolder. No lease points
+at a VM, frame ID, recycled window or borrowed local. A function retains its
+optional lexical scope only for compiled name demand or mutable mappings.
 
-## Invariants
+Only runtime-added declarations use a mutable name-to-cell holder. An ordinary
+activation exposes a fresh own holder at its selected variable boundary. Parent links
+remain live: adding an outer declaration after child entry is visible; creating an inner
+declaration never selects an outer homonym. Existing own static bindings reuse their
+cells and attributes. Eval-added bindings are separately owned and deletable. Delete
+reveals the parent on fresh lookup. Saved holder references recreate only their own
+binding (sloppy) or throw (strict). Structural epochs change for add/delete/remap, never
+for cell-value writes. Tests: `binding/scope_tests.rs`, `direct_eval/s3b_bindings.rs`.
 
-1. **Slots are private until captured.** `locals` is `Vec<Option<Value>>`. A
-   slot with no cell is read and written directly; the `authoritative_slots`
-   mask records which (`bytecode/vm_bindings.rs`). Once a slot has a cell, the
-   cell is the binding and the bit is cleared (`bytecode/vm_capture.rs`).
-2. **Capture is by cell, by position.** `bytecode/upvalue_resolver.rs`
-   classifies each captured parent slot as `ParentLocal` (box the parent's
-   slot) or `ParentUpvalue` (pass on a cell the parent received).
-   `captured_upvalues_for_function` builds a closure's `upvalues` in the
-   callee's received-slot order; producer and consumer must agree on
-   `Local::is_received_upvalue`, because one extra entry shifts every later
-   index. Tests: unit tests in `upvalue_resolver.rs`; `closure_state.rs`
-   `::captured_lexical_cell_is_shared_by_parent_and_sibling_closures`,
-   `::shadowed_lexical_closures_keep_distinct_shared_cells`.
-3. **Call-frame values are frame-local.** `this`, `arguments`, `new.target`
-   and the other `is_call_frame_binding` names are seeded by call setup into
-   the declaring function's own slots and are never received upvalues. An
-   arrow function captures that local cell as an ordinary `ParentLocal`.
-   Compiler temporaries (names starting `\0\0`) are never captured. Tests:
-   `functions.rs::evaluates_arrow_functions_with_lexical_this`,
-   `::evaluates_arrow_functions_with_lexical_arguments`.
-4. **Each loop iteration gets a fresh cell.** `fresh_iteration_scope` gives
-   every captured per-iteration lexical a new cell holding the current value.
-   Tests: `closure_state.rs::loop_body_lexicals_get_per_iteration_environment`,
-   `::for_let_head_allocates_a_cell_after_the_initializer_and_each_back_edge`.
-5. **Realm bindings have one cell each, from creation.** `RealmState.bindings`
-   is one name-to-cell map (`DynamicBindings`); there is no separate value map
-   and no lazily filled cell table. A global-scope `var` or function slot
-   stays empty and its `local_upvalues` entry is the realm cell; a sloppy
-   global-fallback slot attaches the same cell, and the `realm_binding_slots`
-   mask makes the read a direct cell load. Deleting the global, or redefining
-   it as an accessor, stores the uninitialized marker in the cell and unbinds
-   the name (`CallEnv::remove_realm`); a reader that finds the marker asks the
-   global object (`load_local_slow`). Tests: `closure_state.rs`
-   `::sibling_calls_share_a_captured_global_var_cell`,
-   `::deleting_a_sloppy_global_invalidates_its_cached_cell`,
-   `::global_accessor_definition_deopts_a_cached_sloppy_global_cell`;
-   `global.rs::keeps_global_object_properties_and_bindings_in_sync`.
-6. **Intrinsics are not global bindings.** `RealmState` keeps the Object,
-   Array, String and Number prototypes and the well-known symbols in set-once
-   fields; rebinding the global `Object` does not change them.
-7. **Mapped `arguments` shares the parameter's cell.** Each parameter slot
-   attaches the cell held by the arguments object's index accessor
-   (`initial_local_upvalues`). Test: `parameters.rs`
-   `::mapped_arguments_keeps_parameter_cell_across_nested_descriptor_helper`.
-8. **Immutable self names are cells too.** A class's inner name and a named
-   function expression's own name are normally received cells; when the
-   function-expression name is not, the function carries one extra cell,
-   `Function.immutable_env_value` (`function/value.rs`). Tests:
-   `functions.rs::named_function_expression_name_binding_is_immutable`,
-   `classes.rs::class_inner_name_binding_is_immutable_inside_members`.
-9. **TDZ is a state of the location, not a second table.** An unentered
-   lexical slot is `None`; a cell created before initialization holds the
-   uninitialized-lexical marker. Reading either throws `ReferenceError`
-   (`load_local`, `checked_local_value`). Tests:
-   `expressions.rs::assignments_respect_lexical_tdz`,
-   `parameters.rs::default_parameter_initializers_use_parameter_tdz`.
-10. **Modules use cells for live bindings.** An import slot attaches the
-    exporting module's cell (`CallEnv::module_import_cell`); a module's own
-    top-level slot attaches its instantiation cell. Test: `bytecode/`
-    `vm_frame_init.rs`, `direct_module_frame_keeps_import_cell_storage`.
-11. **Suspension keeps the cells.** A suspended frame owns its `locals`,
-    `local_upvalues` and `upvalues`: [generator-suspension.md](generator-suspension.md).
+The resolver walks descriptor/cells, own holder, with object and parent in lexical
+order; with uses HasProperty and unscopables, releasing every borrow before hooks.
+Reference intervals save the selected cell/holder/global base before RHS effects;
+consumption, abrupt exit or short-circuit releases it. A global start bound without
+observable work (lexical, import, own property) or read at its start saves nothing
+(`reference_admission.rs`); every tier stores it by `binding::set_bound_global`.
 
-## Derived constructor this
+Sloppy function eval declares in the caller's selected own holder after checking
+active lexical/parameter conflicts. Strict eval owns a new holder and lexical scope.
+Global script/eval builders explicitly select global routes; function-shaped eval
+IR must not imply a function variable environment. Global setters are not published
+as data cells. Host scripts install function descriptors before the body and
+preserve their non-configurable attributes. Compiled eval caches retain plans and
+parse context only; every invocation uses its current chain.
 
-Each derived activation shares one marker-initialized `Upvalue` through its
-FrameBindings, declaring slot, eval and arrows. Reads throw before binding;
-compatibility forks preserve this implicit cell, and name writeback skips it.
-Optional FunctionColdState retains an arrow's cell and original constructor.
-Super constructs Base before duplicate checking, then binds before fields:
-Base failure keeps TDZ; field failure keeps binding; completion rejects TDZ
-unless an object is returned. Tests: `tests/direct_eval/derived_this.rs`.
+## Immutable names and imports
 
-## Dynamic scope: direct `eval` and `with`
+A named function expression compiles one self-name descriptor/metadata plan.
+Each function instance owns one initialized cell in a lease outside its parameter
+and body scopes. Calls and escaping children retain that cell; body vars/eval
+additions shadow it in their own holder. Its write policy ignores sloppy Assign
+and rejects strict Assign; const/class names always reject Assign. Named calls
+never snapshot or restore a same-named caller binding. Dynamic Function names
+are display names and introduce no self environment. Import routes reject Assign
+without reading an exporter's possibly uninitialized cell; reads still observe
+that cell's TDZ. Tests: `direct_eval/self_binding.rs`, `binding/scope_tests.rs`.
 
-Only these resolve a name at run time, so only they use a name-keyed map, and
-that map holds cells, not values.
+## Lexical call context
 
-- A frame whose bytecode contains a direct `eval` or a `with`, or that
-  inherits such a scope, gets `CallEnv.deopt_bindings`, a `DynamicBindings`
-  name-to-cell map (`with_frame_bytecode` in `bytecode/vm_frame_init.rs`). No
-  other frame allocates one.
-- In such a frame every non-temporary local gets a cell at entry, and
-  `frame_deopt_bindings` overlays the live cells into the map under their
-  source names, so `eval` code and compiled slot access update the same
-  cell. A `var` created by `eval` becomes a new named cell in the map.
-- `with` pushes its object on the frame's `with_stack` (`bytecode/vm_with.rs`).
-  Only free names inside the block compile to with-aware operations that
-  consult the object first. A function created inside the block keeps the
-  stack in `Function.with_stack`; its own slots stay closer than the stack.
-- A closure that provably resolves none of the scope's names may drop or
-  bypass the scope (`closure_scope_use`); `DynamicBindings` revokes every
-  bypass as soon as a name is added, removed or remapped.
+`context/call_owner.rs` owns receiver/new.target, home/super, active constructor and
+field/static restrictions inline. Lexical retention moves the owner into one Rc,
+redirecting the declaring activation. BindingPlan propagates owner demand through
+lexical arrows (including nested new.target/eval); parameter-only arrows retain none.
+Inline calls/constructors and standalone callbacks bind this owner before execution;
+wide/loop/VM execution reads it. Inputs/drivers carry no receiver/target/home copy.
 
-Tests: `closure_state.rs::direct_eval_and_closures_share_the_same_local_cell`,
-`::with_fallback_assignment_updates_the_outer_local_cell`,
-`::closure_created_inside_with_resolves_the_retained_with_object`,
-`::closures_made_beside_a_direct_eval_see_every_rebinding`.
+Derived this is one uninitialized BindingCell in the typed owner; no declaring
+slot or name-keyed mirror exists. Super constructs Base before duplicate checking,
+initializes the cell before fields, preserves TDZ on Base failure and preserves
+binding on field failure. An object return may bypass an unbound this. Root
+builders initialize script/module receivers explicitly; a public property named
+this cannot change them. Fields/static blocks establish their own receiver and
+restrictions, arrows inherit them, and ordinary nested calls establish new owners.
+Tests: `context/call_owner.rs`, `function/call_activation_tests.rs`, `class_keys.rs`.
 
-## What `CallEnv` is and is not
+`context/creation.rs` owns shared realm, referrer, module routes, private context and
+explicit global selection. `context/activation.rs` owns logical variable identity
+(minted on first exposure), call owner, scope roots, mode and strictness. **Reuse:**
+only a returned, never-exposed activation (unminted identity, inline owner, no
+scopes/holders/saved references) enters a pool bounded in count and bytes; no lease,
+cell, closure, arguments object, continuation, generator or eval holder can reference
+it, and an identical later entry rebinds it. Related realms mint non-wrapping tokens in
+their AtomDomain boundary. Parameter/body entry changes only its scope boundary.
+Module-root routing stays a scope fact; creation/module metadata holds cell routes only.
 
-`CallEnv` (`function/env.rs`) is per-call context, not binding storage: one realm-scope `Rc`,
-a small `frame_bindings` vector for call/native/dynamic metadata, optional `deopt_bindings`, and private-name/module/host state.
-Ordinary calls build no locals map. Static callbacks use shared cells without exporting caller names; dynamic/marked closure contexts retain their views.
-Bytecode preparation plans (`bytecode/frame_init_plan.rs`) include receiver use through deferred keys and lexical arrows; positional inputs precede cell creation and completed calls recycle cleared storage.
-Special context stays owned; mapped arguments, dynamic scope and suspension retain compatibility entry. Cells are never recycled or caller views borrowed.
-`BindingSnapshot` is an owned copy for the few consumers that enumerate a frame; it never takes part in binding identity.
+`Context<'a>` borrows services/activation; it is never cloned or retained. NativeSite
+borrows call info, target and eval sources; callee realm is lazy. Vm/tiers own callee
+state; no caller-equality proof or empty-env factory remains. RuntimeGroup shares
+AtomDomain/weak realm registry; host/agent services stay canonical; Dynamic Function
+reuses its callee Realm/live globals. Debug services capture QJS_VERIFY_BINDINGS,
+QJS_FORCE_EVAL_EXPOSURE, QJS_POISON_RELEASED_SCOPES and QJS_POISON_RELEASED_ACTIVATIONS
+(pooled activations hold a checked poison) once; production ignores them. Forcing
+applies to materialized declarations; nonexposing admitted tiers keep their storage.
+Class keys execute inline; a cold continuation owns partial class/private context across
+yield/await, handlers restore regions and mode. Heritage validation precedes keys; each
+method installs before the next; static fields/blocks run in source order; the inner
+name stays TDZ through keys, initializes before static fields; inferred names bind none.
 
-The compact tiers run only when the environment can answer no name at all
-(`environment_is_slot_only` in `bytecode/compact_fn/activation.rs`). A
-slot-seeded direct frame that only reads its received cells resolves them
-from the function it retains instead of building a cell vector
-(`bytecode/vm_direct_upvalues.rs`; unit tests in `bytecode/vm_frame_init.rs`).
+Compact/wide/leaf tiers keep static cell paths; retained chains prove nothing of callers.
+A slot-backed body that cannot observe its chain (no eval/with/closure creation) enters
+without it only while the chain resolves free names globally and captured names to their
+received cells: no with object, holder of a suspendable owner, holder binding either name
+kind, or other fixed cell of one. `function/call.rs` caches this per (function, holder
+epoch), which holder add/delete bumps. T077 retires these tiers later.
 
 ## Known limits
 
-- A cell holding a function that captures the same cell is an `Rc` cycle and
-  is never freed; collecting it needs the GC or arena `AGENTS.md` allows.
-- `DynamicBindings` is deliberately the slow path. A new use must need
-  run-time name resolution and stay gated away from ordinary calls.
+- Rc cycles among functions, cells, objects and private state are not collected (collector stage).
+- Dynamic lookup is an uncached chain walk; no name/value cache or inherited map fork.

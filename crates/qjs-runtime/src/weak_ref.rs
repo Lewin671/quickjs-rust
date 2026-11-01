@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 
-use crate::{CallEnv, Function, NativeFunction, ObjectRef, Property, RuntimeError, Value, symbol};
+use crate::{Function, NativeFunction, ObjectRef, Property, RuntimeError, Value, symbol};
 
 const WEAK_REF_TARGET: &str = "\0WeakRefTarget";
 
 pub(crate) fn install_weak_ref(
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
     global_this: &Value,
     object_prototype: ObjectRef,
 ) {
@@ -47,7 +47,7 @@ pub(crate) fn native_weak_ref(
     function: &Function,
     argument_values: &[Value],
     is_construct: bool,
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if !is_construct {
         return Err(RuntimeError {

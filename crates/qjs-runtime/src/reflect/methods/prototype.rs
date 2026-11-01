@@ -1,9 +1,8 @@
-use crate::CallEnv;
 use crate::{RuntimeError, Value, array_prototype, symbol};
 
 pub(crate) fn native_reflect_get_prototype_of(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     if let Some(Value::Proxy(proxy)) = argument_values.first() {
         return crate::proxy::proxy_get_prototype_of(proxy.clone(), env);
@@ -50,7 +49,7 @@ pub(crate) fn native_reflect_get_prototype_of(
 
 pub(crate) fn native_reflect_set_prototype_of(
     argument_values: &[Value],
-    env: &mut CallEnv,
+    env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
     let target = argument_values.first().cloned().unwrap_or(Value::Undefined);
     let prototype_value = argument_values.get(1).cloned().unwrap_or(Value::Undefined);
