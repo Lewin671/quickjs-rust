@@ -1151,7 +1151,7 @@ fn call_closed_form_leaf(
                 .to_value()
         }));
     let arguments = arguments.get(..usize::from(arity))?;
-    let value = super::super::vm_numeric_leaf::try_eval_numeric_leaf(
+    let value = super::super::vm_numeric_leaf::try_eval_pure_numeric_leaf(
         bytecode,
         &function.params,
         arguments,

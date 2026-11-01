@@ -5,7 +5,7 @@ use super::NumOp;
 use qjs_ast::BinaryOp;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum Effect {
+pub(in crate::bytecode) enum Effect {
     Pure,
     /// Evaluation or callee admission must happen even when the result is dead.
     MustEvaluate,

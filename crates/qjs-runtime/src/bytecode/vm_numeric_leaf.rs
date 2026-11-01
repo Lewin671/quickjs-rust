@@ -10,6 +10,9 @@
 //!
 //! The `Math` and number helpers at the end are shared with other tiers.
 
+mod effects;
+pub(super) use effects::try_eval_pure_numeric_leaf;
+
 use qjs_ast::{BinaryOp, FunctionParams, UpdateOp};
 
 use crate::{NativeFunction, Value, function::BindingCell};

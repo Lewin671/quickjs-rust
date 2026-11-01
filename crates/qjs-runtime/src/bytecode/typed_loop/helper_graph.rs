@@ -465,6 +465,13 @@ impl Preparation {
             let (Op::StoreLocal(slot) | Op::AssignLocal(slot)) = op else {
                 continue;
             };
+            // Flattening keeps only private registers. A received-cell store
+            // is an observable effect, not a helper-local assignment; never
+            // erase it or initialize its captured input as undefined.
+            if bytecode.received_upvalue_slots().contains(slot) || !bytecode.local_is_mutable(*slot)
+            {
+                return None;
+            }
             if bytecode.parameter_slots().contains(slot) {
                 // Assigning a parameter would make the argument register live
                 // in two roles; nothing this tier needs does it.
@@ -733,9 +740,9 @@ impl Preparation {
 /// Whether `vm_numeric_leaf` resolves this callee on its own.
 ///
 /// The probe evaluates the body once with numeric arguments. That is not
-/// observable: the evaluator's whole precondition is a closed-form numeric
-/// expression, which is why the tier is already allowed to call it in place of
-/// an ordinary call. It runs once per loop entry.
+/// observable only after the shared effect policy proves the leaf replayable.
+/// Ordinary numeric leaves may commit captured writes; those must decline both
+/// this probe and speculative loop calls before evaluation. Runs once per entry.
 fn closed_form_already_answers(callee: &Value, arity: u8) -> bool {
     let Value::Function(function) = callee else {
         return false;
@@ -747,7 +754,7 @@ fn closed_form_already_answers(callee: &Value, arity: u8) -> bool {
     let Some(arguments) = probe.get(..usize::from(arity)) else {
         return false;
     };
-    super::super::vm_numeric_leaf::try_eval_numeric_leaf(
+    super::super::vm_numeric_leaf::try_eval_pure_numeric_leaf(
         bytecode,
         &function.params,
         arguments,

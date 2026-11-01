@@ -26,7 +26,7 @@ use super::{HelperOp, MAX_HELPER_REGISTERS};
 use crate::bytecode::typed_loop::Typed;
 use crate::function::NativeFunction;
 
-mod effects;
+pub(in crate::bytecode) mod effects;
 
 /// What a register may hold, as a set.
 const NUMBER: u8 = 1;

@@ -1,0 +1,8 @@
+   Compiling qjs-runtime v0.1.0 (/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/crates/qjs-runtime)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.13s
+     Running unittests src/lib.rs (target/debug/deps/qjs_runtime-75a63d361e38909b)
+
+running 1 test
+test bytecode::typed_loop::helper_graph::numeric::effect_tests::loop_preparation_and_deoptimization_never_replay_captured_writes ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2671 filtered out; finished in 0.19s

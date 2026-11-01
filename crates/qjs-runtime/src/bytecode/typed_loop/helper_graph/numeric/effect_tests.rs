@@ -205,3 +205,22 @@ fn discarded_property_reads_and_coercions_remain_observable() {
         assert_eq!(eval(&source), Ok(Value::Boolean(true)), "{source}");
     }
 }
+
+#[test]
+fn loop_preparation_and_deoptimization_never_replay_captured_writes() {
+    for body in [
+        "n++;return x;",
+        "return ++n;",
+        "n+=2;return x;",
+        "n++;return undefined;",
+    ] {
+        for loop_body in ["s+=h(i);", "h(i);", "s+=h(i);if(i===2){s+=obj.v;}"] {
+            let source = format!(
+                "(function(){{var n=0,s=0;var obj={{get v(){{return 0;}}}}; \
+                function h(x){{{body}}}for(var i=0;i<100;i++){{{loop_body}}}return n;}})()"
+            );
+            let expected = if body.contains("+=2") { 200.0 } else { 100.0 };
+            assert_eq!(eval(&source), Ok(Value::Number(expected)), "{source}");
+        }
+    }
+}
