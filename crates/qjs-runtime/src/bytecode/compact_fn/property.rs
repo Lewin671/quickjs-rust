@@ -602,8 +602,8 @@ pub(super) fn get_prop_computed(
 /// Reads a global name from a slot-only environment, exactly as
 /// `Vm::load_global` resolves it for a function frame that carries no frame
 /// bindings, deoptimized bindings, module imports, sloppy fallbacks or
-/// immutable function name: the realm binding, then an own property of
-/// `globalThis` (invoking its getter), then the ReferenceError.
+/// immutable function name: the realm binding, then a property of globalThis
+/// including its prototype chain (invoking its getter), then ReferenceError.
 #[inline(never)]
 pub(in crate::bytecode) fn load_global(
     name: &str,
@@ -632,11 +632,10 @@ pub(in crate::bytecode) fn load_global(
     if let Some(value) = env.get(name) {
         return Ok(value);
     }
-    if let Some(Value::Object(global_this)) = env.global_this()
-        && global_this.has_own_property(name)
+    if let Some(global) = env.global_this()
+        && crate::property::has_property(global.clone(), env, name)?
     {
-        let call_env = &mut *env;
-        return crate::property_value(Value::Object(global_this), name, call_env);
+        return crate::property_value(global, name, env);
     }
     Err(undefined_identifier(name))
 }

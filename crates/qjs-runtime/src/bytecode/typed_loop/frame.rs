@@ -34,6 +34,17 @@ pub(in crate::bytecode) trait LoopFrame {
     fn write_typed_loop_slot(&mut self, slot: usize, value: Value);
     fn load_global(&mut self, name: &str) -> Result<Value, RuntimeError>;
     fn global_this_own_property(&self, name: &str) -> Option<Property>;
+    /// Entry seeding/helper preparation may not execute a getter that would
+    /// then be replayed (or folded away) by the loop. Inherited/exotic routes
+    /// decline unless a separate pure proof exists; ordinary globals stay fast.
+    fn global_read_is_pure(&self, name: &str) -> bool {
+        name == "this"
+            || self.loop_activation().can_cache_realm_globals()
+                && self.loop_activation().is_global_lexical_binding(name)
+            || self
+                .global_this_own_property(name)
+                .is_some_and(|p| !p.is_accessor())
+    }
     /// Whether `array` uses the realm's `Array.prototype` and nothing on
     /// that chain has an own indexed property an element access could meet.
     fn array_access_is_plain(&mut self, array: &ArrayRef) -> bool;

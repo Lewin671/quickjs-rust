@@ -574,10 +574,7 @@ impl Preparation {
             Op::LoadGlobal(name) => {
                 // An accessor on the global object would be observable per
                 // read, so the binding has to be a plain one.
-                if vm
-                    .global_this_own_property(name)
-                    .is_some_and(|property| property.is_accessor())
-                {
+                if !vm.global_read_is_pure(name) {
                     return None;
                 }
                 let value = vm.load_global(name).ok()?;

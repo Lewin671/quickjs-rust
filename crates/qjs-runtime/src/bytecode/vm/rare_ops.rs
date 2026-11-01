@@ -83,7 +83,7 @@ impl Vm<'_, '_> {
                         // reading it invokes any getter. typeof yields
                         // "undefined" only when the reference is genuinely
                         // unresolvable.
-                        self.global_this_own_value(name)?
+                        self.global_this_property_value(name)?
                             .unwrap_or(Value::Undefined)
                     };
                     Ok(Value::String(typeof_value(value)))

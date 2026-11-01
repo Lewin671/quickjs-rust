@@ -152,7 +152,7 @@ impl Vm<'_, '_> {
             if let Some(value) = self.env.get_realm(name) {
                 return Ok(value);
             }
-            if let Some(value) = self.global_this_own_value(name)? {
+            if let Some(value) = self.global_this_property_value(name)? {
                 return Ok(value);
             }
             return Err(RuntimeError {
@@ -189,7 +189,7 @@ impl Vm<'_, '_> {
         if let Some(value) = self.env.get(name) {
             return Ok(value);
         }
-        if let Some(value) = self.global_this_own_value(name)? {
+        if let Some(value) = self.global_this_property_value(name)? {
             return Ok(value);
         }
         Err(RuntimeError {
@@ -198,24 +198,22 @@ impl Vm<'_, '_> {
         })
     }
 
-    /// Reads an own property of `globalThis` by name, invoking any getter, when
-    /// the name resolves to a property created directly on the global object
-    /// (e.g. `this.x = 1`, a realm binding, or `Object.defineProperty`). Returns
-    /// `None` when no such own property exists, so the caller can decide whether
-    /// that is a ReferenceError (a bare read) or "undefined" (a `typeof`).
-    pub(super) fn global_this_own_value(
+    /// Global object bindings use HasProperty, including the prototype chain.
+    /// Get retains globalThis as receiver and invokes an inherited getter once.
+    /// None means the name is unresolvable (typeof may then return undefined).
+    pub(super) fn global_this_property_value(
         &mut self,
         name: &str,
     ) -> Result<Option<Value>, RuntimeError> {
         let Some(global_this) = self.cached_global_this() else {
             return Ok(None);
         };
-        if !global_this.has_own_property(name) {
+        let global = Value::Object(global_this);
+        let mut env = self.context();
+        if !crate::property::has_property(global.clone(), &mut env, name)? {
             return Ok(None);
         }
-        let mut env = self.context();
-        let value = property_value(Value::Object(global_this), name, &mut env)?;
-        Ok(Some(value))
+        property_value(global, name, &mut env).map(Some)
     }
 
     /// Assigns an accessor own property of `globalThis` -- one made by

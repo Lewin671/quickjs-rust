@@ -42,3 +42,18 @@ Focused parameter suite passes 30 tests, including body var/let/const/function
 homonyms and writes through the parameter closure. Exact lead case is an NG
 fixture; existing block/self-scope controls also pass. The runtime representation
 and ContainsExpression var-holder rule are unchanged.
+
+## Inherited global lookup
+
+Parent `72922bed`. VM bare/typeof fallback and wide global reads checked own
+properties only. They now use HasProperty plus Get with globalThis as receiver,
+including inherited data/getters; lexical/canonical cells still take precedence.
+No inherited getter value is cached. Script, function, named-function and eval
+reads each invoke the getter once, with correct receiver; typeof sees the data.
+
+Because inherited hooks are newly reachable, loop entry/helper preparation now
+requires a pure global read (receiver, canonical lexical, or ordinary own data).
+An inherited/exotic route declines instead of probing/hoisting a getter. A
+100-call numeric-helper test asserts 100 getter calls, preserving the P1 effect
+boundary. Before repair the exact lead case threw ReferenceError; focused scope
+suite and strengthened NG fixture cover both data and getter variants.

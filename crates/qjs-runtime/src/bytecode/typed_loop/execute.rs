@@ -731,10 +731,7 @@ fn seed_registers<F: LoopFrame>(
     for (register, name) in &program.global_reads {
         // The realm binding is the authority for a global; an accessor on the
         // global object would be observable per read, so it declines.
-        if vm
-            .global_this_own_property(name)
-            .is_some_and(|property| property.is_accessor())
-        {
+        if !vm.global_read_is_pure(name) {
             return None;
         }
         // Resolving through the interpreter's own path keeps `this`, global
@@ -766,10 +763,7 @@ fn seed_registers<F: LoopFrame>(
         }
     }
     for (register, name) in &program.boxed_global_reads {
-        if vm
-            .global_this_own_property(name)
-            .is_some_and(|property| property.is_accessor())
-        {
+        if !vm.global_read_is_pure(name) {
             return None;
         }
         let value = vm.load_global(name).ok()?;

@@ -50,3 +50,34 @@ fn named_expression_self_scope_precedes_an_outer_homonym_despite_inner_shadow() 
         Ok(Value::String("function".into()))
     );
 }
+
+#[test]
+fn global_identifier_lookup_reaches_inherited_data_and_getters() {
+    assert_eq!(
+        eval("Object.prototype.protoG='fromProto';protoG+':'+typeof protoG;"),
+        Ok(Value::String("fromProto:string".into()))
+    );
+    for read in [
+        "protoG",
+        "(function(){return protoG;})()",
+        "(function nf(){nf;return protoG;})()",
+        "eval('protoG')",
+    ] {
+        let source = format!(
+            "var reads=0;Object.defineProperty(Object.prototype,'protoG',{{configurable:true,get(){{reads++;return this===globalThis?42:-1;}}}});var r={read};r+':'+reads;"
+        );
+        assert_eq!(eval(&source), Ok(Value::String("42:1".into())), "{source}");
+    }
+}
+
+#[test]
+fn inherited_global_getters_are_not_probed_or_folded_by_loop_plans() {
+    assert_eq!(
+        eval(
+            "var reads=0;Object.defineProperty(Object.prototype,'protoG',{get(){reads++;return 1;}}); \
+        function run(){function h(x){return protoG+x;}var s=0;for(var i=0;i<100;i++)s+=h(i);return s;} \
+        run()+':'+reads;"
+        ),
+        Ok(Value::String("5050:100".into()))
+    );
+}
