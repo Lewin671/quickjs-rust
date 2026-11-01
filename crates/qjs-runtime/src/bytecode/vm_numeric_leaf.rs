@@ -109,6 +109,9 @@ pub(super) struct GeneralNumericLeafPlan {
     shortcut: Option<NumericLeafShortcut>,
     hoisted_slots: u32,
     writes_received_upvalues: bool,
+    /// No op writes a received cell, so the body may be probed or retried
+    /// (`effects`); decided once here rather than rescanned per call.
+    pure: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -309,11 +312,13 @@ impl NumericLeafPlan {
                     {
                         return Some(Self::NumberOnly(program));
                     }
+                    let pure = effects::ops_are_pure(&ops);
                     return Some(Self::General(GeneralNumericLeafPlan {
                         ops,
                         shortcut,
                         hoisted_slots,
                         writes_received_upvalues,
+                        pure,
                     }));
                 }
                 _ => return None,
@@ -409,6 +414,7 @@ impl NumericLeafShortcut {
         None
     }
 
+    #[inline]
     fn eval(&self, arguments: &[Value], upvalues: &[BindingCell]) -> Option<Value> {
         if let Self::Constant(value) = self {
             return value.into_value();
@@ -790,6 +796,17 @@ pub(crate) fn try_eval_numeric_leaf(
         .numeric_leaf_plan
         .get_or_init(|| NumericLeafPlan::compile(bytecode))
         .as_ref()?;
+    eval_numeric_leaf_plan(plan, bytecode, params, arguments, upvalues)
+}
+
+#[inline]
+fn eval_numeric_leaf_plan(
+    plan: &NumericLeafPlan,
+    bytecode: &Bytecode,
+    params: &FunctionParams,
+    arguments: &[Value],
+    upvalues: &[BindingCell],
+) -> Option<Value> {
     let NumericLeafPlan::General(plan) = plan else {
         let NumericLeafPlan::NumberOnly(program) = plan else {
             unreachable!("numeric leaf plan variants are exhaustive");

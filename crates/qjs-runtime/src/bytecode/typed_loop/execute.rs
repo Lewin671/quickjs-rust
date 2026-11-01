@@ -617,9 +617,7 @@ fn execute<F: LoopFrame>(
                 registers[reg(dst)] = value;
             }
             TypedOp::CallClosedFormLeaf { dst, .. } => {
-                let Some(value) =
-                    call_leaf(program, &mut vm.loop_context(), &registers[..], boxed, op)
-                else {
+                let Some(value) = call_leaf(program, vm, &registers[..], boxed, op) else {
                     deopt_here!(op);
                 };
                 boxed[dst as usize] = value;
@@ -835,9 +833,11 @@ fn perform_hoisted_reads<F: LoopFrame>(
 /// call and a test: even a rarely taken branch inside the arm itself changes
 /// the loop's register allocation for every other arm.
 #[inline(never)]
-fn call_leaf(
+/// Builds the frame's context only on the native paths that take one; the
+/// closed-form evaluators run without it.
+fn call_leaf<F: LoopFrame>(
     program: &TypedLoopProgram,
-    env: &mut crate::context::Context<'_>,
+    vm: &mut F,
     registers: &[Typed],
     boxed: &[Value],
     op: &TypedOp,
@@ -864,12 +864,18 @@ fn call_leaf(
         return None;
     }
     if arity & super::BOXED_ARGUMENTS != 0 {
-        return call_native_boxed(env, boxed, callee, &args, arity & !super::BOXED_ARGUMENTS);
+        return call_native_boxed(
+            &mut vm.loop_context(),
+            boxed,
+            callee,
+            &args,
+            arity & !super::BOXED_ARGUMENTS,
+        );
     }
     let values = args.map(|register| registers[register as usize]);
     call_closed_form_leaf(
         program,
-        env,
+        vm,
         &boxed[callee as usize],
         &boxed[receiver as usize],
         &values[..usize::from(arity)],
@@ -1074,9 +1080,9 @@ fn call_number_only_leaf(
     Some(Value::Number(value))
 }
 
-fn call_closed_form_leaf(
+fn call_closed_form_leaf<F: LoopFrame>(
     program: &TypedLoopProgram,
-    env: &mut crate::context::Context<'_>,
+    vm: &mut F,
     callee: &Value,
     receiver: &Value,
     args: &[Typed],
@@ -1107,7 +1113,10 @@ fn call_closed_form_leaf(
             });
         let arguments = arguments.get(..usize::from(arity))?;
         return match super::super::vm_call::try_fast_global_native_call(
-            callee, receiver, arguments, env,
+            callee,
+            receiver,
+            arguments,
+            &mut vm.loop_context(),
         ) {
             Some(Ok(value)) => Some(value),
             Some(Err(_)) | None => None,

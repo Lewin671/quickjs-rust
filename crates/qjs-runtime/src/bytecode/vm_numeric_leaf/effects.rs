@@ -1,6 +1,33 @@
 //! Pure numeric leaves may be probed or retried; captured writes may not.
 use super::*;
 
+/// Whether no compiled op writes a received cell: the plan's purity, decided
+/// once when it is compiled.
+pub(super) fn ops_are_pure(ops: &[FastOp]) -> bool {
+    !ops.iter().any(|op| match op {
+        FastOp::StoreLocal {
+            upvalue_index: Some(_),
+            ..
+        }
+        | FastOp::UpdateUpvalueConstReturn { .. } => true,
+        FastOp::LoadConst(_)
+        | FastOp::LoadLocal(_)
+        | FastOp::LoadLocalOrUndefined(_)
+        | FastOp::StoreLocal {
+            upvalue_index: None,
+            ..
+        }
+        | FastOp::Dup
+        | FastOp::Pop
+        | FastOp::ToNumeric
+        | FastOp::Update(_)
+        | FastOp::Binary(_)
+        | FastOp::BinaryConstRight(_, _)
+        | FastOp::Return
+        | FastOp::ReturnConst(_) => false,
+    })
+}
+
 /// Replayable admission/evaluation for loop helper probes and speculative calls.
 /// Ordinary leaf evaluation can commit received-cell writes at Return; success
 /// therefore does not prove purity. Use the shared effect policy before either
@@ -11,44 +38,16 @@ pub(in crate::bytecode) fn try_eval_pure_numeric_leaf(
     arguments: &[Value],
     upvalues: &[BindingCell],
 ) -> Option<Value> {
-    use super::super::typed_loop::helper_graph::numeric::effects::Effect;
     let plan = bytecode
         .numeric_leaf_plan
         .get_or_init(|| NumericLeafPlan::compile(bytecode))
         .as_ref()?;
-    let effect = match plan {
-        NumericLeafPlan::NumberOnly(_) => Effect::Pure,
-        NumericLeafPlan::General(plan) => {
-            if plan.ops.iter().any(|op| match op {
-                FastOp::StoreLocal {
-                    upvalue_index: Some(_),
-                    ..
-                }
-                | FastOp::UpdateUpvalueConstReturn { .. } => true,
-                FastOp::LoadConst(_)
-                | FastOp::LoadLocal(_)
-                | FastOp::LoadLocalOrUndefined(_)
-                | FastOp::StoreLocal {
-                    upvalue_index: None,
-                    ..
-                }
-                | FastOp::Dup
-                | FastOp::Pop
-                | FastOp::ToNumeric
-                | FastOp::Update(_)
-                | FastOp::Binary(_)
-                | FastOp::BinaryConstRight(_, _)
-                | FastOp::Return
-                | FastOp::ReturnConst(_) => false,
-            }) {
-                Effect::MustEvaluate
-            } else {
-                Effect::Pure
-            }
-        }
+    let pure = match plan {
+        NumericLeafPlan::NumberOnly(_) => true,
+        NumericLeafPlan::General(plan) => plan.pure,
     };
-    if effect != Effect::Pure {
+    if !pure {
         return None;
     }
-    try_eval_numeric_leaf(bytecode, params, arguments, upvalues)
+    eval_numeric_leaf_plan(plan, bytecode, params, arguments, upvalues)
 }
