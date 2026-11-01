@@ -76,3 +76,18 @@ compiling a with-bound optional call in assignment/statement position. Returning
 the same optional call from a nested function avoids its compiler defect while
 preserving receiver/short-circuit observations. Candidate runtime tests retain
 those valid assignment/statement programs; no behavior was changed toward NG.
+
+## Labeled continue and TDZ on block re-entry
+
+Parent `e194af4e`. Normal-exit ClearLocal instructions were skipped by labeled
+continue, so an unexposed slot retained the previous iteration's initialized
+value (`ReferenceError:1` instead of two ReferenceErrors). Block declaration
+instantiation now clears its private lexicals at entry before references and
+hoisted functions. Try/finally block entries use the same phase. This also
+predeclares block-function locations before initializing any of them.
+
+Clearing on the abrupt jump itself would precede finally reads, so that route
+is deliberately unchanged. Focused tests cover for/while re-entry, escaped
+initialized closures, escaped still-TDZ cells, and finally reading the exiting
+instance. All eight scope-instantiation tests pass. Permanent NG fixture covers
+the minimal re-entry and retained closure variants.

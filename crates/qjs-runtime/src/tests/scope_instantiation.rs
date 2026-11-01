@@ -103,3 +103,39 @@ fn with_tagged_and_optional_calls_preserve_the_selected_receiver() {
         Ok(Value::Boolean(true))
     );
 }
+
+#[test]
+fn labeled_continue_reenters_nested_lexicals_in_tdz() {
+    for loop_head in ["outer:for(var i=0;i<2;i++)", "var i=0;outer:while(i++<2)"] {
+        let source = format!(
+            "var out=[];{loop_head}{{{{try{{out.push(x);}}catch(e){{out.push(e.name);}}let x=1;continue outer;}}}}out.join(':');"
+        );
+        assert_eq!(
+            eval(&source),
+            Ok(Value::String("ReferenceError:ReferenceError".into())),
+            "{source}"
+        );
+    }
+    assert_eq!(
+        eval(
+            "var f=[];outer:for(var i=0;i<3;i++){{let x=i;f.push(()=>x);continue outer;}}f.map(g=>g()).join();"
+        ),
+        Ok(Value::String("0,1,2".into()))
+    );
+}
+
+#[test]
+fn abrupt_reentry_preserves_finally_reads_and_escaped_tdz_instances() {
+    assert_eq!(
+        eval(
+            "var out=[];outer:for(var i=0;i<2;i++){let x=i;try{continue outer;}finally{out.push(x);}}out.join();"
+        ),
+        Ok(Value::String("0,1".into()))
+    );
+    assert_eq!(
+        eval(
+            "var fs=[];outer:for(var i=0;i<2;i++){{fs.push(()=>x);if(i===0)continue outer;let x=i;}}var r;try{fs[0]();}catch(e){r=e.name;}r+':'+fs[1]();"
+        ),
+        Ok(Value::String("ReferenceError:1".into()))
+    );
+}

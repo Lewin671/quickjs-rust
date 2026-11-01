@@ -40,12 +40,11 @@ impl Compiler {
         self.with_lexical_scope(|compiler| {
             let blocked = annex_b_blocked_names(body, compiler.strict);
             compiler.with_annex_b_blocked_function_names(&blocked, |compiler| {
-                compiler.predeclare_current_scope_lexicals(body);
+                compiler.instantiate_block_declarations(body, &blocked)?;
                 if body.is_empty() {
                     compiler.emit_load_undefined();
                     return Ok(());
                 }
-                compiler.compile_hoisted_function_decls(body)?;
                 let result_slot = compiler.temp_local("block_result");
                 if compiler.tracks_completion_values {
                     compiler.emit_load_undefined();
@@ -74,6 +73,27 @@ impl Compiler {
                 Ok(())
             })
         })
+    }
+
+    /// Each entry creates fresh lexical locations, even if an abrupt jump
+    /// skipped the previous instance's normal-exit cleanup. Emit this at the
+    /// block entry, before any reference/closure or function initialization;
+    /// clearing on continue itself would incorrectly precede finally handlers.
+    fn instantiate_block_declarations(
+        &mut self,
+        body: &[Stmt],
+        names: &[String],
+    ) -> Result<(), RuntimeError> {
+        self.predeclare_current_scope_lexicals(body);
+        for stmt in body {
+            if let Stmt::FunctionDecl { name, .. } = stmt {
+                self.declare_lexical_slot(name, true);
+            }
+        }
+        for slot in self.current_lexical_slots_for_names(names) {
+            self.emit(Op::ClearLocal(slot));
+        }
+        self.compile_hoisted_function_decls(body)
     }
 
     /// Compiles a block that declares `using` resources: opens a disposal scope,
@@ -242,8 +262,7 @@ impl Compiler {
     fn compile_try_body(&mut self, body: &[Stmt], result_slot: usize) -> Result<(), RuntimeError> {
         let blocked = annex_b_blocked_names(body, self.strict);
         self.with_annex_b_blocked_function_names(&blocked, |compiler| {
-            compiler.predeclare_current_scope_lexicals(body);
-            compiler.compile_hoisted_function_decls(body)?;
+            compiler.instantiate_block_declarations(body, &blocked)?;
             for stmt in body {
                 compiler.compile_stmt(stmt)?;
                 compiler.emit(Op::StoreLocal(result_slot));
