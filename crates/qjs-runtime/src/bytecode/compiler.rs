@@ -353,12 +353,28 @@ impl Compiler {
         self.emit(Op::FunctionPrologueEnd);
         let parameter_expressions = super::compiler_params::contains_expressions(params);
         self.scope_plan.enter_function_body(parameter_expressions);
+        // Parameter-created closures retain the enclosing/parameter scope.
+        // Body declarations get their own lookup layer, so a body var/let
+        // cannot reuse or outrank a captured outer cell during initialization.
+        self.lexical_scopes.push(NameMap::default());
         self.body_var_split = parameter_expressions;
         let param_blocked = function_param_names(params);
         self.with_annex_b_blocked_function_names(&param_blocked, |compiler| {
             compiler.collect_hoisted_locals(body, false);
             Ok(())
         })?;
+        let body_bindings = self
+            .local_slots
+            .iter()
+            .filter(|&(_, &slot)| {
+                self.locals[slot].hoisted && !self.locals[slot].compiler_temporary
+            })
+            .map(|(name, &slot)| (name.clone(), slot))
+            .collect::<Vec<_>>();
+        self.lexical_scopes
+            .last_mut()
+            .expect("body scope")
+            .extend(body_bindings);
         if parameter_expressions
             && self.arguments_owner
             && !params.names().iter().any(|name| name == "arguments")

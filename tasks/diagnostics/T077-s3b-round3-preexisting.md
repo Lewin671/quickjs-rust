@@ -27,3 +27,18 @@ an inner block also declares that name. Existing indexed routes/cells remain.
 Before, reads threw and writes failed to reach the parent. Eight block/const/
 for-let/catch read/write combinations now pass, plus a self-name precedence
 control. The exact four-case lead reproducer is a permanent NG fixture.
+
+## Default-parameter closure versus body declarations
+
+Parent `34fbbc66`. Capture-demand repair exposed the outer cell, but the compiler
+still used one lexical lookup layer for received parameter-scope captures and
+body declarations. `var x` initialization selected the root capture and changed
+it to inner (before: `inner:inner`, required: `outer:outer`). Function-body
+compilation now opens a lookup layer aligned with its existing body descriptor
+and registers own hoisted bindings there. Parameter closures already compiled
+against the root layer keep their received-cell route. No per-call map is added.
+
+Focused parameter suite passes 30 tests, including body var/let/const/function
+homonyms and writes through the parameter closure. Exact lead case is an NG
+fixture; existing block/self-scope controls also pass. The runtime representation
+and ContainsExpression var-holder rule are unchanged.

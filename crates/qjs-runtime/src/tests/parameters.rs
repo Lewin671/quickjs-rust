@@ -739,3 +739,28 @@ fn computed_keys_and_nested_defaults_keep_a_separate_body_var_environment() {
         );
     }
 }
+
+#[test]
+fn default_parameter_closures_keep_enclosing_cells_outside_body_declarations() {
+    for declaration in [
+        "var x='inner';",
+        "let x='inner';",
+        "const x='inner';",
+        "function x(){}",
+    ] {
+        let source = format!(
+            "function t(){{var x='outer';function f(a=()=>x){{{declaration}return a();}}return f()+':'+x;}}t();"
+        );
+        assert_eq!(
+            eval(&source),
+            Ok(Value::String("outer:outer".into())),
+            "{source}"
+        );
+    }
+    assert_eq!(
+        eval(
+            "function t(){var x='outer';function f(a=()=>x='changed'){var x='inner';return a()+':'+x;}return f()+':'+x;}t();"
+        ),
+        Ok(Value::String("changed:inner:changed".into()))
+    );
+}
