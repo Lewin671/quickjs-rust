@@ -141,7 +141,7 @@ pub(super) fn set_prop_named_hot(
     object: &Value,
     cache: Option<&NamedPropertyCache>,
     value: &Value,
-    env: &mut crate::context::Context<'_>,
+    env: &crate::context::Context<'_>,
 ) -> bool {
     if is_global_object(env, object) {
         return false;
@@ -247,7 +247,7 @@ pub(super) fn set_prop_named(
 
 /// Whether `object` is the realm's global object, matching
 /// `Vm::is_global_object` without a VM-local cache.
-fn is_global_object(env: &mut crate::context::Context<'_>, object: &Value) -> bool {
+fn is_global_object(env: &crate::context::Context<'_>, object: &Value) -> bool {
     matches!(object, Value::Object(object_ref) if env.is_realm_global_object(object_ref))
 }
 

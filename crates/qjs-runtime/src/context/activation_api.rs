@@ -40,6 +40,15 @@ impl ActivationContext {
         self.call.owner().and_then(|owner| owner.this.read().ok())
     }
 
+    /// Borrow the canonical initialized receiver for callback-free fast paths.
+    /// Derived-this cells keep their checked read path and cannot be borrowed.
+    pub(crate) fn initialized_receiver(&self) -> Option<&Value> {
+        match &self.call.owner()?.this {
+            crate::context::ThisBinding::Initialized(value) => Some(value),
+            crate::context::ThisBinding::Derived(_) => None,
+        }
+    }
+
     pub(crate) fn this_value(&self) -> Result<Value, crate::RuntimeError> {
         self.call
             .owner()

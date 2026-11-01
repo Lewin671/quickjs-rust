@@ -110,12 +110,12 @@ that cell's TDZ. Tests: `direct_eval/self_binding.rs`, `binding/scope_tests.rs`.
 
 ## Lexical call context
 
-`context/call_owner.rs` separates receiver, new.target, home/super, active
-constructor and field/static restrictions from declarative bindings. An ordinary
-activation owns this metadata inline. At lexical retention it moves into one Rc
-and the declaring activation redirects to that same owner. BindingPlan propagates
-owner demand through lexical arrows, including nested new.target/eval; parameter-only
-arrows retain no owner.
+`context/call_owner.rs` owns receiver/new.target, home/super, active constructor and
+field/static restrictions inline. Lexical retention moves the owner into one Rc,
+redirecting the declaring activation. BindingPlan propagates owner demand through
+lexical arrows (including nested new.target/eval); parameter-only arrows retain none.
+Inline calls/constructors and standalone callbacks bind this owner before execution;
+wide/loop/VM execution reads it. Inputs/drivers carry no receiver/target/home copy.
 
 Derived this is one uninitialized BindingCell in the typed owner; no declaring
 slot or name-keyed mirror exists. Super constructs Base before duplicate checking,

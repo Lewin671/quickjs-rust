@@ -1,0 +1,27 @@
+{
+  "timing": false,
+  "complete": true,
+  "cases": 86,
+  "case_modes": 258,
+  "invocations": 351,
+  "passed": 348,
+  "failed": 3,
+  "failures": [
+    {
+      "mode": "ic-verify",
+      "id": "external/kraken-1.1/imaging-gaussian-blur",
+      "iterations": null
+    },
+    {
+      "mode": "ic-verify",
+      "id": "development/lodash/transform",
+      "iterations": null
+    },
+    {
+      "mode": "ic-verify",
+      "id": "development/moment/dates",
+      "iterations": null
+    }
+  ],
+  "request_sha256": "1308c6f66a5e96148597f14ff73744aa56ff02c18fffe779e4be95f595216a4e"
+}

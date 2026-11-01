@@ -277,7 +277,6 @@ impl<'a> DirectCallUpvalues<'a> {
 }
 
 pub(crate) struct DirectCallSlots<'a> {
-    pub(crate) this_value: Option<Value>,
     pub(crate) parameter_slots: &'a [usize],
     pub(crate) arguments: &'a [Value],
     pub(crate) upvalues: DirectCallUpvalues<'a>,

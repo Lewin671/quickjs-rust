@@ -1,0 +1,24 @@
+   Compiling qjs-runtime v0.1.0 (/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/crates/qjs-runtime)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 9.75s
+     Running unittests src/lib.rs (target/debug/deps/qjs_runtime-75a63d361e38909b)
+
+running 2 tests
+
+thread 'bytecode::compact_fn::wide::activation::owner_tests::inline_call_owner_and_vm_exit_keep_the_same_receiver' (422691216) panicked at crates/qjs-runtime/src/bytecode/compact_fn/wide/activation/owner_tests.rs:46:5:
+assertion failed: env.caller().this_value().unwrap().same_value(&actual_receiver)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+thread 'bytecode::compact_fn::wide::activation::owner_tests::inline_constructor_owner_keeps_receiver_and_new_target' (422691217) panicked at crates/qjs-runtime/src/bytecode/compact_fn/wide/activation/owner_tests.rs:32:51:
+called `Option::unwrap()` on a `None` value
+test bytecode::compact_fn::wide::activation::owner_tests::inline_constructor_owner_keeps_receiver_and_new_target ... FAILED
+test bytecode::compact_fn::wide::activation::owner_tests::inline_call_owner_and_vm_exit_keep_the_same_receiver ... FAILED
+
+failures:
+
+failures:
+    bytecode::compact_fn::wide::activation::owner_tests::inline_call_owner_and_vm_exit_keep_the_same_receiver
+    bytecode::compact_fn::wide::activation::owner_tests::inline_constructor_owner_keeps_receiver_and_new_target
+
+test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 2637 filtered out; finished in 0.04s
+
+error: test failed, to rerun pass `-p qjs-runtime --lib`

@@ -12,6 +12,12 @@ use super::{
 use crate::{Value, function::BindingCell};
 
 impl Vm<'_, '_> {
+    pub(super) fn indexed_receiver(&self) -> Option<&Value> {
+        self.indexed_call
+            .then(|| self.env.initialized_receiver())
+            .flatten()
+    }
+
     pub(super) fn initial_slots(
         bytecode: &Bytecode,
         env: &crate::context::ActivationContext,

@@ -111,7 +111,7 @@ impl ArraySource {
                 _ => None,
             },
             Self::DirectThisOwnData(key) => {
-                resolve_direct_this_own_data(vm.direct_this.as_ref()?, key)
+                resolve_direct_this_own_data(vm.indexed_receiver()?, key)
             }
         }
     }

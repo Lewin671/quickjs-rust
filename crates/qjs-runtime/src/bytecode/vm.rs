@@ -212,10 +212,9 @@ pub(super) struct FrameState<'a> {
     pub(super) upvalues: Vec<BindingCell>,
     /// Shared realm plus this frame's internal/caller-scope bindings.
     pub(super) env: crate::context::ActivationContext,
-    /// Ordinary leaf calls can keep their receiver here instead of
-    /// materializing a name-keyed frame binding. Functions that compile an
-    /// own `this` local store it in `locals` and leave this empty.
-    pub(super) direct_this: Option<Value>,
+    /// Indexed-entry eligibility, never receiver storage. Receiver fast paths
+    /// borrow the activation's canonical call owner through `indexed_receiver`.
+    pub(super) indexed_call: bool,
     pub(super) realm: Realm,
     /// Dynamic-import host copied into every `crate::context::ActivationContext` this VM creates.
     pub(super) module_host: Option<crate::module::ModuleHostRef>,

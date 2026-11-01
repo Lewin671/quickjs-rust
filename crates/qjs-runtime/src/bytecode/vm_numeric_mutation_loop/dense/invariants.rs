@@ -63,7 +63,7 @@ impl OwnDataOwner {
 
     fn resolve(&self, vm: &Vm<'_, '_>) -> Option<ObjectRef> {
         let value = match self {
-            Self::DirectThis => vm.direct_this.as_ref()?.clone(),
+            Self::DirectThis => vm.indexed_receiver()?.clone(),
             Self::Local(slot) => vm.local_slot_value(*slot)?,
         };
         let Value::Object(object) = value else {

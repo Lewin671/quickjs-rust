@@ -599,7 +599,6 @@ pub(crate) fn call_direct_function_literal(
         crate::context::OwnerKind::Function,
     ));
     let direct_call_slots = DirectCallSlots {
-        this_value: None,
         parameter_slots: bytecode.parameter_slots(),
         arguments: argument_values,
         upvalues: DirectCallUpvalues::Slice(&[]),
@@ -1160,12 +1159,8 @@ fn enter_indexed_function_activation<'a>(
     // Ordinary leaf calls and direct base class constructions both reach
     // this frame; the class-constructor TypeError is the caller's concern.
     debug_assert!(can_seed_slot_backed_call(function, bytecode));
-    let mut frame_env = crate::context::ActivationContext::new(
-        selected_function_creation(function),
-        crate::context::ExecutionMode::Function,
-    );
-    frame_env.strict = function.is_strict;
-    let direct_this_value = bytecode.uses_lexical_this().then(|| {
+    let mut frame_env = enter_indexed_activation(function);
+    let receiver = if bytecode.uses_lexical_this() {
         function_call_this(
             Some(this_value),
             &crate::context::Context {
@@ -1175,22 +1170,14 @@ fn enter_indexed_function_activation<'a>(
             },
             function.is_strict,
         )
-    });
-    if let Some(owner) = function.lexical_call() {
-        frame_env.inherit_call_owner(owner);
     } else {
-        let mut owner = crate::context::CallOwner::root(
-            direct_this_value.clone().unwrap_or(Value::Undefined),
-            function.owner_kind,
-        );
-        owner.new_target = new_target;
-        frame_env.set_call_owner(owner);
-    }
+        Value::Undefined
+    };
+    bind_indexed_call_owner(function, &mut frame_env, receiver, new_target);
     PreparedFunctionActivation {
         env: frame_env,
         call_inputs: None,
         direct_call_slots: Some(DirectCallSlots {
-            this_value: direct_this_value,
             parameter_slots: bytecode.parameter_slots(),
             arguments: argument_values,
             upvalues: DirectCallUpvalues::Function(function),
@@ -1218,7 +1205,6 @@ fn enter_function_activation<'a>(
     );
     frame_env.strict = function.is_strict;
     frame_env.set_scope_cursor(function.lexical_scope());
-    let mut direct_this_value = None;
     if let Some(owner) = function.lexical_call() {
         frame_env.inherit_call_owner(owner);
     } else {
@@ -1236,9 +1222,6 @@ fn enter_function_activation<'a>(
         } else {
             Value::Undefined
         };
-        if use_direct_call_slots {
-            direct_this_value = Some(receiver.clone());
-        }
         let derived = function.is_derived_constructor && is_construct;
         let this = if derived {
             crate::context::ThisBinding::Derived(super::BindingCell::with_metadata(
@@ -1262,7 +1245,6 @@ fn enter_function_activation<'a>(
         });
     }
     let direct_call_slots = use_direct_call_slots.then(|| DirectCallSlots {
-        this_value: direct_this_value,
         parameter_slots: bytecode.parameter_slots(),
         arguments: argument_values,
         upvalues: DirectCallUpvalues::Function(function),
@@ -1427,9 +1409,36 @@ pub(crate) fn enter_indexed_activation(function: &Function) -> crate::context::A
         crate::context::ExecutionMode::Function,
     );
     activation.strict = function.is_strict;
-    activation.set_call_owner(crate::context::CallOwner::root(
-        Value::Undefined,
-        function.owner_kind,
-    ));
+    if let Some(owner) = function.lexical_call() {
+        activation.inherit_call_owner(owner);
+    } else {
+        let mut owner = crate::context::CallOwner::root(Value::Undefined, function.owner_kind);
+        owner.home = function.home_object();
+        owner.super_constructor = function.super_constructor();
+        activation.set_call_owner(owner);
+    }
     activation
+}
+
+/// Finalize an admitted indexed entry before executing its body. VM exits and
+/// effectful operations read this owner; positional inputs carry no receiver.
+pub(crate) fn bind_indexed_call_owner(
+    function: &Function,
+    activation: &mut crate::context::ActivationContext,
+    receiver: Value,
+    new_target: Option<Value>,
+) {
+    debug_assert!(!function.is_derived_constructor);
+    match &mut activation.call {
+        crate::context::LexicalCallContext::Inline(owner) => {
+            owner.this = crate::context::ThisBinding::Initialized(receiver);
+            owner.new_target = new_target;
+        }
+        crate::context::LexicalCallContext::Shared(_) => {
+            debug_assert!(function.lexical_this && new_target.is_none());
+        }
+        crate::context::LexicalCallContext::None => {
+            unreachable!("indexed entry requires its canonical call owner")
+        }
+    }
 }

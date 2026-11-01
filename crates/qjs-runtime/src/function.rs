@@ -76,4 +76,4 @@ pub(crate) use value::{
     InstanceFieldInitializer, InstancePrivateElement, PrivateFieldInit,
 };
 
-pub(crate) use call::enter_indexed_activation;
+pub(crate) use call::{bind_indexed_call_owner, enter_indexed_activation};

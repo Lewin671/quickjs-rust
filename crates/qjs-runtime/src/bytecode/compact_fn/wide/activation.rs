@@ -1,7 +1,7 @@
 //! The wide tier's VM-free activation and frame driver.
 //!
 //! This is the numeric tier's driver (`compact_fn::activation`) with three
-//! additions: every frame carries its seeded `this`, a resolved call takes
+//! additions: every frame owns its canonical call owner, a resolved call takes
 //! its receiver from the register below the callee, and the dispatch loop
 //! answers the named-property operations through the shared cached fast
 //! paths in `compact_fn::property`. The numeric driver is deliberately not
@@ -23,6 +23,10 @@ use crate::{RuntimeError, Value};
 mod entry;
 mod exits;
 
+#[cfg(test)]
+#[path = "activation/owner_tests.rs"]
+mod owner_tests;
+
 use exits::{EXIT_ARGC, ExitOutcome, RootExit, exit_to_interpreter};
 
 /// Everything an admitted body needs to run.
@@ -32,9 +36,6 @@ struct WideActivation<'a, 's> {
     env: &'a mut crate::context::Context<'s>,
     upvalue_owner: Option<&'a Function>,
     upvalue_slots: u128,
-    /// The seeded `this`, mirroring `Vm.direct_this`. A body that reads `this`
-    /// is admitted only when this is present.
-    this_value: Option<&'a Value>,
 }
 
 impl WideActivation<'_, '_> {
@@ -339,7 +340,6 @@ fn compute_fixed_inline_facts(callee: &Value, function: &Function, bytecode: &By
 struct WideFrame {
     activation: crate::context::ActivationContext,
     callee: Value,
-    this_value: Option<Value>,
     base: usize,
     len: usize,
     resume_pc: usize,
@@ -535,7 +535,6 @@ fn enter_constructor(
     registers: &mut Vec<Value>,
     frames: &mut Vec<WideFrame>,
     current_callee: &mut Value,
-    current_this: &mut Option<Value>,
     current_base: &mut usize,
     current_len: &mut usize,
     argument_index: usize,
@@ -543,7 +542,7 @@ fn enter_constructor(
     dst: u16,
     resume_pc: usize,
 ) -> Result<Option<Value>, RuntimeError> {
-    let Some((inline, receiver, class)) = inline_constructor(&callee, env) else {
+    let Some((mut inline, receiver, class)) = inline_constructor(&callee, env) else {
         return Ok(Some(callee));
     };
     if frames.len() >= MAX_FRAMES {
@@ -582,10 +581,18 @@ fn enter_constructor(
             &mut registers[callee_base..callee_base + callee_len],
         );
     }
+    let Value::Function(function) = &callee else {
+        unreachable!("admitted indexed constructor")
+    };
+    crate::function::bind_indexed_call_owner(
+        function,
+        &mut inline.activation,
+        Value::Object(receiver.clone()),
+        Some(callee.clone()),
+    );
     frames.push(WideFrame {
         activation: std::mem::replace(env.activation, inline.activation),
         callee: std::mem::replace(current_callee, callee),
-        this_value: current_this.replace(Value::Object(receiver)),
         base: std::mem::replace(current_base, callee_base),
         len: std::mem::replace(current_len, callee_len),
         resume_pc,
@@ -597,7 +604,7 @@ fn enter_constructor(
 
 /// A constructor's result: the returned value when it is an object, else
 /// the receiver, as the general construct path decides.
-fn constructed(value: Value, receiver: Option<Value>) -> Value {
+fn constructed(value: Value, activation: &crate::context::ActivationContext) -> Value {
     match value {
         Value::Array(_)
         | Value::Function(_)
@@ -607,7 +614,7 @@ fn constructed(value: Value, receiver: Option<Value>) -> Value {
         | Value::Proxy(_) => value,
         other => {
             release(other);
-            receiver.unwrap_or(Value::Undefined)
+            activation.receiver_seed().unwrap_or(Value::Undefined)
         }
     }
 }
@@ -638,7 +645,6 @@ fn run(
     entry: WideEntry<'_>,
     parameter_slots: &[usize],
     arguments: &[Value],
-    this_value: Option<Value>,
     root: RootExit<'_>,
 ) -> Result<Value, RuntimeError> {
     crate::diagnostics::count!(compact_standalone_activations);
@@ -654,7 +660,6 @@ fn run(
         entry,
         parameter_slots,
         arguments,
-        this_value,
         root,
         &mut storage,
     );
@@ -680,7 +685,6 @@ fn run_frames(
     entry: WideEntry<'_>,
     parameter_slots: &[usize],
     arguments: &[Value],
-    root_this: Option<Value>,
     root: RootExit<'_>,
     storage: &mut FrameStorage,
 ) -> Result<Value, RuntimeError> {
@@ -693,7 +697,6 @@ fn run_frames(
     // its own upvalues, and its read-only slots are its bytecode's.
     let root_owner = entry.upvalue_owner;
     let root_slots = entry.upvalue_slots;
-    let mut current_this = root_this;
     let mut current_base = 0_usize;
     let mut current_len = entry.program.register_count;
     let mut pc = 0_usize;
@@ -729,7 +732,6 @@ fn run_frames(
                 env,
                 upvalue_owner,
                 upvalue_slots,
-                this_value: current_this.as_ref(),
             };
             let ops = &program.ops[..];
             let window = &mut registers[current_base..current_base + current_len];
@@ -784,7 +786,7 @@ fn run_frames(
                     WideOp::LoadThis { dst } => {
                         // Admission required a seeded receiver, so this never
                         // fabricates one.
-                        let Some(value) = activation.this_value else {
+                        let Some(value) = activation.env.caller().initialized_receiver() else {
                             break Err(execute::uninitialized_local());
                         };
                         execute::store(&mut window[dst as usize], value.clone());
@@ -792,7 +794,7 @@ fn run_frames(
                     WideOp::GetPropThis { dst, index } => {
                         let (Some(site), Some(receiver)) = (
                             program.named_reads.get(index as usize),
-                            activation.this_value,
+                            activation.env.caller().initialized_receiver(),
                         ) else {
                             break Err(execute::uninitialized_local());
                         };
@@ -802,8 +804,9 @@ fn run_frames(
                             execute::store(&mut window[dst as usize], value);
                             continue;
                         }
+                        let receiver = receiver.clone();
                         match property::get_prop_named(
-                            receiver,
+                            &receiver,
                             &site.key,
                             &site.cache,
                             activation.env,
@@ -869,7 +872,7 @@ fn run_frames(
                     WideOp::SetPropThis { dst, value, index } => {
                         let (Some(site), Some(receiver)) = (
                             program.named_writes.get(index as usize),
-                            activation.this_value,
+                            activation.env.caller().initialized_receiver(),
                         ) else {
                             break Err(execute::uninitialized_local());
                         };
@@ -884,8 +887,9 @@ fn run_frames(
                             execute::store(&mut window[dst as usize], assigned);
                             continue;
                         }
+                        let receiver = receiver.clone();
                         match property::set_prop_named(
-                            receiver,
+                            &receiver,
                             &site.key,
                             site.cache.as_ref(),
                             site.is_strict,
@@ -1180,7 +1184,6 @@ fn run_frames(
                     pc,
                     &mut registers[current_base..current_base + current_len],
                     env,
-                    current_this.clone(),
                 ) {
                     ExitOutcome::Continue { pc: resume } => {
                         pc = resume;
@@ -1217,7 +1220,6 @@ fn run_frames(
                 registers,
                 frames,
                 &mut current_callee,
-                &mut current_this,
                 &mut current_base,
                 &mut current_len,
                 callee_index + 1,
@@ -1255,13 +1257,12 @@ fn run_frames(
                     return Ok(value);
                 };
                 let value = if caller.constructs {
-                    constructed(value, current_this.take())
+                    constructed(value, env.activation)
                 } else {
                     value
                 };
                 *env.activation = caller.activation;
                 current_callee = caller.callee;
-                current_this = caller.this_value;
                 current_base = caller.base;
                 current_len = caller.len;
                 pc = caller.resume_pc;
@@ -1306,7 +1307,6 @@ fn run_frames(
             registers,
             frames,
             &mut current_callee,
-            &mut current_this,
             &mut current_base,
             &mut current_len,
             &mut pc,
@@ -1337,7 +1337,6 @@ fn run_frames(
                 env,
                 upvalue_owner,
                 upvalue_slots,
-                this_value: current_this.as_ref(),
             };
             let arguments = &registers[argument_index..argument_index + argument_count];
             call_from_activation(
@@ -1561,9 +1560,8 @@ pub(in crate::bytecode) fn try_run_standalone(
         return None;
     }
     let entry = admit(bytecode, slots.upvalues)?;
-    // A body that reads `this` needs the caller to seed a receiver, exactly
-    // like the general path's `Vm.direct_this`.
-    if entry.program.requires_this && slots.this_value.is_none() {
+    // An admitted receiver read borrows the same owner the VM will resume.
+    if entry.program.requires_this && env.initialized_receiver().is_none() {
         return None;
     }
     let call_env = env;
@@ -1579,7 +1577,6 @@ pub(in crate::bytecode) fn try_run_standalone(
         entry,
         call_slots.parameter_slots,
         call_slots.arguments,
-        call_slots.this_value.take(),
         root,
     ))
 }
@@ -1666,7 +1663,6 @@ pub(super) fn run_typed_loop_here(
     env: &mut crate::context::Context<'_>,
     window: &mut [Value],
     upvalues: &[BindingCell],
-    this_value: Option<&Value>,
     header: usize,
     backedge: usize,
     base_depth: usize,
@@ -1699,7 +1695,6 @@ pub(super) fn run_typed_loop_here(
         program.own_locals,
         upvalues,
         bytecode.cell_received_upvalue_slots().unwrap_or(0),
-        this_value,
         stack.get_mut(base_depth..).unwrap_or_default(),
     );
     if !crate::bytecode::typed_loop::try_run_typed_loop(&mut frame, plans, header, backedge) {

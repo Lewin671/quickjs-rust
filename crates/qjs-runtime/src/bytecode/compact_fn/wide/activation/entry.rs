@@ -12,7 +12,6 @@ pub(super) fn try_enter_call(
     registers: &mut Vec<Value>,
     frames: &mut Vec<WideFrame>,
     current_callee: &mut Value,
-    current_this: &mut Option<Value>,
     current_base: &mut usize,
     current_len: &mut usize,
     pc: &mut usize,
@@ -21,7 +20,7 @@ pub(super) fn try_enter_call(
     dst: u16,
     resume_pc: usize,
 ) -> Result<bool, RuntimeError> {
-    let Some(inline) = inline_callee(callee) else {
+    let Some(mut inline) = inline_callee(callee) else {
         return Ok(false);
     };
     if inline.numeric
@@ -64,7 +63,15 @@ pub(super) fn try_enter_call(
             Some(Value::Object(object)) if !crate::symbol::is_symbol_primitive(&object) => {
                 Value::Object(object)
             }
-            receiver => crate::function::function_call_this(receiver, env, inline.is_strict),
+            receiver => crate::function::function_call_this(
+                receiver,
+                &crate::context::Context {
+                    runtime: env.runtime,
+                    activation: &mut inline.activation,
+                    native: None,
+                },
+                inline.is_strict,
+            ),
         })
     } else {
         if let Some(receiver) = receiver.take() {
@@ -72,6 +79,15 @@ pub(super) fn try_enter_call(
         }
         None
     };
+    let Value::Function(function) = callee else {
+        unreachable!("admitted indexed callee")
+    };
+    crate::function::bind_indexed_call_owner(
+        function,
+        &mut inline.activation,
+        callee_this.clone().unwrap_or(Value::Undefined),
+        None,
+    );
     if inline.has_lexical_slots
         && let Some(program) = super::super::program_for(running_bytecode(callee, root_bytecode))
     {
@@ -83,7 +99,6 @@ pub(super) fn try_enter_call(
     frames.push(WideFrame {
         activation: std::mem::replace(env.activation, inline.activation),
         callee: std::mem::replace(current_callee, std::mem::replace(callee, Value::Undefined)),
-        this_value: std::mem::replace(current_this, callee_this),
         base: *current_base,
         len: *current_len,
         resume_pc,

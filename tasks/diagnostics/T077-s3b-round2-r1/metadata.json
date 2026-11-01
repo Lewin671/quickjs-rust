@@ -1,0 +1,20 @@
+{
+  "parent": "55f5d1d6e063bba8a7a14dfa9026202101215cdd",
+  "runtime_diff_sha256": "773930e90f9be269e3a265b6b09ad331ea6146d0a7d387e4f9a38e1337cc76ce",
+  "ng": {
+    "default": {
+      "cases": 301,
+      "log_sha256": "8e25b4f34570cbc540d6d9f1ca12ff62b88fbc3f4c8bb2066a177e170002ac44"
+    },
+    "off": {
+      "cases": 301,
+      "log_sha256": "8e25b4f34570cbc540d6d9f1ca12ff62b88fbc3f4c8bb2066a177e170002ac44"
+    },
+    "verify": {
+      "cases": 301,
+      "log_sha256": "8e25b4f34570cbc540d6d9f1ca12ff62b88fbc3f4c8bb2066a177e170002ac44"
+    }
+  },
+  "raw_sweep_cases_sha256": "9c0f36e514d8e59a5892811cbc6e3ef6c865fc8c136fb9a8e4f97b11acbffff2",
+  "fast_gate_sha256": "31fa826b835e895b07c935a1eafd1481d9d0e0e33654759cec9d785a0bc7b12c"
+}

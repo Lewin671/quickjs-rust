@@ -202,9 +202,9 @@ impl<'a, 's> Vm<'a, 's> {
                 .then(|| (owner.clone(), slots))
             })
             .map_or((None, 0), |(owner, slots)| (Some(owner), slots));
-        let direct_this = direct_call_slots.and_then(|direct_call_slots| {
-            Self::seed_direct_call_slots(bytecode, &mut locals, direct_call_slots)
-        });
+        if let Some(direct_call_slots) = direct_call_slots {
+            Self::seed_direct_call_slots(&mut locals, direct_call_slots);
+        }
         let (mut local_upvalues, direct_realm_binding_slots) =
             if direct_readonly_upvalue_owner.is_some() {
                 (
@@ -295,7 +295,7 @@ impl<'a, 's> Vm<'a, 's> {
                 realm_binding_slots,
                 upvalues,
                 env,
-                direct_this,
+                indexed_call: is_direct_call,
                 realm,
                 module_host,
                 stop_at_prologue: false,
@@ -321,17 +321,14 @@ impl<'a, 's> Vm<'a, 's> {
     }
 
     pub(super) fn seed_direct_call_slots(
-        _bytecode: &Bytecode,
         locals: &mut [Slot],
         direct_call_slots: DirectCallSlots<'_>,
-    ) -> Option<Value> {
-        let direct_this = direct_call_slots.this_value;
+    ) {
         Self::seed_call_inputs(
             direct_call_slots.parameter_slots,
             locals,
             direct_call_slots.arguments,
         );
-        direct_this
     }
 
     fn seed_call_inputs(parameter_slots: &[usize], locals: &mut [Slot], arguments: &[Value]) {
@@ -467,7 +464,6 @@ mod tests {
             Vec::new(),
             Vec::new(),
             Some(DirectCallSlots {
-                this_value: None,
                 parameter_slots: bytecode.parameter_slots(),
                 arguments: &[],
                 upvalues: DirectCallUpvalues::Function(&function),

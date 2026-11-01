@@ -24,8 +24,6 @@ pub(super) struct WideLoopFrame<'a, 's> {
     /// The cells the activation received, indexed through the bytecode.
     pub(super) upvalues: &'a [BindingCell],
     pub(super) upvalue_slots: u128,
-    /// The activation's receiver, which a program reads as the `this` name.
-    pub(super) this_value: Option<&'a Value>,
     /// Where the program left the loop and the operand stack it left.
     pub(super) resume_ip: Option<usize>,
     pub(super) deoptimized: bool,
@@ -53,7 +51,6 @@ impl<'a, 's> WideLoopFrame<'a, 's> {
         own_locals: u128,
         upvalues: &'a [BindingCell],
         upvalue_slots: u128,
-        this_value: Option<&'a Value>,
         stack: &'a mut [Value],
     ) -> Self {
         Self {
@@ -63,7 +60,6 @@ impl<'a, 's> WideLoopFrame<'a, 's> {
             own_locals,
             upvalues,
             upvalue_slots,
-            this_value,
             resume_ip: None,
             deoptimized: false,
             stack,
@@ -140,10 +136,7 @@ impl LoopFrame for WideLoopFrame<'_, '_> {
         // The receiver is compiled as a read of the name `this`, which the
         // tier answers from the activation (`WideOp::LoadThis`).
         if name == "this" {
-            return self.this_value.cloned().ok_or_else(|| RuntimeError {
-                thrown: None,
-                message: "compact activation has no receiver".to_owned(),
-            });
+            return self.env.caller().this_value();
         }
         crate::bytecode::compact_fn::property::load_global(name, self.env)
     }

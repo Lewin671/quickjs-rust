@@ -45,7 +45,6 @@ pub(super) fn exit_to_interpreter(
     resume_pc: usize,
     window: &mut [Value],
     env: &mut crate::context::Context<'_>,
-    this_value: Option<Value>,
 ) -> ExitOutcome {
     let bytecode = running_bytecode(callee, root_bytecode);
     let Some(program) = super::super::program_for(bytecode) else {
@@ -54,7 +53,6 @@ pub(super) fn exit_to_interpreter(
     if let Some((header, backedge)) = program.probed_header(resume_pc) {
         return enter_loop_at_header(
             callee, bytecode, program, root, header, backedge, depth, resume_pc, window, env,
-            this_value,
         );
     }
     let probe = program.probed_backedge(ip);
@@ -193,7 +191,6 @@ pub(super) fn exit_to_interpreter(
             env,
             window,
             upvalues.as_slice(),
-            this_value.as_ref(),
             header,
             ip as usize,
             depth as usize,
@@ -247,7 +244,6 @@ pub(super) fn exit_to_interpreter(
         from,
         window,
         env,
-        this_value,
     )
 }
 
@@ -264,12 +260,10 @@ fn resume_in_interpreter(
     from: ResumeFrom,
     window: &mut [Value],
     env: &mut crate::context::Context<'_>,
-    this_value: Option<Value>,
 ) -> ExitOutcome {
     let local_registers = program.local_registers as usize;
     let (locals, stack) = window.split_at_mut(local_registers);
     let slots = DirectCallSlots {
-        this_value,
         parameter_slots: bytecode.parameter_slots(),
         arguments: &[],
         upvalues,
@@ -343,7 +337,6 @@ fn enter_loop_at_header(
     resume_pc: usize,
     window: &mut [Value],
     env: &mut crate::context::Context<'_>,
-    this_value: Option<Value>,
 ) -> ExitOutcome {
     let ready = u32::try_from(backedge)
         .ok()
@@ -365,7 +358,6 @@ fn enter_loop_at_header(
         env,
         window,
         upvalues.as_slice(),
-        this_value.as_ref(),
         header,
         backedge,
         usize::from(depth),
@@ -392,7 +384,6 @@ fn enter_loop_at_header(
                 },
                 window,
                 env,
-                this_value,
             )
         }
     }

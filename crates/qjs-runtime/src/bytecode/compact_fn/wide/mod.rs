@@ -106,7 +106,7 @@ enum WideOp {
         dst: u16,
     },
     /// Loads the activation's seeded `this`. Admission requires a receiver to
-    /// be seeded, exactly like `Vm.direct_this`, so this never fabricates one.
+    /// come from the activation call owner; this never fabricates one.
     LoadThis {
         dst: u16,
     },

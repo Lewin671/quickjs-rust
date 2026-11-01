@@ -1,0 +1,43 @@
+[
+  {
+    "mode": "ic-verify",
+    "id": "external/kraken-1.1/imaging-gaussian-blur",
+    "iterations": null,
+    "command": [
+      "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/target/debug/qjs",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/target/s3b-round2-r1-public/work-gzqfwg9k/kraken-1.1--imaging-gaussian-blur.js"
+    ],
+    "expected_stdout": "__QJS_EXTERNAL_OK__\n__QJS_EXTERNAL_OK__\n",
+    "passed": false,
+    "error": "Command '['/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/target/debug/qjs', '--raw', '/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/target/s3b-round2-r1-public/work-gzqfwg9k/kraken-1.1--imaging-gaussian-blur.js']' timed out after 120 seconds"
+  },
+  {
+    "mode": "ic-verify",
+    "id": "development/lodash/transform",
+    "iterations": null,
+    "command": [
+      "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/target/debug/qjs",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/target/s3b-round2-r1-public/work-gzqfwg9k/development--lodash--transform.js"
+    ],
+    "expected_stdout": "CHECKSUM dd804f67\n__QJS_EXTERNAL_OK__\n__QJS_EXTERNAL_OK__\n",
+    "passed": false,
+    "exit": 101,
+    "stdout": "",
+    "stderr": "\nthread 'main' (423245189) panicked at crates/qjs-runtime/src/function/value.rs:471:28:\nattempt to shift left with overflow\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+  },
+  {
+    "mode": "ic-verify",
+    "id": "development/moment/dates",
+    "iterations": null,
+    "command": [
+      "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/target/debug/qjs",
+      "--raw",
+      "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/target/s3b-round2-r1-public/work-gzqfwg9k/development--moment--dates.js"
+    ],
+    "expected_stdout": "CHECKSUM 77a28ccb\n__QJS_EXTERNAL_OK__\n__QJS_EXTERNAL_OK__\n",
+    "passed": false,
+    "error": "Command '['/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/target/debug/qjs', '--raw', '/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/target/s3b-round2-r1-public/work-gzqfwg9k/development--moment--dates.js']' timed out after 60 seconds"
+  }
+]
