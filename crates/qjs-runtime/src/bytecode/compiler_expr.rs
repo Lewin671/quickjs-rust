@@ -931,6 +931,12 @@ impl Compiler {
             self.compile_super_method(property)?;
             self.compile_optional_resolved_call(first.optional, arguments, &mut end_jumps)?;
             index = 1;
+        } else if let Some(first) = chain.first()
+            && let OptionalChainStep::Call(arguments) = &first.kind
+            && self.compile_with_callee_reference(base)
+        {
+            self.compile_optional_resolved_call(first.optional, arguments, &mut end_jumps)?;
+            index = 1;
         } else {
             self.compile_expr(base)?;
         }
@@ -1254,7 +1260,10 @@ impl Compiler {
             return Ok(());
         }
 
-        self.compile_expr(tag)?;
+        let resolved = self.compile_with_callee_reference(tag);
+        if !resolved {
+            self.compile_expr(tag)?;
+        }
         self.emit(Op::RequireCallable);
         self.emit(Op::NewTemplateObject {
             site,
@@ -1264,7 +1273,11 @@ impl Compiler {
         for expression in expressions {
             self.compile_expr(expression)?;
         }
-        self.emit(Op::Call(expressions.len() + 1));
+        self.emit(if resolved {
+            Op::CallResolved(expressions.len() + 1)
+        } else {
+            Op::Call(expressions.len() + 1)
+        });
         Ok(())
     }
 

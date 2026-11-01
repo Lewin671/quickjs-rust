@@ -317,6 +317,33 @@ impl Compiler {
         Ok(())
     }
 
+    /// Preserve GetThisValue for an identifier selected through an object
+    /// environment. Resolution and Get happen once, before argument effects.
+    /// Leaves [receiver, callee], for ordinary/optional/tagged call forms.
+    pub(super) fn compile_with_callee_reference(&mut self, callee: &Expr) -> bool {
+        let Expr::Identifier { name, .. } = callee else {
+            return false;
+        };
+        let slot = self.resolve_local_slot(name);
+        if !self.identifier_needs_with_resolution(slot) {
+            return false;
+        }
+        let object_slot = self.temp_local("with_call_object");
+        self.emit(Op::ResolveIdentWith {
+            name: name.clone(),
+            slot,
+            object_slot,
+        });
+        self.emit(Op::LoadLocal(object_slot));
+        self.emit(Op::LoadResolvedIdentWith {
+            name: name.clone(),
+            slot,
+            object_slot,
+            is_strict: self.strict,
+        });
+        true
+    }
+
     pub(super) fn compile_call(
         &mut self,
         callee: &Expr,
@@ -428,43 +455,23 @@ impl Compiler {
             return Ok(());
         }
 
-        // A bare-identifier call resolved through a `with` scope uses the with
-        // binding object as the `this` value when the name is found on it (and
-        // undefined otherwise), per GetThisValue of an object-environment
-        // reference. `eval` keeps its dedicated direct-eval path.
-        if let Expr::Identifier { name, .. } = callee
-            && name != "eval"
+        // Direct eval retains its dedicated calling protocol.
+        if !matches!(callee, Expr::Identifier { name, .. } if name == "eval")
+            && self.compile_with_callee_reference(callee)
         {
-            let slot = self.resolve_local_slot(name);
-            if self.identifier_needs_with_resolution(slot) {
-                let object_slot = self.temp_local("with_call_object");
-                self.emit(Op::ResolveIdentWith {
-                    name: name.clone(),
-                    slot,
-                    object_slot,
-                });
-                // Receiver (with object or undefined), then the resolved callee.
-                self.emit(Op::LoadLocal(object_slot));
-                self.emit(Op::LoadResolvedIdentWith {
-                    name: name.clone(),
-                    slot,
-                    object_slot,
-                    is_strict: self.strict,
-                });
-                if has_spread {
-                    self.compile_argument_array(arguments)?;
-                    self.emit(Op::CallResolvedSpread);
-                    return Ok(());
-                }
-                for argument in arguments {
-                    let CallArgument::Expr(argument) = argument else {
-                        unreachable!("spread arguments are handled above");
-                    };
-                    self.compile_expr(argument)?;
-                }
-                self.emit(Op::CallResolved(arguments.len()));
+            if has_spread {
+                self.compile_argument_array(arguments)?;
+                self.emit(Op::CallResolvedSpread);
                 return Ok(());
             }
+            for argument in arguments {
+                let CallArgument::Expr(argument) = argument else {
+                    unreachable!("spread arguments are handled above");
+                };
+                self.compile_expr(argument)?;
+            }
+            self.emit(Op::CallResolved(arguments.len()));
+            return Ok(());
         }
 
         let direct_eval = matches!(callee, Expr::Identifier { name, .. } if name == "eval");

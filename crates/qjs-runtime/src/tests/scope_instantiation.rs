@@ -81,3 +81,25 @@ fn inherited_global_getters_are_not_probed_or_folded_by_loop_plans() {
         Ok(Value::String("5050:100".into()))
     );
 }
+
+#[test]
+fn with_tagged_and_optional_calls_preserve_the_selected_receiver() {
+    for call in ["f`x`", "f?.()", "f?.(...[])"] {
+        let source = format!(
+            "var o={{v:7,f:function(){{return this===o?this.v:-1;}}}},r;with(o){{r={call};}}r;"
+        );
+        assert_eq!(eval(&source), Ok(Value::Number(7.0)), "{source}");
+        let source = format!(
+            "var o={{v:7,f:function(){{return this.v;}}}},g;with(o){{g=function(){{return {call};}};}}g();"
+        );
+        assert_eq!(eval(&source), Ok(Value::Number(7.0)), "{source}");
+    }
+    assert_eq!(
+        eval("var n=0,r;with({f:null}){r=f?.(n++);}typeof r+':'+n;"),
+        Ok(Value::String("undefined:0".into()))
+    );
+    assert_eq!(
+        eval("var o={f(){return this===o;}};with(o){f?.(delete o.f);}"),
+        Ok(Value::Boolean(true))
+    );
+}

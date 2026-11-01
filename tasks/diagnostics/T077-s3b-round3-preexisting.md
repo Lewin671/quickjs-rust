@@ -57,3 +57,22 @@ An inherited/exotic route declines instead of probing/hoisting a getter. A
 100-call numeric-helper test asserts 100 getter calls, preserving the P1 effect
 boundary. Before repair the exact lead case threw ReferenceError; focused scope
 suite and strengthened NG fixture cover both data and getter variants.
+
+## With-reference receivers in tagged/optional calls
+
+Parent `c7f8be93`. Ordinary calls retained the selected with-object receiver,
+but tagged and optional forms compiled the identifier as a bare Value. The
+compiler now shares one object-environment callee-reference lowering across
+all three call forms. Resolve/Get occur once before argument/template effects;
+optional short-circuit drops both receiver and nullish callee, skipping args.
+Direct eval keeps its dedicated protocol.
+
+Focused tests cover tagged/optional/spread calls, escaped with closures,
+nullish short-circuit and RHS deletion of the selected property. The initial
+case failed before repair; permanent NG fixture checks the same routes.
+
+NG fixture note: pinned NG reports `InternalError: inconsistent stack size`
+compiling a with-bound optional call in assignment/statement position. Returning
+the same optional call from a nested function avoids its compiler defect while
+preserving receiver/short-circuit observations. Candidate runtime tests retain
+those valid assignment/statement programs; no behavior was changed toward NG.
