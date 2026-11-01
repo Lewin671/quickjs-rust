@@ -216,3 +216,67 @@ fn property_loaded_equality_preserves_every_iteration_and_receiver_read_path() {
         }
     }
 }
+
+#[test]
+fn inline_error_discards_its_activation_and_clears_pooled_frames() {
+    let Value::Function(function) =
+        crate::eval("(function top(obj){return obj.child();})").unwrap()
+    else {
+        panic!("function")
+    };
+    let child = crate::eval("(function child(){return this.bad.key;})").unwrap();
+    assert!(inline_entry(&child).is_some());
+    let object = crate::ObjectRef::new(
+        std::collections::HashMap::new(),
+        function.creation_realm().atoms(),
+    );
+    object.set("child".into(), child);
+    let obj = Value::Object(object);
+    let receiver = Value::Object(crate::ObjectRef::new(
+        std::collections::HashMap::new(),
+        function.creation_realm().atoms(),
+    ));
+    let mut parked = crate::function::enter_indexed_activation(&function);
+    crate::function::bind_indexed_call_owner(&function, &mut parked, receiver.clone(), None);
+    let parked_id = parked.variable_identity();
+    let bytecode = function.bytecode.as_ref().unwrap();
+    let upvalues = crate::bytecode::DirectCallUpvalues::Function(&function);
+    let entry = admit(bytecode, upvalues).unwrap();
+    let mut activation = crate::function::enter_indexed_activation(&function);
+    crate::function::bind_indexed_call_owner(&function, &mut activation, receiver.clone(), None);
+    let (mut runtime, _) =
+        crate::context::HostRoot::new(function.creation_realm().clone()).into_parts();
+    let result = run(
+        bytecode,
+        &mut activation,
+        &mut runtime,
+        entry,
+        bytecode.parameter_slots(),
+        std::slice::from_ref(&obj),
+        RootExit {
+            upvalues,
+            realm_upvalue_slots: 0,
+        },
+    );
+    assert!(result.unwrap_err().message.contains("TypeError"));
+    // Terminal unwind deliberately leaves the failed child owner in this
+    // disposable activation. The separately parked caller was never borrowed.
+    assert!(activation.this_value().unwrap().same_value(&obj));
+    assert!(parked.this_value().unwrap().same_value(&receiver));
+    assert_eq!(parked.variable_identity(), parked_id);
+    FRAME_STORAGE.with(|cell| {
+        let storage = cell.borrow();
+        assert!(storage.frames.is_empty());
+        assert!(
+            storage
+                .registers
+                .iter()
+                .all(|v| matches!(v, Value::Undefined))
+        );
+    });
+    drop(activation);
+    assert_eq!(
+        crate::eval("(function(){return 7;})()"),
+        Ok(Value::Number(7.0))
+    );
+}

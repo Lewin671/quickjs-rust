@@ -1522,6 +1522,10 @@ fn construct_plain_array(
     Some(Value::Array(array))
 }
 
+/// Terminal error cleanup only: every caller immediately returns Err from
+/// run_frames. The fresh call activation is then discarded, even if it now
+/// describes an inline child. Never resume or expose it as the parked caller;
+/// restoring caller frames is the normal-return protocol, not this cleanup.
 #[cold]
 #[inline(never)]
 fn unwind(registers: &mut [Value], frames: &mut Vec<WideFrame>, live_end: usize) {

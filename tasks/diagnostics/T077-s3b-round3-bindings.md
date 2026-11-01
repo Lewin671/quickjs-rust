@@ -64,3 +64,16 @@ a non-eval wide loop continuation with forced cells, nor an expression-free rest
 parameter/body var homonym. The handoff described passed suites at named sources,
 not exhaustive stress correctness. Its coverage was insufficient; the new exact
 fixtures plus seeded generators expand that coverage before final qualification.
+
+## Inline error lifetime invariant
+
+Parent `0b9a1d7c`. `unwind` is terminal: every call immediately exits run_frames
+with Err. That run owns a fresh callee activation; its caller is separately
+parked outside the borrow. Error cleanup deliberately does not restore the
+failed activation to an inline parent. It must be discarded, never resumed or
+used as the parked caller. The code comment makes this precondition explicit.
+
+A low-level admitted-inline failure test checks the child owner remains in the
+disposable activation, parked caller receiver/identity are unchanged, every
+pooled frame/register is cleared, and a subsequent call works. Permanent NG
+fixture repeats failures interleaved with receiver-dependent successful calls.
