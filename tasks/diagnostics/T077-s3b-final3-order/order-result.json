@@ -1,0 +1,19 @@
+{
+  "source": "a84252bdde8a21138f60e2148ed4379f4c74da81",
+  "base": "3cc12c6f",
+  "scope": "default external/sentinel/broad; no development or held-out",
+  "command": [
+    "python3",
+    "-m",
+    "tools.benchmark.order_file",
+    "--binary",
+    "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261101T140029Z-t077-s3b-final3-order/out/build/x86_64-apple-darwin/release/qjs",
+    "--output",
+    "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261101T140029Z-t077-s3b-final3-order/out/hot-functions-x86_64.order"
+  ],
+  "binary_sha256": "1fbeaaa9106fb3cdf7c5d015d24b162f6ffd56f2e976f319632d563943a8fe25",
+  "producer_sha256": "1ea7ad61ef7d4d684ab1511a53b685e9d4e23e3519973433a535c905f2732f0b",
+  "started_cst": "2026-11-01T22:02:47.210248+08:00",
+  "exit": 0,
+  "order_sha256": "981a0ee6df5769dc92fd90076ac3ee66a898f76b9f3351e00aec6108ffd06e53"
+}
