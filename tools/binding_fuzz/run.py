@@ -16,9 +16,10 @@ import time
 from collections import Counter
 
 from .generate import Gen
+from .generate_global import GlobalStoreGen
 from .generate_this import G
 
-PROFILES = ("binding", "binding-simple", "receiver")
+PROFILES = ("binding", "binding-simple", "receiver", "global-store")
 STRESS = {"QJS_VERIFY_BINDINGS": "1", "QJS_FORCE_EVAL_EXPOSURE": "1",
           "QJS_POISON_RELEASED_SCOPES": "1", "QJS_POISON_RELEASED_ACTIVATIONS": "1",
           "QJS_VERIFY_IC": "1"}
@@ -34,6 +35,8 @@ def program(profile, seed):
         return G(seed).program()
     if profile in ("binding", "binding-simple"):
         return Gen(seed, simple_parameters=profile == "binding-simple").program()
+    if profile == "global-store":
+        return GlobalStoreGen(seed).program()
     raise ValueError(profile)
 
 

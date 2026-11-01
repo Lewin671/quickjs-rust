@@ -41,8 +41,12 @@ the nearest loop so nested var/let counters cannot invalidate whole programs.
 
 Profiles are `binding` (scope/eval/with/NFE/default/rest/arguments/generators/
 classes/jobs), `binding-simple` (the review's alternative simple-parameter
-sampling distribution), and `receiver` (this/arguments/new.target and compound
-operations across native/JS/constructor/loop entry). All run by default; count
+sampling distribution), `receiver` (this/arguments/new.target and compound
+operations across native/JS/constructor/loop entry), and `global-store` (global
+Name assignments, plain/compound/update/destructuring/for-in/of, whose RHS
+deletes or redefines the global property, declares a lexical or var through
+another script or eval, or changes Object.prototype; repeated sloppy/strict
+calls reach every tier). All run by default; count
 is per profile. Each generator uses its own seeded RNG, so concurrency does
 not affect generated source. Replay one program with the recorded seed/profile
 using `program()` in run.py, or run that profile with start=<seed>, count=1.

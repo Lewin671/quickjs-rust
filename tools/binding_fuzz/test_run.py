@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from .run import STRESS, classify, execute, normalize
+from .run import PROFILES, STRESS, classify, execute, normalize, program
 
 
 def result(value="ok"):
@@ -69,6 +69,12 @@ class DifferentialTests(unittest.TestCase):
             self.assertEqual(row["normalized"], ["absent", "1", "UTC"])
             self.assertTrue(row["stdout"].endswith("Undefined\n"))
             self.assertEqual(row["exit"], 0)
+
+    def test_every_profile_generates_deterministic_source(self):
+        for profile in PROFILES:
+            self.assertEqual(program(profile, 9), program(profile, 9), profile)
+            self.assertNotEqual(program(profile, 9), program(profile, 10), profile)
+        self.assertTrue(program("global-store", 0).endswith('SNAP("final");\n'))
 
 
 if __name__ == "__main__":
