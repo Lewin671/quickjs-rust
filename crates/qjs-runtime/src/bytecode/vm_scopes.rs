@@ -33,6 +33,7 @@ impl Vm<'_, '_> {
         if previous == next {
             return;
         }
+        let authority_before = self.authoritative_slots;
         let owner = self.bytecode.clone();
         let scopes = &owner.binding_plan.scopes;
         if self.runtime.binding_debug.poisoning() {
@@ -119,6 +120,10 @@ impl Vm<'_, '_> {
             }
         }
         self.binding_scope = Some(next);
+        self.slow_flags |= super::vm::SLOW_SCOPES;
+        if self.authoritative_slots != authority_before {
+            self.slow_flags |= super::vm::SLOW_AUTHORITY;
+        }
         self.force_binding_exposure(next);
         self.verify_binding_authority();
     }

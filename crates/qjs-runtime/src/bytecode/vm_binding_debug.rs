@@ -30,6 +30,7 @@ impl Vm<'_, '_> {
             current = descriptor.parent;
         }
         self.binding_scope = Some(id);
+        self.slow_flags |= super::vm::SLOW_SCOPES;
     }
 
     #[inline]

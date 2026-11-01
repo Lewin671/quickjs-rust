@@ -109,6 +109,12 @@ impl Vm<'_, '_> {
                 .get(self.ip.saturating_sub(1))
                 .copied();
         }
+        self.slow_flags |= super::vm::SLOW_AUTHORITY
+            | if self.binding_scope.is_some() {
+                super::vm::SLOW_SCOPES
+            } else {
+                0
+            };
         self.verify_binding_authority();
         crate::diagnostics::count!(binding_promotions);
         upvalue

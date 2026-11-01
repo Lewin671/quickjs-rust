@@ -175,7 +175,16 @@ fn eval_direct_call_fallback(
     value
 }
 
+/// `FrameState::slow_flags` bits, set by every writer that changes what the
+/// dispatch loop must check before an op: a promotion (authority, and scope
+/// tracking once it starts) or a scope update that changes authority. The
+/// fast loop runs only while scope tracking and reference hooks are off and
+/// leaves its interval as soon as an op sets a bit.
+pub(super) const SLOW_SCOPES: u8 = 1;
+pub(super) const SLOW_AUTHORITY: u8 = 1 << 1;
+
 pub(super) struct FrameState<'a> {
+    pub(super) slow_flags: u8,
     pub(super) reference_hooks: bool,
     pub(super) active_reference_count: usize,
     pub(super) binding_scope: Option<crate::binding::ScopeId>,
@@ -503,6 +512,23 @@ impl<'a, 's> Vm<'a, 's> {
     /// and its disassembly stays inspectable.
     #[inline(never)]
     pub(super) fn run_current_activation(&mut self) -> Result<FrameExit, RuntimeError> {
+        // Scope tracking and reference hooks are fixed for an activation
+        // except that a promotion can start scope tracking, which ends the
+        // fast loop's interval; the next one runs the checking loop.
+        self.current.slow_flags = 0;
+        if self.current.binding_scope.is_some() || self.current.reference_hooks {
+            self.dispatch::<true>()
+        } else {
+            self.dispatch::<false>()
+        }
+    }
+
+    /// The dispatch loop. `SLOW` checks scope changes, reference events and
+    /// authority before every op; the fast instance checks nothing per op
+    /// and leaves its interval after any out-of-line op that set a
+    /// `slow_flags` bit.
+    #[inline(never)]
+    fn dispatch<const SLOW: bool>(&mut self) -> Result<FrameExit, RuntimeError> {
         // One owner clone per activation, held on this stack frame. The view
         // borrows the owner rather than the VM, which is what lets the current
         // instruction stay borrowed while its handler mutates VM state -- and
@@ -531,48 +557,63 @@ impl<'a, 's> Vm<'a, 's> {
         let references = &program.bytecode.binding_plan.references;
         let mut event_cursor = references.events.partition_point(|event| event.pc < pc);
         let mut expected_pc = pc;
-        loop {
-            if let Some(active) = self.current.binding_scope
-                && program
-                    .bytecode
-                    .binding_plan
-                    .pc_scopes
-                    .get(pc)
-                    .is_some_and(|scope| *scope != active)
-            {
-                self.update_binding_scope(pc);
-                if self.current.authoritative_slots != authority_at_entry {
-                    self.current.ip = pc;
-                    return Ok(FrameExit::RefreshBindings);
-                }
-            }
-            if self.current.reference_hooks {
-                if pc != expected_pc {
-                    event_cursor = references.events.partition_point(|event| event.pc < pc);
-                }
-                expected_pc = pc + 1;
-                self.prune_references(references, pc);
-                if references
-                    .events
-                    .get(event_cursor)
-                    .is_some_and(|event| event.pc == pc)
+        // Fixed for the activation (set only at frame entry and resume).
+        let reference_hooks = self.current.reference_hooks;
+        'dispatch: loop {
+            debug_assert!(
+                SLOW || (self.current.binding_scope.is_none()
+                    && !self.current.reference_hooks
+                    && self.current.authoritative_slots == authority_at_entry),
+                "the fast dispatch loop outlived a slow-path change"
+            );
+            if SLOW {
+                if let Some(active) = self.current.binding_scope
+                    && program
+                        .bytecode
+                        .binding_plan
+                        .pc_scopes
+                        .get(pc)
+                        .is_some_and(|scope| *scope != active)
                 {
-                    let event = &references.events[event_cursor];
-                    event_cursor += 1;
-                    self.current.ip = pc + 1;
-                    let result = self.run_reference_event(references, event, &code[pc]);
-                    match self.handle_runtime_result(result)? {
-                        Some(false) => {}
-                        _ => {
-                            pc = self.current.ip;
-                            continue;
+                    self.update_binding_scope(pc);
+                    if self.current.authoritative_slots != authority_at_entry {
+                        self.current.ip = pc;
+                        return Ok(FrameExit::RefreshBindings);
+                    }
+                }
+                if reference_hooks {
+                    if pc != expected_pc {
+                        event_cursor = references.events.partition_point(|event| event.pc < pc);
+                    }
+                    expected_pc = pc + 1;
+                    if self.current.active_reference_count != 0 {
+                        self.prune_references(references, pc);
+                    }
+                    if references
+                        .events
+                        .get(event_cursor)
+                        .is_some_and(|event| event.pc == pc)
+                    {
+                        let event = &references.events[event_cursor];
+                        event_cursor += 1;
+                        self.current.ip = pc + 1;
+                        let result = self.run_reference_event(references, event, &code[pc]);
+                        match self.handle_runtime_result(result)? {
+                            Some(false) => {}
+                            _ => {
+                                pc = self.current.ip;
+                                continue;
+                            }
                         }
                     }
                 }
-            }
-            if self.current.authoritative_slots != authority_at_entry {
-                self.current.ip = pc;
-                return Ok(FrameExit::RefreshBindings);
+                // Every authority writer sets `SLOW_AUTHORITY`.
+                if self.current.slow_flags & SLOW_AUTHORITY != 0
+                    && self.current.authoritative_slots != authority_at_entry
+                {
+                    self.current.ip = pc;
+                    return Ok(FrameExit::RefreshBindings);
+                }
             }
             let Some(op) = code.get(pc) else {
                 self.current.ip = pc;
@@ -584,345 +625,365 @@ impl<'a, 's> Vm<'a, 's> {
             pc += 1;
             #[cfg(feature = "perf-counters")]
             crate::diagnostics::update(|c| c.executed_ops += 1);
-            match op {
-                Op::LoadConst(index) => {
-                    crate::diagnostics::count!(dispatched_load_const_ops);
-                    if let Some(value) = constants.get(*index) {
-                        let value = value.clone();
-                        self.current.stack.push(value);
-                        continue;
+            'out_of_line: {
+                match op {
+                    Op::LoadConst(index) => {
+                        crate::diagnostics::count!(dispatched_load_const_ops);
+                        if let Some(value) = constants.get(*index) {
+                            let value = value.clone();
+                            self.current.stack.push(value);
+                            continue 'dispatch;
+                        }
                     }
-                }
-                Op::LoadLocal(slot) => {
-                    crate::diagnostics::count!(dispatched_local_binding_ops);
-                    crate::diagnostics::count!(dispatched_load_local_ops);
-                    // The general path answers with `Result<Value,
-                    // RuntimeError>` (40 bytes) and `handle_runtime_result`
-                    // rewraps it as `Result<Option<Value>, RuntimeError>` (48).
-                    // Neither fits the two-register return, so the most
-                    // frequently dispatched opcode in the engine paid two
-                    // round trips through memory to report a success that
-                    // cannot fail. Answer the authoritative-slot case here
-                    // instead, and leave everything else out of line.
-                    if !self.current.direct_eval_with_stack
-                        && *slot < u128::BITS as usize
-                        && self.current.authoritative_slots & (1_u128 << *slot) != 0
-                        && let Some(Some(value)) = self.current.locals.get(*slot)
-                    {
-                        let value = super::vm_bindings::clone_local_value(value);
-                        self.current.stack.push(value);
-                        crate::diagnostics::count!(authoritative_load_local_hits);
-                        continue;
+                    Op::LoadLocal(slot) => {
+                        crate::diagnostics::count!(dispatched_local_binding_ops);
+                        crate::diagnostics::count!(dispatched_load_local_ops);
+                        // The general path answers with `Result<Value,
+                        // RuntimeError>` (40 bytes) and `handle_runtime_result`
+                        // rewraps it as `Result<Option<Value>, RuntimeError>` (48).
+                        // Neither fits the two-register return, so the most
+                        // frequently dispatched opcode in the engine paid two
+                        // round trips through memory to report a success that
+                        // cannot fail. Answer the authoritative-slot case here
+                        // instead, and leave everything else out of line.
+                        if !self.current.direct_eval_with_stack
+                            && *slot < u128::BITS as usize
+                            && self.current.authoritative_slots & (1_u128 << *slot) != 0
+                            && let Some(Some(value)) = self.current.locals.get(*slot)
+                        {
+                            let value = super::vm_bindings::clone_local_value(value);
+                            self.current.stack.push(value);
+                            crate::diagnostics::count!(authoritative_load_local_hits);
+                            continue 'dispatch;
+                        }
+                        self.current.ip = pc;
+                        self.op_load_local(*slot)?;
+                        pc = self.current.ip;
+                        break 'out_of_line;
                     }
-                    self.current.ip = pc;
-                    self.op_load_local(*slot)?;
-                    pc = self.current.ip;
-                    continue;
-                }
-                Op::StoreLocal(slot) => {
-                    crate::diagnostics::count!(dispatched_local_binding_ops);
-                    crate::diagnostics::count!(dispatched_store_local_ops);
-                    // Same rationale as `LoadLocal`: keep the
-                    // authoritative-slot write off the memory-returned
-                    // `Result` path. Falling through when the stack is empty is
-                    // deliberate -- the general path raises the underflow.
-                    let slot = *slot;
-                    if slot < u128::BITS as usize
-                        && self.current.authoritative_slots & (1_u128 << slot) != 0
-                        && self
-                            .current
-                            .bytecode
-                            .locals
-                            .get(slot)
-                            .is_some_and(|local| local.mutable)
-                        && let Some(value) = self.current.stack.pop()
-                    {
-                        self.current.locals[slot] = Some(value);
-                        crate::diagnostics::count!(authoritative_store_local_hits);
-                        continue;
+                    Op::StoreLocal(slot) => {
+                        crate::diagnostics::count!(dispatched_local_binding_ops);
+                        crate::diagnostics::count!(dispatched_store_local_ops);
+                        // Same rationale as `LoadLocal`: keep the
+                        // authoritative-slot write off the memory-returned
+                        // `Result` path. Falling through when the stack is empty is
+                        // deliberate -- the general path raises the underflow.
+                        let slot = *slot;
+                        if slot < u128::BITS as usize
+                            && self.current.authoritative_slots & (1_u128 << slot) != 0
+                            && self
+                                .current
+                                .bytecode
+                                .locals
+                                .get(slot)
+                                .is_some_and(|local| local.mutable)
+                            && let Some(value) = self.current.stack.pop()
+                        {
+                            self.current.locals[slot] = Some(value);
+                            crate::diagnostics::count!(authoritative_store_local_hits);
+                            continue 'dispatch;
+                        }
+                        self.current.ip = pc;
+                        self.op_store_local(slot)?;
+                        pc = self.current.ip;
+                        break 'out_of_line;
                     }
-                    self.current.ip = pc;
-                    self.op_store_local(slot)?;
-                    pc = self.current.ip;
-                    continue;
-                }
-                Op::AssignLocal(slot) => {
-                    crate::diagnostics::count!(dispatched_local_binding_ops);
-                    crate::diagnostics::count!(dispatched_assign_local_ops);
-                    // Mirrors `assign_local`'s own fast path, so an assignment
-                    // to an initialized mutable slot never builds a `Result` to
-                    // report that it succeeded.
-                    let slot = *slot;
-                    if !self.current.direct_eval_with_stack
-                        && slot < u128::BITS as usize
-                        && self.current.authoritative_slots & (1_u128 << slot) != 0
-                        && self
-                            .current
-                            .bytecode
-                            .locals
-                            .get(slot)
-                            .is_some_and(|local| local.mutable)
-                        && self.current.locals.get(slot).is_some_and(Option::is_some)
-                        && let Some(value) = self.current.stack.pop()
-                    {
-                        self.current.locals[slot] = Some(value);
-                        crate::diagnostics::count!(authoritative_assign_local_hits);
-                        continue;
+                    Op::AssignLocal(slot) => {
+                        crate::diagnostics::count!(dispatched_local_binding_ops);
+                        crate::diagnostics::count!(dispatched_assign_local_ops);
+                        // Mirrors `assign_local`'s own fast path, so an assignment
+                        // to an initialized mutable slot never builds a `Result` to
+                        // report that it succeeded.
+                        let slot = *slot;
+                        if !self.current.direct_eval_with_stack
+                            && slot < u128::BITS as usize
+                            && self.current.authoritative_slots & (1_u128 << slot) != 0
+                            && self
+                                .current
+                                .bytecode
+                                .locals
+                                .get(slot)
+                                .is_some_and(|local| local.mutable)
+                            && self.current.locals.get(slot).is_some_and(Option::is_some)
+                            && let Some(value) = self.current.stack.pop()
+                        {
+                            self.current.locals[slot] = Some(value);
+                            crate::diagnostics::count!(authoritative_assign_local_hits);
+                            continue 'dispatch;
+                        }
+                        self.current.ip = pc;
+                        self.op_assign_local(slot)?;
+                        pc = self.current.ip;
+                        break 'out_of_line;
                     }
-                    self.current.ip = pc;
-                    self.op_assign_local(slot)?;
-                    pc = self.current.ip;
-                    continue;
-                }
-                Op::LoadGlobal(name) => {
-                    crate::diagnostics::count!(dispatched_global_binding_ops);
-                    self.current.ip = pc;
-                    self.op_load_global(name)?;
-                    pc = self.current.ip;
-                    continue;
-                }
-                Op::StoreGlobalStrict(name) => {
-                    crate::diagnostics::count!(dispatched_global_binding_ops);
-                    self.current.ip = pc;
-                    self.op_store_global_strict(name)?;
-                    pc = self.current.ip;
-                    continue;
-                }
-                Op::StoreGlobalSloppy { slot, name } => {
-                    crate::diagnostics::count!(dispatched_global_binding_ops);
-                    self.current.ip = pc;
-                    self.op_store_global_sloppy(*slot, name)?;
-                    pc = self.current.ip;
-                    continue;
-                }
-                Op::GetPropNamed { name, cache, .. } => {
-                    crate::diagnostics::count!(dispatched_named_property_ops);
-                    crate::diagnostics::count!(named_property_reads);
-                    self.current.ip = pc;
-                    self.op_get_prop_named(program.bytecode, *name, cache)?;
-                    pc = self.current.ip;
-                    continue;
-                }
-                Op::GetPropIndex(index) => {
-                    crate::diagnostics::count!(dispatched_computed_property_ops);
-                    crate::diagnostics::count!(computed_property_reads);
-                    self.current.ip = pc;
-                    self.op_get_prop_index(*index)?;
-                    pc = self.current.ip;
-                    continue;
-                }
-                Op::GetProp => {
-                    crate::diagnostics::count!(dispatched_computed_property_ops);
-                    crate::diagnostics::count!(computed_property_reads);
-                    self.current.ip = pc;
-                    self.op_get_prop()?;
-                    pc = self.current.ip;
-                    continue;
-                }
-                Op::SetProp { is_strict } => {
-                    crate::diagnostics::count!(dispatched_computed_property_ops);
-                    crate::diagnostics::count!(computed_property_writes);
-                    self.current.ip = pc;
-                    self.op_set_prop(*is_strict)?;
-                    pc = self.current.ip;
-                    continue;
-                }
-                Op::SetPropIndex { index, is_strict } => {
-                    crate::diagnostics::count!(dispatched_computed_property_ops);
-                    crate::diagnostics::count!(computed_property_writes);
-                    self.current.ip = pc;
-                    self.op_set_prop_index(*index, *is_strict)?;
-                    pc = self.current.ip;
-                    continue;
-                }
-                Op::SetPropNamed {
-                    name,
-                    cache,
-                    is_strict,
-                    ..
-                } => {
-                    crate::diagnostics::count!(dispatched_named_property_ops);
-                    crate::diagnostics::count!(named_property_writes);
-                    self.current.ip = pc;
-                    self.op_set_prop_named(program.bytecode, *name, cache.as_ref(), *is_strict)?;
-                    pc = self.current.ip;
-                    continue;
-                }
-                Op::Call(argc) => {
-                    crate::diagnostics::count!(dispatched_call_construct_ops);
-                    self.current.ip = pc;
-                    self.call(*argc)?;
-                    pc = self.current.ip;
-                    continue;
-                }
-                Op::CallResolved(argc) => {
-                    crate::diagnostics::count!(dispatched_call_construct_ops);
-                    self.current.ip = pc;
-                    self.call_resolved(*argc)?;
-                    pc = self.current.ip;
-                    continue;
-                }
-                Op::CallResolvedGuardedMathUnary => {
-                    crate::diagnostics::count!(dispatched_call_construct_ops);
-                    self.current.ip = pc;
-                    self.call_resolved_guarded_math_unary()?;
-                    pc = self.current.ip;
-                    continue;
-                }
-                Op::New(argc) => {
-                    crate::diagnostics::count!(dispatched_call_construct_ops);
-                    self.current.ip = pc;
-                    self.construct(*argc)?;
-                    pc = self.current.ip;
-                    continue;
-                }
-                Op::Unary(op) => {
-                    crate::diagnostics::count!(dispatched_numeric_ops);
-                    self.current.ip = pc;
-                    self.op_unary(*op)?;
-                    pc = self.current.ip;
-                    continue;
-                }
-                Op::Return => {
-                    crate::diagnostics::count!(dispatched_branch_return_ops);
-                    self.current.ip = pc;
-                    if let Some(value) = self.op_return()? {
-                        return Ok(FrameExit::Completed(Completion::Return(value)));
+                    Op::LoadGlobal(name) => {
+                        crate::diagnostics::count!(dispatched_global_binding_ops);
+                        self.current.ip = pc;
+                        self.op_load_global(name)?;
+                        pc = self.current.ip;
+                        break 'out_of_line;
                     }
-                    pc = self.current.ip;
-                    continue;
-                }
-                Op::Pop => {
-                    crate::diagnostics::count!(dispatched_stack_ops);
-                    if self.current.stack.pop().is_some() {
-                        continue;
+                    Op::StoreGlobalStrict(name) => {
+                        crate::diagnostics::count!(dispatched_global_binding_ops);
+                        self.current.ip = pc;
+                        self.op_store_global_strict(name)?;
+                        pc = self.current.ip;
+                        break 'out_of_line;
                     }
-                    self.current.ip = pc;
-                    return Err(stack_underflow());
-                }
-                Op::Dup => {
-                    crate::diagnostics::count!(dispatched_stack_ops);
-                    let stack = &mut *self.current.stack;
-                    let Some(value) = stack.last() else {
+                    Op::StoreGlobalSloppy { slot, name } => {
+                        crate::diagnostics::count!(dispatched_global_binding_ops);
+                        self.current.ip = pc;
+                        self.op_store_global_sloppy(*slot, name)?;
+                        pc = self.current.ip;
+                        break 'out_of_line;
+                    }
+                    Op::GetPropNamed { name, cache, .. } => {
+                        crate::diagnostics::count!(dispatched_named_property_ops);
+                        crate::diagnostics::count!(named_property_reads);
+                        self.current.ip = pc;
+                        self.op_get_prop_named(program.bytecode, *name, cache)?;
+                        pc = self.current.ip;
+                        break 'out_of_line;
+                    }
+                    Op::GetPropIndex(index) => {
+                        crate::diagnostics::count!(dispatched_computed_property_ops);
+                        crate::diagnostics::count!(computed_property_reads);
+                        self.current.ip = pc;
+                        self.op_get_prop_index(*index)?;
+                        pc = self.current.ip;
+                        break 'out_of_line;
+                    }
+                    Op::GetProp => {
+                        crate::diagnostics::count!(dispatched_computed_property_ops);
+                        crate::diagnostics::count!(computed_property_reads);
+                        self.current.ip = pc;
+                        self.op_get_prop()?;
+                        pc = self.current.ip;
+                        break 'out_of_line;
+                    }
+                    Op::SetProp { is_strict } => {
+                        crate::diagnostics::count!(dispatched_computed_property_ops);
+                        crate::diagnostics::count!(computed_property_writes);
+                        self.current.ip = pc;
+                        self.op_set_prop(*is_strict)?;
+                        pc = self.current.ip;
+                        break 'out_of_line;
+                    }
+                    Op::SetPropIndex { index, is_strict } => {
+                        crate::diagnostics::count!(dispatched_computed_property_ops);
+                        crate::diagnostics::count!(computed_property_writes);
+                        self.current.ip = pc;
+                        self.op_set_prop_index(*index, *is_strict)?;
+                        pc = self.current.ip;
+                        break 'out_of_line;
+                    }
+                    Op::SetPropNamed {
+                        name,
+                        cache,
+                        is_strict,
+                        ..
+                    } => {
+                        crate::diagnostics::count!(dispatched_named_property_ops);
+                        crate::diagnostics::count!(named_property_writes);
+                        self.current.ip = pc;
+                        self.op_set_prop_named(
+                            program.bytecode,
+                            *name,
+                            cache.as_ref(),
+                            *is_strict,
+                        )?;
+                        pc = self.current.ip;
+                        break 'out_of_line;
+                    }
+                    Op::Call(argc) => {
+                        crate::diagnostics::count!(dispatched_call_construct_ops);
+                        self.current.ip = pc;
+                        self.call(*argc)?;
+                        pc = self.current.ip;
+                        break 'out_of_line;
+                    }
+                    Op::CallResolved(argc) => {
+                        crate::diagnostics::count!(dispatched_call_construct_ops);
+                        self.current.ip = pc;
+                        self.call_resolved(*argc)?;
+                        pc = self.current.ip;
+                        break 'out_of_line;
+                    }
+                    Op::CallResolvedGuardedMathUnary => {
+                        crate::diagnostics::count!(dispatched_call_construct_ops);
+                        self.current.ip = pc;
+                        self.call_resolved_guarded_math_unary()?;
+                        pc = self.current.ip;
+                        break 'out_of_line;
+                    }
+                    Op::New(argc) => {
+                        crate::diagnostics::count!(dispatched_call_construct_ops);
+                        self.current.ip = pc;
+                        self.construct(*argc)?;
+                        pc = self.current.ip;
+                        break 'out_of_line;
+                    }
+                    Op::Unary(op) => {
+                        crate::diagnostics::count!(dispatched_numeric_ops);
+                        self.current.ip = pc;
+                        self.op_unary(*op)?;
+                        pc = self.current.ip;
+                        break 'out_of_line;
+                    }
+                    Op::Return => {
+                        crate::diagnostics::count!(dispatched_branch_return_ops);
+                        self.current.ip = pc;
+                        if let Some(value) = self.op_return()? {
+                            return Ok(FrameExit::Completed(Completion::Return(value)));
+                        }
+                        pc = self.current.ip;
+                        break 'out_of_line;
+                    }
+                    Op::Pop => {
+                        crate::diagnostics::count!(dispatched_stack_ops);
+                        if self.current.stack.pop().is_some() {
+                            continue 'dispatch;
+                        }
                         self.current.ip = pc;
                         return Err(stack_underflow());
-                    };
-                    let value = super::vm_bindings::clone_local_value(value);
-                    stack.push(value);
-                    continue;
-                }
-                Op::ToNumeric => {
-                    crate::diagnostics::count!(dispatched_numeric_ops);
-                    // `eval_to_numeric` is the identity on a number, so the
-                    // general path pops and re-pushes the same value through
-                    // two memory-sized results to change nothing.
-                    if matches!(self.current.stack.last(), Some(Value::Number(_))) {
-                        continue;
                     }
-                    self.current.ip = pc;
-                    self.op_to_numeric()?;
-                    pc = self.current.ip;
-                    continue;
-                }
-                Op::Update(op) => {
-                    crate::diagnostics::count!(dispatched_numeric_ops);
-                    if let Some(Value::Number(number)) = self.current.stack.last_mut() {
-                        *number = match op {
-                            qjs_ast::UpdateOp::Increment => *number + 1.0,
-                            qjs_ast::UpdateOp::Decrement => *number - 1.0,
+                    Op::Dup => {
+                        crate::diagnostics::count!(dispatched_stack_ops);
+                        let stack = &mut *self.current.stack;
+                        let Some(value) = stack.last() else {
+                            self.current.ip = pc;
+                            return Err(stack_underflow());
                         };
-                        continue;
+                        let value = super::vm_bindings::clone_local_value(value);
+                        stack.push(value);
+                        continue 'dispatch;
                     }
-                    self.current.ip = pc;
-                    self.op_update(*op)?;
-                    pc = self.current.ip;
-                    continue;
-                }
-                Op::Binary(op) => {
-                    crate::diagnostics::count!(dispatched_numeric_ops);
-                    // Number-number arithmetic rewrites the operand stack in
-                    // place. The general path pops twice, calls
-                    // `fast_number_binary`, and returns a memory-sized
-                    // `Result`, which `handle_runtime_result` then rewraps --
-                    // four values crossing a call boundary to add two floats
-                    // that are already adjacent on the stack.
-                    let stack = &mut *self.current.stack;
-                    let len = stack.len();
-                    if len >= 2
-                        && let (Value::Number(left), Value::Number(right)) =
-                            (&stack[len - 2], &stack[len - 1])
-                        && let Some(value) =
-                            super::vm_props::fast_number_binary_numbers(*left, *op, *right)
-                    {
-                        stack.truncate(len - 1);
-                        stack[len - 2] = value;
-                        continue;
-                    }
-                    self.current.ip = pc;
-                    self.op_binary(*op)?;
-                    pc = self.current.ip;
-                    continue;
-                }
-                Op::Jump(target) => {
-                    crate::diagnostics::count!(dispatched_branch_return_ops);
-                    // A forward jump is the `if`/`else` and loop-exit shape and
-                    // carries no accelerator; only a backward edge consults the
-                    // loop plans, and that decision is out of line.
-                    if *target >= pc - 1 {
-                        pc = *target;
-                        continue;
-                    }
-                    self.current.ip = pc;
-                    if let Some(exit) = self.op_jump(&program, *target) {
-                        return Ok(exit);
-                    }
-                    pc = self.current.ip;
-                    continue;
-                }
-                Op::JumpIfFalse(target) => {
-                    crate::diagnostics::count!(dispatched_branch_return_ops);
-                    let Some(value) = self.current.stack.last() else {
+                    Op::ToNumeric => {
+                        crate::diagnostics::count!(dispatched_numeric_ops);
+                        // `eval_to_numeric` is the identity on a number, so the
+                        // general path pops and re-pushes the same value through
+                        // two memory-sized results to change nothing.
+                        if matches!(self.current.stack.last(), Some(Value::Number(_))) {
+                            continue 'dispatch;
+                        }
                         self.current.ip = pc;
-                        return Err(stack_underflow());
-                    };
-                    if !is_truthy(value) {
-                        pc = *target;
+                        self.op_to_numeric()?;
+                        pc = self.current.ip;
+                        break 'out_of_line;
                     }
-                    continue;
-                }
-                Op::JumpIfTrue(target) => {
-                    crate::diagnostics::count!(dispatched_branch_return_ops);
-                    let Some(value) = self.current.stack.last() else {
+                    Op::Update(op) => {
+                        crate::diagnostics::count!(dispatched_numeric_ops);
+                        if let Some(Value::Number(number)) = self.current.stack.last_mut() {
+                            *number = match op {
+                                qjs_ast::UpdateOp::Increment => *number + 1.0,
+                                qjs_ast::UpdateOp::Decrement => *number - 1.0,
+                            };
+                            continue 'dispatch;
+                        }
                         self.current.ip = pc;
-                        return Err(stack_underflow());
-                    };
-                    if is_truthy(value) {
-                        pc = *target;
+                        self.op_update(*op)?;
+                        pc = self.current.ip;
+                        break 'out_of_line;
                     }
-                    continue;
-                }
-                Op::JumpIfNotNullish(target) => {
-                    crate::diagnostics::count!(dispatched_branch_return_ops);
-                    if !matches!(
-                        self.current.stack.last(),
-                        Some(Value::Null | Value::Undefined)
-                    ) {
-                        pc = *target;
+                    Op::Binary(op) => {
+                        crate::diagnostics::count!(dispatched_numeric_ops);
+                        // Number-number arithmetic rewrites the operand stack in
+                        // place. The general path pops twice, calls
+                        // `fast_number_binary`, and returns a memory-sized
+                        // `Result`, which `handle_runtime_result` then rewraps --
+                        // four values crossing a call boundary to add two floats
+                        // that are already adjacent on the stack.
+                        let stack = &mut *self.current.stack;
+                        let len = stack.len();
+                        if len >= 2
+                            && let (Value::Number(left), Value::Number(right)) =
+                                (&stack[len - 2], &stack[len - 1])
+                            && let Some(value) =
+                                super::vm_props::fast_number_binary_numbers(*left, *op, *right)
+                        {
+                            stack.truncate(len - 1);
+                            stack[len - 2] = value;
+                            continue 'dispatch;
+                        }
+                        self.current.ip = pc;
+                        self.op_binary(*op)?;
+                        pc = self.current.ip;
+                        break 'out_of_line;
                     }
-                    continue;
+                    Op::Jump(target) => {
+                        crate::diagnostics::count!(dispatched_branch_return_ops);
+                        // A forward jump is the `if`/`else` and loop-exit shape and
+                        // carries no accelerator; only a backward edge consults the
+                        // loop plans, and that decision is out of line.
+                        if *target >= pc - 1 {
+                            pc = *target;
+                            continue 'dispatch;
+                        }
+                        self.current.ip = pc;
+                        if let Some(exit) = self.op_jump(&program, *target) {
+                            return Ok(exit);
+                        }
+                        pc = self.current.ip;
+                        break 'out_of_line;
+                    }
+                    Op::JumpIfFalse(target) => {
+                        crate::diagnostics::count!(dispatched_branch_return_ops);
+                        let Some(value) = self.current.stack.last() else {
+                            self.current.ip = pc;
+                            return Err(stack_underflow());
+                        };
+                        if !is_truthy(value) {
+                            pc = *target;
+                        }
+                        continue 'dispatch;
+                    }
+                    Op::JumpIfTrue(target) => {
+                        crate::diagnostics::count!(dispatched_branch_return_ops);
+                        let Some(value) = self.current.stack.last() else {
+                            self.current.ip = pc;
+                            return Err(stack_underflow());
+                        };
+                        if is_truthy(value) {
+                            pc = *target;
+                        }
+                        continue 'dispatch;
+                    }
+                    Op::JumpIfNotNullish(target) => {
+                        crate::diagnostics::count!(dispatched_branch_return_ops);
+                        if !matches!(
+                            self.current.stack.last(),
+                            Some(Value::Null | Value::Undefined)
+                        ) {
+                            pc = *target;
+                        }
+                        continue 'dispatch;
+                    }
+                    _ => {
+                        crate::diagnostics::count!(dispatched_general_ops);
+                    }
                 }
-                _ => {
-                    crate::diagnostics::count!(dispatched_general_ops);
+                self.current.ip = pc;
+                match self.run_general_op(op, &program)? {
+                    Some(exit) => return Ok(exit),
+                    None => pc = self.current.ip,
+                }
+                self.verify_binding_authority();
+                if SLOW && self.current.authoritative_slots != authority_at_entry {
+                    return Ok(FrameExit::RefreshBindings);
                 }
             }
-            self.current.ip = pc;
-            match self.run_general_op(op, &program)? {
-                Some(exit) => return Ok(exit),
-                None => pc = self.current.ip,
-            }
-            self.verify_binding_authority();
-            if self.current.authoritative_slots != authority_at_entry {
-                return Ok(FrameExit::RefreshBindings);
+            // Only out-of-line work can promote a binding or start scope
+            // tracking; the inline arms continue above. A promotion that
+            // leaves authority unchanged and starts no scope tracking needs
+            // no new interval.
+            if !SLOW && self.current.slow_flags != 0 {
+                if self.current.binding_scope.is_some()
+                    || self.current.authoritative_slots != authority_at_entry
+                {
+                    self.current.ip = pc;
+                    return Ok(FrameExit::RefreshBindings);
+                }
+                self.current.slow_flags = 0;
             }
         }
     }

@@ -277,6 +277,7 @@ impl<'a, 's> Vm<'a, 's> {
         let mut vm = Self {
             runtime,
             current: FrameState {
+                slow_flags: 0,
                 reference_hooks: !handle.binding_plan.references.can_skip(&env),
                 active_reference_count: 0,
                 binding_scope: None,
