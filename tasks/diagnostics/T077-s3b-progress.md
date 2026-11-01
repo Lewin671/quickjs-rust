@@ -1071,3 +1071,13 @@ failure/timeout/not-run/gap, unchanged 10,900 configuration skips and no lost
 baseline passes. [Cached receipt](T077-s3b-exact-ca5-cached/README.md) owns raw
 summary, commands and hashes. Its burndown is appended at runtime `1e91be92`;
 the prior rejected row remains. IC-off is running on the same frozen binary.
+
+Final IC-off exact is complete and identical to cached: **42,672/42,672 passes**,
+zero failure/timeout/not-run/gap, unchanged exclusions and no lost passes. Its
+complete burndown is appended at candidate `ca5ab643`; both scan processes finish
+normally and generated submodule case files are removed. The final full gate
+rerun passes. [Owner handoff](T077-s3b-owner-handoff.md) now owns the current
+completion/blocker state. Fresh candidate-host audit at 09:24 CST still finds
+only the hostname mismatch. Public86 has no valid measurements, its alias-only
+qualification proposal remains unapplied pending explicit decision, and no
+performance/stage acceptance is claimed.

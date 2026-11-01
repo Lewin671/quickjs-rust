@@ -1,0 +1,6 @@
+{
+  "expected_node": "iMac.local",
+  "actual_node": "iMac.lan",
+  "differences": {}
+}
+job 20261101T012446Z-t077-s3b-repaired-host-identity: exit 0 after 0 s

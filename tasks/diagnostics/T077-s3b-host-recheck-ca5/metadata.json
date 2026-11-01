@@ -1,0 +1,13 @@
+{
+  "candidate": "ca5ab643c2de99d7268df7022c3370596f7b8b41",
+  "job": "20261101T012446Z-t077-s3b-repaired-host-identity",
+  "timing": false,
+  "exit": 0,
+  "policy_sha256": "f3e8ef40b8b45601b5b86edaf4b47c2d9d904d0045eb024e837f1c447a52bec4",
+  "hashes": {
+    "status": "c44c1b1408676ba444203b87145d15152b7f525f9d545009e4d8c99da5371027",
+    "identity.json": "bedad35f329fd66b94f9bd40dce469cdd50ad96852557517134f7ce36ce487e8",
+    "command.sh": "2079d7169486ba86b9282298a8a8047adf59fbd3821fbe65a77a00d156958577",
+    "log": "3c346c1a4b82e74445318e9f61ecc273babfc17eef9689a4031dfe9f2eeef549"
+  }
+}
