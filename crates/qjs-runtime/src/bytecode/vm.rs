@@ -218,6 +218,10 @@ pub(super) struct FrameState<'a> {
     /// the cell's uninitialized marker still deoptimizes deleted/accessor
     /// globals through the observable global-object path.
     pub(super) realm_binding_slots: u128,
+    /// The realm binding-table generation `realm_binding_slots` was derived
+    /// at: while it is current, each such slot's cell is still the realm's
+    /// cell for its name (`binding::table::DynamicBindings::generation`).
+    pub(super) realm_binding_generation: u64,
     pub(super) upvalues: Vec<BindingCell>,
     /// Shared realm plus this frame's internal/caller-scope bindings.
     pub(super) env: crate::context::ActivationContext,

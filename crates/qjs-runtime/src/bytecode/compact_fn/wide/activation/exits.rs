@@ -148,10 +148,11 @@ pub(super) fn exit_to_interpreter(
         bytecode.code.get(ip as usize + 1),
     ) && env.activation.saved_references.is_none()
         && let Some(pc) = program.resume_pc(ip as usize + 2, usize::from(depth) - 2)
+        && let Some(site) = program.global_write_site(ip as usize + 1)
     {
         let top = usize::from(program.local_registers) + usize::from(depth);
         let (left, right) = window[top - 2..top].split_at_mut(1);
-        if property::try_append_global_var(name, &mut left[0], &mut right[0], env) {
+        if property::try_append_global_var(name, &mut left[0], &mut right[0], site, env) {
             return ExitOutcome::Continue { pc };
         }
     }
@@ -172,7 +173,9 @@ pub(super) fn exit_to_interpreter(
                 Err(error) => ExitOutcome::Finished(Err(error)),
             };
         }
-        if property::try_store_global_var(name, &window[top], env) {
+        if let Some(site) = program.global_write_site(ip as usize)
+            && property::try_store_global_var(name, &window[top], site, env)
+        {
             execute::store(&mut window[top], Value::Undefined);
             return ExitOutcome::Continue { pc: resume_pc };
         }

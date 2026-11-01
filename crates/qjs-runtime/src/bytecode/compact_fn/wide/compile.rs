@@ -1148,6 +1148,12 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
         requires_this,
         global_reads: global_names.iter().map(|_| Default::default()).collect(),
         global_names,
+        global_writes: code
+            .iter()
+            .enumerate()
+            .filter(|(_, op)| matches!(op, Op::StoreLocalOrGlobalSloppy { .. }))
+            .filter_map(|(ip, _)| Some((u32::try_from(ip).ok()?, Default::default())))
+            .collect(),
         lexical_slots,
         tdz_marker: crate::Value::Function(crate::Function::uninitialized_lexical_marker()),
         local_registers: u16::try_from(local_registers).ok()?,

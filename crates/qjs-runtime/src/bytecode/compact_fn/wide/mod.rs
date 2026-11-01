@@ -281,6 +281,9 @@ pub(in crate::bytecode) struct WideProgram {
     global_names: Vec<String>,
     /// Each `global_names` entry's realm-cell memo.
     global_reads: Box<[super::property::GlobalReadSite]>,
+    /// The realm-cell memo of each plain global store an exit performs
+    /// (`StoreLocalOrGlobalSloppy`), by bytecode ip, sorted.
+    global_writes: Box<[(u32, super::property::GlobalReadSite)]>,
     /// The frame's own `let`/`const` slots. An activation seeds each with the
     /// temporal-dead-zone marker, exactly as the interpreter starts such a
     /// slot uninitialized, so a read that precedes the declaration's
@@ -363,6 +366,16 @@ const EXIT_JUDGEMENT_ACTIVATIONS: u32 = 64;
 impl WideProgram {
     /// Counts one activation; `false` once the program has proved exit-heavy.
     #[inline]
+    /// The store memo for the plain global store at bytecode `ip`.
+    pub(super) fn global_write_site(&self, ip: usize) -> Option<&super::property::GlobalReadSite> {
+        let ip = u32::try_from(ip).ok()?;
+        let index = self
+            .global_writes
+            .binary_search_by_key(&ip, |(site_ip, _)| *site_ip)
+            .ok()?;
+        Some(&self.global_writes[index].1)
+    }
+
     pub(super) fn admit_activation(&self) -> bool {
         if !self.has_exits {
             return true;

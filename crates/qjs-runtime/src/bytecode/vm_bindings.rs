@@ -116,6 +116,7 @@ impl Vm<'_, '_> {
                 & !self.direct_readonly_upvalue_slots;
         let direct_realm_binding_slots =
             self.realm_binding_slots & self.direct_readonly_upvalue_slots;
+        self.realm_binding_generation = self.env.realm().binding_cells().generation();
         self.realm_binding_slots =
             Self::initial_realm_binding_slots(&self.bytecode, &self.local_upvalues, &self.env)
                 | direct_realm_binding_slots;

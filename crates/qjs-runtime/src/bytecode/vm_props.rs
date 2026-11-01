@@ -90,6 +90,49 @@ impl Vm<'_, '_> {
         )
     }
 
+    /// `store_global_binding`'s data-property write for a hoisted global
+    /// var whose slot holds the realm's own cell for it: the global object's
+    /// property is written by name and the cell through its handle, with no
+    /// realm-table lookup while the table's generation is the one the slot
+    /// was derived at, and one lookup of this name otherwise; either proves
+    /// the cell is still the realm's for `name` (so no global lexical shares
+    /// it). Never allocates the name. `None` leaves anything else to the
+    /// by-name path.
+    fn try_store_realm_var_cell(
+        &mut self,
+        slot: usize,
+        name: &str,
+        value: &Value,
+        is_strict: bool,
+    ) -> Option<Result<(), RuntimeError>> {
+        if !self.slot_is_realm_binding(slot) || !self.env.can_cache_realm_globals() {
+            return None;
+        }
+        let cell = self.local_upvalue_cell(slot)?.clone();
+        if cell.metadata().kind != crate::binding::BindingKind::ObjectStorage
+            || self.env.realm().binding_cells().generation() != self.realm_binding_generation
+                && !self.env.is_realm_binding_cell(name, &cell)
+        {
+            return None;
+        }
+        let Some(Value::Object(global_this)) = self.env.selected_global_this() else {
+            return None;
+        };
+        match global_this.write_existing_own_data_property(name, value) {
+            OwnDataPropertyWrite::Written => {
+                self.env
+                    .replace_existing_realm_with_cell(name, value.clone(), &cell);
+                Some(Ok(()))
+            }
+            OwnDataPropertyWrite::ReadOnly if is_strict => Some(Err(RuntimeError {
+                thrown: None,
+                message: format!("TypeError: Cannot assign to read only property '{name}'"),
+            })),
+            OwnDataPropertyWrite::ReadOnly => Some(Ok(())),
+            OwnDataPropertyWrite::NeedsSlowPath => None,
+        }
+    }
+
     fn try_store_indexed_realm_global(
         &mut self,
         slot: usize,
@@ -701,6 +744,11 @@ impl Vm<'_, '_> {
             return self.store_global_binding(name, value, false);
         }
         if self.env.has_global_binding_root() {
+            if let Some(slot) = slot
+                && let Some(result) = self.try_store_realm_var_cell(slot, name, &value, false)
+            {
+                return result;
+            }
             return self.store_global_binding(name, value, false);
         }
 

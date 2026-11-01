@@ -253,6 +253,7 @@ impl<'a, 's> Vm<'a, 's> {
         let authoritative_slots =
             Self::initial_authoritative_slots(bytecode, &local_upvalues, &env)
                 & !direct_readonly_upvalue_slots;
+        let realm_binding_generation = env.realm().binding_cells().generation();
         let realm_binding_slots = direct_realm_binding_slots
             .unwrap_or_else(|| Self::initial_realm_binding_slots(bytecode, &local_upvalues, &env));
         // Ordinary function creation captures these runtime-only contexts.
@@ -294,6 +295,7 @@ impl<'a, 's> Vm<'a, 's> {
                 direct_readonly_upvalue_slots,
                 authoritative_slots,
                 realm_binding_slots,
+                realm_binding_generation,
                 upvalues,
                 env,
                 indexed_call: is_direct_call,

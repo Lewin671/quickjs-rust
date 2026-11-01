@@ -640,10 +640,11 @@ pub(in crate::bytecode) fn load_global(
     Err(undefined_identifier(name))
 }
 
-/// A `LoadGlobal` site's memo of the realm cell its name resolved to: valid
-/// while the frame reads the realm directly and the table still maps every
-/// name to the cell it did (its generation). The table is held, not its
-/// address, so a freed table's address cannot be mistaken for it.
+/// A `LoadGlobal` (or plain global store) site's memo of the realm cell its
+/// name resolved to: valid while the frame reads the realm directly and the
+/// table still maps every name to the cell it did (its generation). The
+/// table is held, not its address, so a freed table's address cannot be
+/// mistaken for it.
 #[derive(Clone, Default)]
 pub(in crate::bytecode) struct GlobalReadSite(
     std::cell::RefCell<
@@ -702,9 +703,10 @@ fn undefined_identifier(name: &str) -> RuntimeError {
 pub(super) fn try_store_global_var(
     name: &str,
     value: &Value,
+    site: &GlobalReadSite,
     env: &mut crate::context::Context<'_>,
 ) -> bool {
-    match plain_global_var(name, env) {
+    match plain_global_var_at(name, site, env) {
         Some(GlobalVar::Absent(global_this)) => {
             // The first assignment of an undeclared name creates it, as the
             // interpreter's store does: a global data property and the realm
@@ -742,13 +744,14 @@ pub(super) fn try_append_global_var(
     name: &str,
     left: &mut Value,
     right: &mut Value,
+    site: &GlobalReadSite,
     env: &mut crate::context::Context<'_>,
 ) -> bool {
     // A numeric accumulator (`total += n`) takes the same exit; its sum is
     // stored like any other plain global assignment.
     if let (Value::Number(sum), Value::Number(addend)) = (&*left, &*right) {
         let value = Value::Number(sum + addend);
-        if !try_store_global_var(name, &value, env) {
+        if !try_store_global_var(name, &value, site, env) {
             return false;
         }
         *left = Value::Undefined;
@@ -761,7 +764,7 @@ pub(super) fn try_append_global_var(
     if !crate::bytecode::vm_string_append::is_appendable(right) {
         return false;
     }
-    let Some(GlobalVar::Bound(global_this, cell)) = plain_global_var(name, env) else {
+    let Some(GlobalVar::Bound(global_this, cell)) = plain_global_var_at(name, site, env) else {
         return false;
     };
     if cell.with_value(
@@ -811,6 +814,39 @@ fn mirrors(property: &Value, binding: &Value) -> bool {
         (Value::String(left), Value::String(right)) => crate::JsString::ptr_eq(left, right),
         (left, right) => left.same_value(right),
     }
+}
+
+/// [`plain_global_var`] through a store site's memo of the realm cell it
+/// found: while the frame reads the realm directly, has no module bindings,
+/// and the realm table still maps every name to the cell it did (its
+/// generation), that cell is still the realm's object-storage binding for
+/// `name`, so no global lexical, immutable or module binding shares the
+/// name. Hashes `name` only on a miss.
+fn plain_global_var_at(
+    name: &str,
+    site: &GlobalReadSite,
+    env: &mut crate::context::Context<'_>,
+) -> Option<GlobalVar> {
+    let unshadowed =
+        !env.activation.has_module_imports() && !env.activation.has_module_live_bindings();
+    if unshadowed
+        && let Some(realm) = env.realm_read_layer()
+        && let Some((bindings, generation, cell)) = &*site.0.borrow()
+        && bindings.ptr_eq(realm)
+        && *generation == realm.generation()
+        && let Some(Value::Object(global_this)) = env.global_this()
+    {
+        return Some(GlobalVar::Bound(global_this, cell.clone()));
+    }
+    let found = plain_global_var(name, env);
+    if unshadowed
+        && let Some(GlobalVar::Bound(_, cell)) = &found
+        && cell.metadata().kind == crate::binding::BindingKind::ObjectStorage
+        && let Some(realm) = env.realm_read_layer()
+    {
+        *site.0.borrow_mut() = Some((realm.clone(), realm.generation(), cell.clone()));
+    }
+    found
 }
 
 /// The global variable `name` resolves to from a function that neither
