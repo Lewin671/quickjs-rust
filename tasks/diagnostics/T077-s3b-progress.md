@@ -1048,3 +1048,20 @@ Repair gate: **2,637 default runtime tests and 5,174 curated Test262 cases**
 pass, along with formatting, strict workspace Clippy and context checks. Full
 exact affected slices pass **100/100 Function.bind** and **42/42 global-code**,
 with zero gaps/timeouts/not-run. These filtered slices create no burndown rows.
+
+## Repaired runtime and order freeze
+
+Runtime `1e91be92`; final order candidate **`ca5ab643`**, baseline main `3cc12c6f`.
+The [new owner receipt](T077-s3b-owner-ca5/README.md) records fresh full gate,
+2,637 default / 2,692 feature tests, all 299 NG scripts and three module fixtures
+in six modes, individual and combined stress, depth maxima/explicit parity,
+ten deterministic two-run counter maps, deletion audit and all production builds.
+All counter maps equal the prior candidate; retired events remain zero. The
+[new order job](T077-s3b-repaired-order/README.md) profiles the unchanged default
+76 public cases, producing 496 symbols, with no held-out input or offset search.
+
+Complete exact cached/off is running on the hash-pinned repaired agents ARM
+binary. The x86 order is not an ARM build input, and its post-order rebuild is
+byte-identical; runtime/harness/configuration are unchanged between both source
+revisions. Public86 still requires the pending explicit hostname qualification
+decision. Neither partial exact scans nor missing timing establish acceptance.

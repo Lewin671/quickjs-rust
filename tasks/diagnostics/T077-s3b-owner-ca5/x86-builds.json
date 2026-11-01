@@ -1,0 +1,51 @@
+[
+  {
+    "profile": "agents",
+    "command": [
+      "cargo",
+      "build",
+      "--locked",
+      "--release",
+      "--target",
+      "x86_64-apple-darwin",
+      "-p",
+      "qjs-cli",
+      "--features",
+      "agents"
+    ],
+    "path": "target/s3b-r2-x86/x86_64-apple-darwin/release/qjs",
+    "sha256": "9cef2eb7b45e65021e64fd48942171248e3973bef58696ba3573c50d8b1d8daf"
+  },
+  {
+    "profile": "default",
+    "command": [
+      "cargo",
+      "build",
+      "--locked",
+      "--release",
+      "--target",
+      "x86_64-apple-darwin",
+      "-p",
+      "qjs-cli"
+    ],
+    "path": "target/s3b-r2-x86-extra/x86_64-apple-darwin/release/qjs",
+    "sha256": "a96e6993ed276c7e41b7b2f47cff6290e26a25ada7a7c6b7abb202daf10db7dd"
+  },
+  {
+    "profile": "perf-counters",
+    "command": [
+      "cargo",
+      "build",
+      "--locked",
+      "--release",
+      "--target",
+      "x86_64-apple-darwin",
+      "-p",
+      "qjs-cli",
+      "--features",
+      "perf-counters"
+    ],
+    "path": "target/s3b-r2-x86-extra/x86_64-apple-darwin/release/qjs",
+    "sha256": "6f5f2f4a5952738f7e7e34d6a4d533357456c5bd76dd7f34e54a5ed98f91f7eb"
+  }
+]

@@ -1,0 +1,37 @@
+{
+  "candidate": "ca5ab643c2de99d7268df7022c3370596f7b8b41",
+  "runtime_revision": "1e91be92c2af7b876efdc68f7d8698820b44dfe1",
+  "baseline": "3cc12c6f8d93ffd6eae91d1bd44efe74134ae195",
+  "host": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+  "test262_pin": "4249661388e5d3f92a85186213da140a6481490f",
+  "ng_pin": "f7830186043e4488f2998759d60a514faf07cbc9",
+  "rustc": "rustc 1.95.0 (59807616e 2026-04-14)\nbinary: rustc\ncommit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860\ncommit-date: 2026-04-14\nhost: aarch64-apple-darwin\nrelease: 1.95.0\nLLVM version: 22.1.2\n",
+  "binaries": {
+    "agents-arm64": {
+      "path": "target/s3b-r2-agents/release/qjs",
+      "sha256": "fb492869e525b8def3f02b023853481b2faa2f9a1b520c8890dc3d8f9a0ce202"
+    },
+    "default-arm64": {
+      "path": "target/s3b-r2-default/release/qjs",
+      "sha256": "b0734da97a69834833a81661ef691eeb7784b2cb570bb1533529547c8953ac65"
+    },
+    "debug-arm64": {
+      "path": "target/s3b-r2-default/debug/qjs",
+      "sha256": "38e8bef10538d86ae81052eb003b2f313ea0da3c10b07228ab98eb6472be5c40"
+    },
+    "counts-arm64": {
+      "path": "target/s3b-r2-counts/release/qjs",
+      "sha256": "7e91bb5fe77805d1f16d4c7fc3db14f32a0c79cb59414c44ad8a358b2c4214d1"
+    }
+  },
+  "counter_instrumentation": "../T077-s3b-round1/base-instrumentation.patch",
+  "base_instrumentation_sha256": "75dfd736bc32991c7fefac363877bb716b4de871345915cfd768b796006c4b5b",
+  "files": {
+    "candidate-counts.json": "ca5f990b37c303fa5fd2bee65023d45e7a857b138beac2a92fcac812efc59aa3",
+    "candidate-depth.json": "abe8a0b96b055d990177378cc27f948ce192e8d3cf8147b0c9cb59e17074e349",
+    "depth-parity.json": "3ed84d29fb0b9531fdfc54dd702f33935ba71275406f03fb1e814ecbe2d23c3b",
+    "modules.json": "cb17f45b7f454b6812eed82d5340dedee3123d0ca20fb511e03a562adda095e5",
+    "deletion-audit.json": "ebb8e6ac7c5bca43a6994e258b4a92e3c43607f6774cf1c12f8b3872de93dc14",
+    "x86-builds.json": "bc0435dfb632bc2cde240f21c8874260b2cf1ee14e0ef09e30995ffd4ff72555"
+  }
+}
