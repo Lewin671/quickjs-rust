@@ -1247,3 +1247,71 @@ for every seed and no mode disagreement; reference-sensitive Test262 slices (17
 prefixes) 3,779/3,779 cached and IC-off; depth maxima forEach 951, map 942, reduce
 1,000, call 3,567, apply 2,335, reflect_apply 2,492, yield_star 831, plain 4,096
 (all ≥ base). No timing ran locally. Next: causes 3–5 (milestone 2).
+
+## Round-4 milestone 2: causes 3–5
+
+Commits over `1198fc24`, baseline `3cc12c6f`: **77c63039** (reuse invariant and
+pool-poison mode), **5d8b951a** (cause 3), **b72bd74f** (cause 4), **3d028455**,
+**dc507107** (cause 5), **832328a4** (repair), **d6633cd1** (x86 order),
+**f7057a51** (poison checks out of release builds).
+
+**Cause 3.** A slot-backed body that cannot observe its retained chain enters
+without it while `ScopeCursor::resolves_globally` holds (no with, no
+suspendable-owner holder, no holder binding a free or captured name, no other
+fixed cell of one), cached per (function, holder epoch); every holder add/delete
+bumps the epoch. Every function with a retained chain needs the proof, which also
+closes a pre-existing gap: `new C()` over an eval scope ignored an eval-declared
+name. **Cause 4.** Leaf purity is a plan bit; typed-loop closed-form calls build a
+Context only for natives. **Cause 5.** The VM loop is one body instantiated as a
+checking and a fast instance; writers of scope tracking/authority set
+`FrameState::slow_flags`, the fast instance tests it after out-of-line ops only.
+Global-code var stores use the slot's realm cell (realm-table generation, else one
+lookup); wide plain global stores keep a per-site realm-cell memo.
+**Repair (832328a4).** aea492db's typed-loop sink seeded its register from an
+empty fallback slot: a loop admitted after `if (i == 4) g = 7` created `g` wrote
+`undefined` back. Regression tests: `typed_loop/global_binding_tests.rs`,
+`tests/global_cell_routes.rs`, `tests/extensible_scope_closures.rs`.
+
+Reproducers, local arm64 instructions vs base at f7057a51 (f609c0ae in brackets):
+upw0/upw1/upw4 1.149/1.149/1.174 [1.164/1.168/1.177]; call-implicit/call-var
+global write 1.318/1.058 [1.500/1.319]; vm-ops/-local/-plain 1.045/1.280/1.009
+[1.190/1.279/1.074]; closed-form-call 1.032 [1.187]; eval-closure/-parent-closure
+1.432/1.069 [1.521/2.959]; validate-like 0.969; bitand/partial-global 1.019/1.016.
+Public cases: date-format-xparb 1.048, string-tagcloud 1.026 (tier parity).
+
+| Public86 job (vs 3cc12c6f) | broad | development | external | sentinel |
+| --- | ---: | ---: | ---: | ---: |
+| `20261101T115125Z-t077-s3b-r4-m2` (d6633cd1) | 1.019 / 1.034 | 1.049 / 1.025 | 1.028 / 1.032 | 0.983 / 1.033 |
+| `20261101T120529Z-t077-s3b-r4-m2b` (f7057a51) | 1.037 / 1.031 | 1.034 / 1.011 | 1.025 / 1.026 | 0.976 / 1.032 |
+
+Wall / instruction lane geomeans; both 430/430 valid, budget met, likely loss.
+Lanes stay above 1.00, so the final requalification did not run (lead rule).
+Remaining cost by class (m2b instructions):
+
+- Per-call activation binding, about 130–150 instructions per call: slot
+  rebinding (~40), owner binding (~15), out-of-line frame push (~30), release
+  checks (~25), Context rebinding at both depth changes (~20), receiver reads
+  through the owner. broad top_level/plain/reordered/two-args calls
+  1.12/1.08/1.08/1.08, method_call 1.06, captured_read 1.10, sentinel
+  capturing/polymorphic calls 1.07/1.06, binary-trees and
+  raytrace-public-class-fields 1.14, hash-map 1.06, lodash 1.07. A same-function
+  slot fast path lost (lodash +2.5%). Removing the cost needs on-demand activation
+  binding in the register tier, beyond the S3b plan.
+- Captured writes: `captured_write` 1.16 adds a checked `BindingCell::assign` per
+  store (TDZ/metadata/strictness, ~125 instructions); a compile-time unchecked-set
+  policy is not implemented.
+- Global code with configurable globals keeps the checking loop and per-site
+  events (call-implicit-global-write 1.32); eval-function locals read through
+  cells (vm-ops-local 1.28; date-format-tofte 1.08, xparb 1.04).
+- Wall-only: lodash 1.18, string-unpack-code 1.17 (instructions 1.07/1.04),
+  branch_arithmetic 1.48 (1.02) after the order was generated at dc507107.
+- Diffuse 1–4% without call-count differences (partial-sums 1.09, base64 1.07,
+  nbody, crypto, 3d): typed-loop/property/string codegen; not attributed by counts.
+
+Checks at f7057a51 unless noted: fast gate at every commit (2,722 runtime + curated
+Test262), perf-counters 2,771, runtime tests under binding/scope/activation poison
+2,722, 17 reference-sensitive Test262 prefixes 3,779/3,779 cached and IC-off;
+at dc507107: compare-qjs 318/318, differential seeds 0–299 × three profiles,
+900 programs tag-identical to the final qualification with no mode disagreement.
+Depth maxima forEach 936, map 927, reduce 1,026, call 3,449, apply 2,335,
+reflect_apply 2,492, yield_star 820, plain 4,096 (all ≥ base). No timing ran locally.
