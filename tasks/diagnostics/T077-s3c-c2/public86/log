@@ -1,0 +1,258 @@
+STAGE build_quieting: 0.030 s
+STAGE build_base: 1.118 s
+   Compiling qjs-ast v0.1.0 (/private/var/folders/kg/mznmn9cd7_9f7rzcc0q9lcj00000gn/T/qjs-triage-hggz3x4n/source/crates/qjs-ast)
+   Compiling qjs-unicode v0.1.0 (/private/var/folders/kg/mznmn9cd7_9f7rzcc0q9lcj00000gn/T/qjs-triage-hggz3x4n/source/crates/qjs-unicode)
+   Compiling qjs-cli v0.1.0 (/private/var/folders/kg/mznmn9cd7_9f7rzcc0q9lcj00000gn/T/qjs-triage-hggz3x4n/source/crates/qjs-cli)
+   Compiling qjs-lexer v0.1.0 (/private/var/folders/kg/mznmn9cd7_9f7rzcc0q9lcj00000gn/T/qjs-triage-hggz3x4n/source/crates/qjs-lexer)
+   Compiling qjs-parser v0.1.0 (/private/var/folders/kg/mznmn9cd7_9f7rzcc0q9lcj00000gn/T/qjs-triage-hggz3x4n/source/crates/qjs-parser)
+   Compiling qjs-runtime v0.1.0 (/private/var/folders/kg/mznmn9cd7_9f7rzcc0q9lcj00000gn/T/qjs-triage-hggz3x4n/source/crates/qjs-runtime)
+warning: method `identity` is never used
+   --> crates/qjs-runtime/src/bytecode/named_property_cache.rs:105:8
+    |
+104 | impl Resolution {
+    | --------------- method in this implementation
+105 |     fn identity(&self) -> Option<(u8, usize)> {
+    |        ^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: field `reserved` is never read
+  --> crates/qjs-runtime/src/value/layout/mod.rs:95:5
+   |
+90 | pub(crate) struct ShapeEntry {
+   |                   ---------- field in this struct
+...
+95 |     reserved: u16,
+   |     ^^^^^^^^
+   |
+   = note: `ShapeEntry` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: method `verify_position` is never used
+   --> crates/qjs-runtime/src/value/layout/storage.rs:175:19
+    |
+137 | impl Layout {
+    | ----------- method in this implementation
+...
+175 |     pub(super) fn verify_position(&self, key: KeyId) -> Option<usize> {
+    |                   ^^^^^^^^^^^^^^^
+
+warning: method `is_empty` is never used
+  --> crates/qjs-runtime/src/value/layout/transitions.rs:37:19
+   |
+15 | impl Transitions {
+   | ---------------- method in this implementation
+...
+37 |     pub(super) fn is_empty(&self) -> bool {
+   |                   ^^^^^^^^
+
+warning: methods `transitions_empty` and `next_order` are never used
+  --> crates/qjs-runtime/src/value/layout/links.rs:47:19
+   |
+13 | impl Layout {
+   | ----------- methods in this implementation
+...
+47 |     pub(super) fn transitions_empty(&self) -> bool {
+   |                   ^^^^^^^^^^^^^^^^^
+...
+52 |     pub(super) fn next_order(&self) -> u32 {
+   |                   ^^^^^^^^^^
+
+warning: method `identity` is never used
+  --> crates/qjs-runtime/src/value/named.rs:34:19
+   |
+24 | impl WeakTarget {
+   | --------------- method in this implementation
+...
+34 |     pub(crate) fn identity(&self) -> (u8, usize) {
+   |                   ^^^^^^^^
+
+warning: `qjs-runtime` (lib) generated 6 warnings
+    Finished `release` profile [optimized] target(s) in 1m 13s
+STAGE build_candidate: 74.436 s
+STAGE prepare_workloads: 0.330 s
+STAGE settle_and_launch: 1.219 s
+COLLECT 0 0 broad/array_allocation
+COLLECT 1 0 broad/array_dynamic_read
+COLLECT 2 0 broad/array_index_of
+COLLECT 3 0 broad/array_read
+COLLECT 1 0 broad/branch_arithmetic
+COLLECT 0 0 broad/array_write
+COLLECT 3 0 broad/captured_write
+COLLECT 2 0 broad/captured_read
+COLLECT 1 0 broad/dynamic_method_call
+COLLECT 0 0 broad/closure_allocation_call
+COLLECT 2 0 broad/empty_loop
+COLLECT 3 0 broad/function_call_reordered
+COLLECT 1 0 broad/global_read
+COLLECT 0 0 broad/function_call_two_args
+COLLECT 2 0 broad/local_read
+COLLECT 3 0 broad/many_locals_call
+COLLECT 1 0 broad/method_call
+COLLECT 0 0 broad/math_abs
+COLLECT 2 0 broad/object_allocation
+COLLECT 3 0 broad/plain_function_call
+COLLECT 1 0 broad/property_read
+COLLECT 0 0 broad/property_dynamic_read
+COLLECT 2 0 broad/property_write
+COLLECT 3 0 broad/string_slice
+COLLECT 1 0 development/big.js/arith
+COLLECT 0 0 broad/top_level_function_call
+COLLECT 2 0 development/diff/compare
+COLLECT 3 0 development/graphlib/paths
+COLLECT 0 0 development/immutable/persistent
+COLLECT 1 0 development/js-yaml/document
+COLLECT 3 0 development/matter-js/simulate
+COLLECT 0 0 development/meriyah/parse
+COLLECT 2 0 development/lodash/transform
+COLLECT 3 0 external/jetstream3-js-subset/cdjs
+COLLECT 1 0 development/moment/dates
+COLLECT 3 0 external/jetstream3-js-subset/stanford-crypto-aes
+COLLECT 0 0 external/jetstream3-js-subset/gaussian-blur
+COLLECT 2 0 development/papaparse/csv
+COLLECT 3 0 external/kraken-1.1/audio-fft
+COLLECT 0 0 external/kraken-1.1/ai-astar
+COLLECT 3 0 external/kraken-1.1/imaging-gaussian-blur
+COLLECT 2 0 external/jetstream3-js-subset/raytrace-public-class-fields
+COLLECT 2 0 external/kraken-1.1/audio-dft
+COLLECT 0 0 external/kraken-1.1/audio-oscillator
+COLLECT 2 0 external/kraken-1.1/imaging-desaturate
+COLLECT 0 0 external/kraken-1.1/json-parse-financial
+COLLECT 1 0 external/jetstream3-js-subset/hash-map
+COLLECT 0 0 external/kraken-1.1/stanford-crypto-pbkdf2
+COLLECT 2 0 external/kraken-1.1/stanford-crypto-aes
+COLLECT 1 0 external/kraken-1.1/audio-beat-detection
+COLLECT 0 0 external/sunspider-1.0/3d-raytrace
+COLLECT 2 0 external/sunspider-1.0/3d-cube
+COLLECT 0 0 external/sunspider-1.0/access-nsieve
+COLLECT 1 0 external/kraken-1.1/imaging-darkroom
+COLLECT 2 0 external/sunspider-1.0/access-fannkuch
+COLLECT 0 0 external/sunspider-1.0/bitops-nsieve-bits
+COLLECT 2 0 external/sunspider-1.0/bitops-bits-in-byte
+COLLECT 0 0 external/sunspider-1.0/crypto-sha1
+COLLECT 2 0 external/sunspider-1.0/crypto-aes
+COLLECT 1 0 external/kraken-1.1/json-stringify-tinderbox
+COLLECT 0 0 external/sunspider-1.0/math-partial-sums
+COLLECT 3 0 external/kraken-1.1/stanford-crypto-ccm
+COLLECT 2 0 external/sunspider-1.0/date-format-xparb
+COLLECT 1 0 external/kraken-1.1/stanford-crypto-sha256-iterative
+COLLECT 0 0 external/sunspider-1.0/string-fasta
+COLLECT 2 0 external/sunspider-1.0/regexp-dna
+COLLECT 0 0 sentinel/capturing_closure_call
+COLLECT 1 0 external/sunspider-1.0/access-binary-trees
+COLLECT 3 0 external/sunspider-1.0/3d-morph
+COLLECT 2 0 external/sunspider-1.0/string-unpack-code
+COLLECT 1 0 external/sunspider-1.0/bitops-3bit-bits-in-byte
+COLLECT 3 0 external/sunspider-1.0/access-nbody
+COLLECT 0 0 sentinel/recursive_call_tree
+COLLECT 2 0 sentinel/polymorphic_call_site
+COLLECT 1 0 external/sunspider-1.0/controlflow-recursive
+COLLECT 3 0 external/sunspider-1.0/bitops-bitwise-and
+COLLECT 1 0 external/sunspider-1.0/date-format-tofte
+COLLECT 3 0 external/sunspider-1.0/crypto-md5
+COLLECT 3 0 external/sunspider-1.0/math-cordic
+COLLECT 1 0 external/sunspider-1.0/math-spectral-norm
+COLLECT 3 0 external/sunspider-1.0/string-base64
+COLLECT 1 0 external/sunspider-1.0/string-tagcloud
+COLLECT 3 0 external/sunspider-1.0/string-validate-input
+COLLECT 1 0 sentinel/heterogeneous_property_read
+COLLECT 3 0 sentinel/prototype_method_call
+COLLECT 1 0 sentinel/string_key_map_churn
+STAGE collection: 406.846 s
+STAGE seal_and_replay: 8.099 s
+STAGE analysis: 10.662 s
+Triage: likely loss (candidate/base; lower is faster).
+Diagnostic only: triage cannot promote anything, spend/reset a plan attempt, waive a required run, select an acceptance run to keep, or change an existing decision. Five-pair 95% bootstrap intervals are exploratory, unadjusted, and do not cover layout bias or unmeasured cases. Natural layout only; no formal precision or complete-portfolio claim.
+
+| case | wall ratio [95% exploratory interval] | instructions [95% exploratory interval] |
+| --- | ---: | ---: |
+| broad/array_allocation (target) | 1.0033 [0.9885, 1.0186] | 1.0391 [1.0391, 1.0392] |
+| broad/array_dynamic_read (target) | 0.9939 [0.9452, 0.9961] | 1.0000 [0.9999, 1.0001] |
+| broad/array_index_of (target) | 0.9881 [0.9632, 1.5180] | 1.0141 [1.0140, 1.0144] |
+| broad/array_read (target) | 1.0757 [1.0673, 1.1124] | 1.0600 [1.0599, 1.0601] |
+| broad/array_write (target) | 1.0973 [1.0661, 1.1501] | 1.0782 [1.0781, 1.0782] |
+| broad/branch_arithmetic (target) | 1.0030 [0.9806, 1.0390] | 1.0000 [1.0000, 1.0000] |
+| broad/captured_read (target) | 0.9310 [0.9029, 0.9379] | 0.9464 [0.9464, 0.9465] |
+| broad/captured_write (target) | 1.6862 [1.6803, 1.7216] | 1.5444 [1.5444, 1.5445] |
+| broad/closure_allocation_call (target) | 1.0462 [0.9889, 1.0561] | 1.0581 [1.0580, 1.0582] |
+| broad/dynamic_method_call (target) | 1.0394 [1.0218, 1.1465] | 1.0667 [1.0666, 1.0667] |
+| broad/empty_loop (target) | 0.9977 [0.9769, 1.0052] | 1.0000 [0.9999, 1.0000] |
+| broad/function_call_reordered (target) | 0.9291 [0.9168, 0.9424] | 0.9405 [0.9404, 0.9406] |
+| broad/function_call_two_args (target) | 0.9395 [0.9254, 0.9484] | 0.9362 [0.9362, 0.9363] |
+| broad/global_read (target) | 1.0412 [1.0264, 1.0456] | 1.0001 [1.0000, 1.0001] |
+| broad/local_read (target) | 0.9972 [0.9923, 1.0018] | 1.0000 [1.0000, 1.0000] |
+| broad/many_locals_call (target) | 1.0313 [1.0241, 1.0435] | 1.0075 [1.0074, 1.0075] |
+| broad/math_abs (target) | 0.9950 [0.9845, 1.0536] | 1.0000 [1.0000, 1.0001] |
+| broad/method_call (target) | 0.9639 [0.9573, 0.9690] | 0.9527 [0.9526, 0.9527] |
+| broad/object_allocation (target) | 1.0098 [0.9833, 1.0348] | 1.0403 [1.0402, 1.0405] |
+| broad/plain_function_call (target) | 0.9382 [0.9084, 1.0263] | 0.9405 [0.9404, 0.9406] |
+| broad/property_dynamic_read (target) | 1.1027 [1.0984, 1.1536] | 1.0917 [1.0915, 1.0919] |
+| broad/property_read (target) | 1.0648 [1.0385, 1.0722] | 1.0558 [1.0558, 1.0559] |
+| broad/property_write (target) | 1.0689 [1.0491, 1.1315] | 1.0696 [1.0696, 1.0698] |
+| broad/string_slice (target) | 0.9578 [0.9461, 0.9707] | 1.0146 [1.0146, 1.0147] |
+| broad/top_level_function_call (target) | 1.0445 [0.9988, 1.0769] | 0.9784 [0.9784, 0.9785] |
+| development/big.js/arith (target) | 1.0167 [1.0103, 1.0334] | 1.0119 [1.0119, 1.0120] |
+| development/diff/compare (target) | 1.0810 [1.0023, 1.0837] | 1.1007 [1.1006, 1.1007] |
+| development/graphlib/paths (target) | 1.1192 [1.1013, 1.1682] | 1.1532 [1.1531, 1.1533] |
+| development/immutable/persistent (target) | 1.2126 [1.1453, 1.2305] | 1.2422 [1.2421, 1.2422] |
+| development/js-yaml/document (target) | 1.0893 [1.0692, 1.1458] | 1.1111 [1.1111, 1.1112] |
+| development/lodash/transform (target) | 1.1525 [1.0613, 1.1611] | 1.2892 [1.2883, 1.2895] |
+| development/matter-js/simulate (target) | 1.0402 [1.0231, 1.0791] | 1.0207 [1.0207, 1.0208] |
+| development/meriyah/parse (target) | 1.1169 [1.0275, 1.1344] | 1.1418 [1.1416, 1.1419] |
+| development/moment/dates (target) | 1.0906 [1.0577, 1.1400] | 1.1627 [1.1626, 1.1628] |
+| development/papaparse/csv (target) | 1.0965 [1.0417, 1.1118] | 1.0717 [1.0715, 1.0718] |
+| external/jetstream3-js-subset/cdjs (target) | 1.2807 [1.2652, 1.3294] | 1.2760 [1.2758, 1.2763] |
+| external/jetstream3-js-subset/gaussian-blur (target) | 1.0149 [1.0070, 1.0202] | 1.0151 [1.0151, 1.0162] |
+| external/jetstream3-js-subset/hash-map (target) | 1.3483 [1.3280, 1.3591] | 1.3434 [1.3415, 1.3455] |
+| external/jetstream3-js-subset/raytrace-public-class-fields (target) | 1.2212 [1.1824, 1.2424] | 1.2185 [1.2184, 1.2186] |
+| external/jetstream3-js-subset/stanford-crypto-aes (target) | 1.0376 [1.0350, 1.0569] | 1.0356 [1.0355, 1.0357] |
+| external/kraken-1.1/ai-astar (target) | 1.0317 [0.9896, 1.0636] | 1.0057 [1.0056, 1.0058] |
+| external/kraken-1.1/audio-beat-detection (target) | 1.0179 [0.9973, 1.0281] | 1.0034 [0.9917, 1.0268] |
+| external/kraken-1.1/audio-dft (target) | 0.9835 [0.9486, 0.9995] | 1.0007 [0.9995, 1.0011] |
+| external/kraken-1.1/audio-fft (target) | 0.9986 [0.9773, 1.0195] | 1.0068 [1.0068, 1.0068] |
+| external/kraken-1.1/audio-oscillator (target) | 1.0128 [1.0060, 1.0165] | 1.0021 [1.0021, 1.0022] |
+| external/kraken-1.1/imaging-darkroom (target) | 1.0503 [1.0097, 1.0802] | 1.0126 [1.0107, 1.0147] |
+| external/kraken-1.1/imaging-desaturate (target) | 0.9959 [0.9818, 1.0202] | 1.0071 [1.0066, 1.0092] |
+| external/kraken-1.1/imaging-gaussian-blur (target) | 1.0348 [1.0014, 1.0510] | 1.0015 [1.0014, 1.0019] |
+| external/kraken-1.1/json-parse-financial (target) | 1.0023 [0.8944, 1.0701] | 1.0017 [1.0014, 1.0018] |
+| external/kraken-1.1/json-stringify-tinderbox (target) | 1.0379 [1.0128, 1.0667] | 1.0174 [1.0171, 1.0178] |
+| external/kraken-1.1/stanford-crypto-aes (target) | 1.0465 [1.0294, 1.0503] | 1.0400 [1.0398, 1.0401] |
+| external/kraken-1.1/stanford-crypto-ccm (target) | 1.0613 [1.0574, 1.0745] | 1.0519 [1.0519, 1.0521] |
+| external/kraken-1.1/stanford-crypto-pbkdf2 (target) | 1.0404 [1.0372, 1.0482] | 1.0317 [1.0317, 1.0317] |
+| external/kraken-1.1/stanford-crypto-sha256-iterative (target) | 1.0194 [0.9977, 1.0373] | 1.0156 [1.0155, 1.0156] |
+| external/sunspider-1.0/3d-cube (target) | 1.0476 [1.0265, 1.0589] | 1.0540 [1.0536, 1.0542] |
+| external/sunspider-1.0/3d-morph (target) | 1.0022 [0.9684, 1.0165] | 1.0058 [1.0057, 1.0059] |
+| external/sunspider-1.0/3d-raytrace (target) | 1.1292 [1.1140, 1.1472] | 1.1236 [1.1236, 1.1237] |
+| external/sunspider-1.0/access-binary-trees (target) | 1.2705 [1.2575, 1.3169] | 1.3569 [1.3567, 1.3570] |
+| external/sunspider-1.0/access-fannkuch (target) | 5.2939 [5.1928, 5.3537] | 3.9178 [3.9165, 3.9180] |
+| external/sunspider-1.0/access-nbody (target) | 1.0416 [1.0262, 1.0606] | 1.0372 [1.0371, 1.0373] |
+| external/sunspider-1.0/access-nsieve (target) | 1.0155 [0.9960, 1.0299] | 1.0004 [1.0004, 1.0005] |
+| external/sunspider-1.0/bitops-3bit-bits-in-byte (target) | 1.0603 [1.0191, 1.0727] | 0.9994 [0.9994, 0.9999] |
+| external/sunspider-1.0/bitops-bits-in-byte (target) | 0.9973 [0.9648, 1.0080] | 1.0011 [1.0009, 1.0014] |
+| external/sunspider-1.0/bitops-bitwise-and (target) | 1.0030 [0.9955, 1.0090] | 1.0010 [1.0008, 1.0010] |
+| external/sunspider-1.0/bitops-nsieve-bits (target) | 1.0136 [1.0022, 1.0264] | 1.0149 [1.0148, 1.0149] |
+| external/sunspider-1.0/controlflow-recursive (target) | 1.0159 [1.0063, 1.0221] | 1.0014 [1.0013, 1.0016] |
+| external/sunspider-1.0/crypto-aes (target) | 1.0272 [0.9909, 1.0524] | 1.0401 [1.0395, 1.0403] |
+| external/sunspider-1.0/crypto-md5 (target) | 1.0201 [1.0102, 1.0459] | 1.0595 [1.0592, 1.0599] |
+| external/sunspider-1.0/crypto-sha1 (target) | 1.0192 [0.9921, 1.0285] | 1.0033 [1.0031, 1.0036] |
+| external/sunspider-1.0/date-format-tofte (target) | 1.2970 [1.2933, 1.3136] | 1.2423 [1.2407, 1.2424] |
+| external/sunspider-1.0/date-format-xparb (target) | 1.0946 [1.0660, 1.1143] | 1.1418 [1.1415, 1.1418] |
+| external/sunspider-1.0/math-cordic (target) | 1.0696 [1.0489, 1.1016] | 1.0957 [1.0957, 1.0958] |
+| external/sunspider-1.0/math-partial-sums (target) | 0.9943 [0.9469, 1.0199] | 1.0076 [1.0075, 1.0077] |
+| external/sunspider-1.0/math-spectral-norm (target) | 1.0070 [0.9229, 1.0265] | 1.0075 [1.0074, 1.0077] |
+| external/sunspider-1.0/regexp-dna (target) | 0.9871 [0.9757, 0.9876] | 1.0009 [1.0008, 1.0010] |
+| external/sunspider-1.0/string-base64 (target) | 1.0656 [1.0321, 1.0911] | 1.0747 [1.0745, 1.0747] |
+| external/sunspider-1.0/string-fasta (target) | 1.2108 [1.2026, 1.2295] | 1.1415 [1.1414, 1.1415] |
+| external/sunspider-1.0/string-tagcloud (target) | 1.0404 [1.0164, 1.0418] | 1.0679 [1.0676, 1.0688] |
+| external/sunspider-1.0/string-unpack-code (target) | 0.9986 [0.9726, 1.0212] | 1.0858 [1.0857, 1.0875] |
+| external/sunspider-1.0/string-validate-input (target) | 1.1317 [1.0775, 1.1427] | 1.1276 [1.1273, 1.1277] |
+| sentinel/capturing_closure_call (target) | 0.9711 [0.9588, 0.9952] | 0.9629 [0.9628, 0.9630] |
+| sentinel/heterogeneous_property_read (target) | 0.9922 [0.9794, 0.9962] | 1.0000 [0.9999, 1.0000] |
+| sentinel/polymorphic_call_site (target) | 0.9623 [0.9299, 0.9715] | 0.9586 [0.9586, 0.9587] |
+| sentinel/prototype_method_call (target) | 1.0043 [1.0020, 1.0244] | 0.9965 [0.9964, 0.9965] |
+| sentinel/recursive_call_tree (target) | 0.9799 [0.9171, 0.9958] | 1.0000 [0.9999, 1.0001] |
+| sentinel/string_key_map_churn (target) | 1.0229 [0.9873, 1.1699] | 1.0147 [1.0146, 1.0147] |
+
+Stage seconds: {"analysis": 10.661894320044667, "build_base": 1.117729299934581, "build_candidate": 74.43631745502353, "build_quieting": 0.030177746200934052, "collection": 406.84551964490674, "command_total": 503.10393296787515, "end_to_end": 563.9490773677826, "prepare_workloads": 0.3300854470580816, "queue_quieting": 60.82775926589966, "seal_and_replay": 8.099010274978355, "settle_and_launch": 1.2188945668749511, "validate_and_freeze": 0.17274007480591536}
+Budget met (includes queue quieting, excludes waiting behind jobs): True
+
+job 20261101T210008Z-t077-s3c-c2: exit 0 after 503 s

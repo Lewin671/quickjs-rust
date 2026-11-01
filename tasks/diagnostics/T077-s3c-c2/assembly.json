@@ -1,0 +1,99 @@
+{
+  "binary_sha256": "4fc02a9616d41937fa1f6c429dda59c82e644f265b3ff60d8359709c33c8ef4b",
+  "target": "aarch64-apple-darwin",
+  "symbols": [
+    {
+      "symbol": "qjs_runtime::bytecode::compact_fn::activation::run_frames",
+      "address": "00000001000c4690",
+      "prologue": [
+        "1000c4690: 6db82beb    \tstp\td11, d10, [sp, #-0x80]!",
+        "1000c4694: 6d0123e9    \tstp\td9, d8, [sp, #0x10]",
+        "1000c4698: a9026ffc    \tstp\tx28, x27, [sp, #0x20]",
+        "1000c469c: a90367fa    \tstp\tx26, x25, [sp, #0x30]",
+        "1000c46a0: a9045ff8    \tstp\tx24, x23, [sp, #0x40]",
+        "1000c46a4: a90557f6    \tstp\tx22, x21, [sp, #0x50]",
+        "1000c46a8: a9064ff4    \tstp\tx20, x19, [sp, #0x60]",
+        "1000c46ac: a9077bfd    \tstp\tx29, x30, [sp, #0x70]",
+        "1000c46b0: 9101c3fd    \tadd\tx29, sp, #0x70",
+        "1000c46b4: d10d43ff    \tsub\tsp, sp, #0x350"
+      ],
+      "frame_store_calls": [
+        "1000c541c: 94023269    \tbl\t0x100151dc0 <<qjs_runtime::bytecode::frame_store::ParkedFrame>::resume>",
+        "1000c5424: 9400025b    \tbl\t0x1000c5d90 <core::ptr::drop_in_place::<qjs_runtime::bytecode::frame_store::ActiveFrame>>",
+        "1000c576c: 94022665    \tbl\t0x10014f100 <<qjs_runtime::bytecode::frame_store::ActiveFrame>::park>",
+        "1000c5908: 9402312e    \tbl\t0x100151dc0 <<qjs_runtime::bytecode::frame_store::ParkedFrame>::resume>",
+        "1000c5910: 94000120    \tbl\t0x1000c5d90 <core::ptr::drop_in_place::<qjs_runtime::bytecode::frame_store::ActiveFrame>>",
+        "1000c5a2c: 940230e5    \tbl\t0x100151dc0 <<qjs_runtime::bytecode::frame_store::ParkedFrame>::resume>",
+        "1000c5a34: 940000d7    \tbl\t0x1000c5d90 <core::ptr::drop_in_place::<qjs_runtime::bytecode::frame_store::ActiveFrame>>",
+        "1000c5ad8: 940230ba    \tbl\t0x100151dc0 <<qjs_runtime::bytecode::frame_store::ParkedFrame>::resume>",
+        "1000c5ae0: 940000ac    \tbl\t0x1000c5d90 <core::ptr::drop_in_place::<qjs_runtime::bytecode::frame_store::ActiveFrame>>",
+        "1000c5b90: 9402308c    \tbl\t0x100151dc0 <<qjs_runtime::bytecode::frame_store::ParkedFrame>::resume>",
+        "1000c5b98: 9400007e    \tbl\t0x1000c5d90 <core::ptr::drop_in_place::<qjs_runtime::bytecode::frame_store::ActiveFrame>>",
+        "1000c5ce4: 94023037    \tbl\t0x100151dc0 <<qjs_runtime::bytecode::frame_store::ParkedFrame>::resume>",
+        "1000c5cf0: 94000028    \tbl\t0x1000c5d90 <core::ptr::drop_in_place::<qjs_runtime::bytecode::frame_store::ActiveFrame>>"
+      ],
+      "memcpy_calls": []
+    },
+    {
+      "symbol": "qjs_runtime::bytecode::compact_fn::wide::activation::run_frames",
+      "address": "00000001000c8840",
+      "prologue": [
+        "1000c8840: 6db923e9    \tstp\td9, d8, [sp, #-0x70]!",
+        "1000c8844: a9016ffc    \tstp\tx28, x27, [sp, #0x10]",
+        "1000c8848: a90267fa    \tstp\tx26, x25, [sp, #0x20]",
+        "1000c884c: a9035ff8    \tstp\tx24, x23, [sp, #0x30]",
+        "1000c8850: a90457f6    \tstp\tx22, x21, [sp, #0x40]",
+        "1000c8854: a9054ff4    \tstp\tx20, x19, [sp, #0x50]",
+        "1000c8858: a9067bfd    \tstp\tx29, x30, [sp, #0x60]",
+        "1000c885c: 910183fd    \tadd\tx29, sp, #0x60",
+        "1000c8860: d11783ff    \tsub\tsp, sp, #0x5e0",
+        "1000c8864: f90003ff    \tstr\txzr, [sp]"
+      ],
+      "frame_store_calls": [
+        "1000c8bb4: 94022483    \tbl\t0x100151dc0 <<qjs_runtime::bytecode::frame_store::ParkedFrame>::resume>",
+        "1000c8bbc: 97fff475    \tbl\t0x1000c5d90 <core::ptr::drop_in_place::<qjs_runtime::bytecode::frame_store::ActiveFrame>>",
+        "1000c8c74: 94021923    \tbl\t0x10014f100 <<qjs_runtime::bytecode::frame_store::ActiveFrame>::park>",
+        "1000c8ed8: 9402188a    \tbl\t0x10014f100 <<qjs_runtime::bytecode::frame_store::ActiveFrame>::park>",
+        "1000c94cc: 9402223d    \tbl\t0x100151dc0 <<qjs_runtime::bytecode::frame_store::ParkedFrame>::resume>",
+        "1000c94d4: 97fff22f    \tbl\t0x1000c5d90 <core::ptr::drop_in_place::<qjs_runtime::bytecode::frame_store::ActiveFrame>>",
+        "1000c9558: 9402221a    \tbl\t0x100151dc0 <<qjs_runtime::bytecode::frame_store::ParkedFrame>::resume>",
+        "1000c9560: 97fff20c    \tbl\t0x1000c5d90 <core::ptr::drop_in_place::<qjs_runtime::bytecode::frame_store::ActiveFrame>>",
+        "1000c95d8: 940221fa    \tbl\t0x100151dc0 <<qjs_runtime::bytecode::frame_store::ParkedFrame>::resume>",
+        "1000c95e0: 97fff1ec    \tbl\t0x1000c5d90 <core::ptr::drop_in_place::<qjs_runtime::bytecode::frame_store::ActiveFrame>>",
+        "1000c96a0: 940221c8    \tbl\t0x100151dc0 <<qjs_runtime::bytecode::frame_store::ParkedFrame>::resume>",
+        "1000c96a8: 97fff1ba    \tbl\t0x1000c5d90 <core::ptr::drop_in_place::<qjs_runtime::bytecode::frame_store::ActiveFrame>>",
+        "1000c9750: 9402219c    \tbl\t0x100151dc0 <<qjs_runtime::bytecode::frame_store::ParkedFrame>::resume>",
+        "1000c9758: 97fff18e    \tbl\t0x1000c5d90 <core::ptr::drop_in_place::<qjs_runtime::bytecode::frame_store::ActiveFrame>>",
+        "1000c97f8: 94022172    \tbl\t0x100151dc0 <<qjs_runtime::bytecode::frame_store::ParkedFrame>::resume>",
+        "1000c9800: 97fff164    \tbl\t0x1000c5d90 <core::ptr::drop_in_place::<qjs_runtime::bytecode::frame_store::ActiveFrame>>",
+        "1000c9924: 94022127    \tbl\t0x100151dc0 <<qjs_runtime::bytecode::frame_store::ParkedFrame>::resume>",
+        "1000c992c: 97fff119    \tbl\t0x1000c5d90 <core::ptr::drop_in_place::<qjs_runtime::bytecode::frame_store::ActiveFrame>>",
+        "1000c99dc: 940220f9    \tbl\t0x100151dc0 <<qjs_runtime::bytecode::frame_store::ParkedFrame>::resume>",
+        "1000c99e4: 97fff0eb    \tbl\t0x1000c5d90 <core::ptr::drop_in_place::<qjs_runtime::bytecode::frame_store::ActiveFrame>>",
+        "1000c9b00: 940220b0    \tbl\t0x100151dc0 <<qjs_runtime::bytecode::frame_store::ParkedFrame>::resume>",
+        "1000c9b08: 97fff0a2    \tbl\t0x1000c5d90 <core::ptr::drop_in_place::<qjs_runtime::bytecode::frame_store::ActiveFrame>>",
+        "1000c9bb4: 94022083    \tbl\t0x100151dc0 <<qjs_runtime::bytecode::frame_store::ParkedFrame>::resume>",
+        "1000c9bc0: 97fff074    \tbl\t0x1000c5d90 <core::ptr::drop_in_place::<qjs_runtime::bytecode::frame_store::ActiveFrame>>"
+      ],
+      "memcpy_calls": []
+    },
+    {
+      "symbol": "qjs_runtime::bytecode::compact_fn::wide::activation::execute_segment",
+      "address": "00000001000c9c30",
+      "prologue": [
+        "1000c9c30: a9ba6ffc    \tstp\tx28, x27, [sp, #-0x60]!",
+        "1000c9c34: a90167fa    \tstp\tx26, x25, [sp, #0x10]",
+        "1000c9c38: a9025ff8    \tstp\tx24, x23, [sp, #0x20]",
+        "1000c9c3c: a90357f6    \tstp\tx22, x21, [sp, #0x30]",
+        "1000c9c40: a9044ff4    \tstp\tx20, x19, [sp, #0x40]",
+        "1000c9c44: a9057bfd    \tstp\tx29, x30, [sp, #0x50]",
+        "1000c9c48: 910143fd    \tadd\tx29, sp, #0x50",
+        "1000c9c4c: d109c3ff    \tsub\tsp, sp, #0x270",
+        "1000c9c50: aa0703fb    \tmov\tx27, x7",
+        "1000c9c54: f90027e6    \tstr\tx6, [sp, #0x48]"
+      ],
+      "frame_store_calls": [],
+      "memcpy_calls": []
+    }
+  ]
+}

@@ -246,3 +246,56 @@ the performance contract is proposed.
      meets the hard gate but misses this target, the remaining external deficit
      against the rebuild baseline becomes an S3d obligation. If any aggregate is
      ≥1.000, S3c does not land; there is no second losing enabling stage.
+
+## Lead decision 2 (2026-11-01): ABI revised after the C2 checkpoint
+
+The first implementation, C1/C2 on the retained branch
+`agent/t077-s3c-activations/codex`, failed its checkpoint:
+- every inline call cost about 940 more instructions;
+- public86 was 1.10 slower on development and external.
+
+An [independent attribution](../diagnostics/T077-s3c-c2/attribution/README.md)
+found two things. A sticky typed-loop decline caused fannkuch's 5.3×. The rest came
+from replacing S3b's contiguous compact/wide register window with a boxed general
+FrameState per call; even with every waste removed, that leaves at least ~300
+instructions per call that are structural. This decision supersedes decision 1, items 1 and 3:
+
+1. **Ordinary (non-suspendable) activations live on one contiguous register stack.**
+   - The Executor owns a `Vec<Value>` register stack and a `Vec<FrameHeader>`
+     (64-byte header, typed CallSlotRefs, callee in the frame prefix).
+   - Each non-reentrant segment binds `regs = &mut stack[base..base+n]` once, so
+     hot addressing is `regs[r]` and never a per-access `base + r` computation or
+     a directory lookup.
+   - A JS call ends the borrow, pushes the header, rebinds, and reverses that on
+     return.
+   - Clearing covers written ranges only.
+   - Growth may reallocate the stack: no pointer into it survives a segment, and
+     cells, leases, closures, arguments and eval holders never point into frames,
+     which is already true after S3b.
+   - Target: about 45+3a+3w instructions per unexposed inline call, in place of
+     S3b's 112-instruction binding protocol.
+2. **Statically known suspendable functions get boxed records from entry.** This
+   covers generators, async functions, async generators and TLA module bodies.
+   Suspension keeps the same box, and resume reattaches it, with no
+   GeneratorSnapshot reconstruction (C4 unchanged). Only suspended or exposed
+   records enter the directory, and FrameIds are allocated lazily.
+3. **The general VM frame** follows the same ownership: either on the register
+   stack or as an owned record. It has no per-call boxing and no per-call deep
+   copy of bytecode; root and eval bodies are retained as `Rc<Bytecode>` once.
+   Every resume re-initializes per-segment VM state, including typed-loop declines
+   and wide handback, unless a decline is keyed by deopt reason and count.
+4. **Restart from main.** Implement this on the new branch
+   `agent/t077-s3c-v2/codex`, based on main `e60e7cfa`. Reuse code from the
+   retained branch only where it fits this ABI, for example lazy Context and
+   call-seed pieces. Do not carry boxed-per-call storage. Update
+   `docs/design/core-rebuild-execution.md` § Frames in the same series, replacing
+   the "directory of boxed activation records" statement.
+5. **New checkpoint, after the revised C1/C2.** Required results:
+   - upw0, upw1 and upw4 instructions per call are each at least 70 below S3b
+     (`8322fc98`);
+   - fannkuch, hash-map and date-format-tofte are ≤1.00× S3b in instructions;
+   - an iMac public86 against `8322fc98` shows instructions below 1.00 on
+     development and external.
+
+   If the target is missed, stop with an attribution.
+6. Acceptance is unchanged from decision 1, item 4. The C3 scope stays approved.

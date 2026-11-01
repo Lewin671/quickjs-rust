@@ -1,0 +1,60 @@
+{
+  "job": "20261101T210008Z-t077-s3c-c2",
+  "base": "8322fc983da20800ce612ad148781aea30e28d08",
+  "candidate": "63b2347fce60d615acd37b674941f1ecffba27b1",
+  "verdict": "likely loss",
+  "counts": {
+    "attempts": 430,
+    "heavy_samples": 0,
+    "invalid": 0,
+    "valid": 430
+  },
+  "budget_met": true,
+  "builds": {
+    "base": {
+      "cache_hit": true,
+      "cache_key": "4c20d0a2f737aaa532faf646d646f39ce08299c76eab6aee8283f14c105e8fc4",
+      "cache_spec_sha256": "eb97e1e25facf6ad38d83a0ee72a798bc5caf2458e23459c896d5ecb424ae29f",
+      "path": "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261101T210008Z-t077-s3c-c2/out/triage/base000/qjs",
+      "revision": "8322fc983da20800ce612ad148781aea30e28d08",
+      "sha256": "a02658e5e8a8d23f5da0197fcf29266d82da35f0ba511d09d4461c8c4a71b09d"
+    },
+    "candidate": {
+      "cache_hit": false,
+      "cache_key": "634016d013c1e7b8992bde7a3ad398b2046ee60508c66346daabd2e05534883b",
+      "cache_spec_sha256": "aefef813cb17c5d3aaeaafa9134cf6dbc5683b879f036a5d0303a9bbf6f34053",
+      "path": "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261101T210008Z-t077-s3c-c2/out/triage/cand000/qjs",
+      "revision": "63b2347fce60d615acd37b674941f1ecffba27b1",
+      "sha256": "a2492b7b336464fd95e6f0c4c1e2d5e0cb592d75e486c798d7f2e91624a288b0"
+    }
+  },
+  "lanes": {
+    "development": {
+      "cases": 10,
+      "wall_ns": 1.1003402540745644,
+      "instructions": 1.127468793624663
+    },
+    "external": {
+      "cases": 45,
+      "wall_ns": 1.0986300033588634,
+      "instructions": 1.0908141072938453
+    },
+    "broad": {
+      "cases": 25,
+      "wall_ns": 1.0304754711283812,
+      "instructions": 1.0283345569483813
+    },
+    "sentinel": {
+      "cases": 6,
+      "wall_ns": 0.9885776808109397,
+      "instructions": 0.9885654425404252
+    },
+    "selection": {
+      "cases": 86,
+      "wall_ns": 1.070647274952012,
+      "instructions": 1.069032615761884
+    }
+  },
+  "aggregation": "unweighted geometric means of frozen per-case ratios; diagnostic only, not formal acceptance",
+  "request_sha256": "ae73c2af8c393da79abc24d315e4e1ec7f93a83bf94d88c8884ec5514263bca4"
+}
