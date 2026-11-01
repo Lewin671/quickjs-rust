@@ -1,0 +1,85 @@
+[
+  {
+    "name": "verify",
+    "environment": {
+      "QJS_VERIFY_BINDINGS": "1"
+    },
+    "command": [
+      "cargo",
+      "test",
+      "-p",
+      "qjs-runtime",
+      "--lib",
+      "--",
+      "--test-threads=4"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "force",
+    "environment": {
+      "QJS_FORCE_EVAL_EXPOSURE": "1"
+    },
+    "command": [
+      "cargo",
+      "test",
+      "-p",
+      "qjs-runtime",
+      "--lib",
+      "--",
+      "--test-threads=4"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "poison",
+    "environment": {
+      "QJS_POISON_RELEASED_SCOPES": "1"
+    },
+    "command": [
+      "cargo",
+      "test",
+      "-p",
+      "qjs-runtime",
+      "--lib",
+      "--",
+      "--test-threads=4"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "ic-verify",
+    "environment": {
+      "QJS_VERIFY_IC": "1"
+    },
+    "command": [
+      "cargo",
+      "test",
+      "-p",
+      "qjs-runtime",
+      "--lib",
+      "--",
+      "--test-threads=4"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "combined",
+    "environment": {
+      "QJS_VERIFY_BINDINGS": "1",
+      "QJS_FORCE_EVAL_EXPOSURE": "1",
+      "QJS_POISON_RELEASED_SCOPES": "1",
+      "QJS_VERIFY_IC": "1"
+    },
+    "command": [
+      "cargo",
+      "test",
+      "-p",
+      "qjs-runtime",
+      "--lib",
+      "--",
+      "--test-threads=4"
+    ],
+    "exit": 0
+  }
+]

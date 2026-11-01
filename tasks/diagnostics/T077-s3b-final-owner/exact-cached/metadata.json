@@ -1,0 +1,59 @@
+{
+  "mode": "cached",
+  "runtime_revision": "e1405670495aa0e75829996d51b797e211f16242",
+  "candidate_order_revision": "8413f925963f42e65c0d972756fe3762659dbfff",
+  "baseline": "3cc12c6f8d93ffd6eae91d1bd44efe74134ae195",
+  "burndown_commit": "e1405670495aa0e75829996d51b797e211f16242",
+  "exit": 0,
+  "complete": true,
+  "qualification_pass": true,
+  "command": "./scripts/find-qjsng-gaps.sh --exact --all --no-recommend --out-dir target/s3b-finish/exact-cached",
+  "environment": {
+    "QJS_AGENTS": "1",
+    "QJS_CLI_PROFILE": "release",
+    "QJS_CLI_BIN": "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/target/s3b-r2-agents/release/qjs",
+    "TEST262_BASELINE_JOBS": "6",
+    "TEST262_TIMEOUT_RETRIES": "1",
+    "TEST262_CASE_TIMEOUT_SECONDS": "20"
+  },
+  "effective_test262_path": "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/third_party/test262",
+  "test262_pin": "4249661388e5d3f92a85186213da140a6481490f",
+  "ng_pin": "f7830186043e4488f2998759d60a514faf07cbc9",
+  "binary_sha256": "856ffa9d6fad8dc61b1b9bde705d5b8f55cf430442cb3336ab93287f313b808b",
+  "hashes": {
+    "summary.json": "cffdf394963ec66c41d006192593e9975e6b082a55483748550b7a9fb866e80f",
+    "cases.jsonl": "2263183d8df546cb37338205c107cc4614a7ddee069a711be6181c0e27c2f61a",
+    "baseline.log": "ca969d1bf4f31b3e9693303c92df4f26c677a8c824467648c5a57a8145c17e74"
+  },
+  "burndown_recorded": true,
+  "burndown": [
+    {
+      "schema": 1,
+      "recorded": "2026-11-01",
+      "commit": "e1405670495aa0e75829996d51b797e211f16242",
+      "source": "local-exact-s3b-final-cached-agents",
+      "total": 53572,
+      "ng_config_skipped": 10900,
+      "configured": 42672,
+      "rust": {
+        "pass": 42672,
+        "fail": 0,
+        "timeout": 0,
+        "not_run": 0
+      },
+      "ng": {
+        "pass": 42602,
+        "fail": 70,
+        "timeout": 0
+      },
+      "comparison": {
+        "both_pass": 42602,
+        "actionable_gap": 0,
+        "ng_pass_rust_fail": 0,
+        "ng_pass_rust_timeout": 0,
+        "ng_pass_rust_not_run": 0,
+        "rust_pass_ng_nonpass": 70
+      }
+    }
+  ]
+}

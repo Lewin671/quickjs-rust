@@ -1,0 +1,29 @@
+[
+  {
+    "configuration": "default",
+    "target": "x86_64-apple-darwin",
+    "binary_sha256": "1344200fb997e0d11eec109cedbd376bc61e38a1db86ad78f8213e7b0d90e3f3",
+    "file": "target/s3b-r2-x86/x86_64-apple-darwin/release/qjs: Mach-O 64-bit executable x86_64",
+    "smoke_exit": 0,
+    "smoke_stdout": "3\n",
+    "source": "8413f925"
+  },
+  {
+    "configuration": "agents",
+    "target": "x86_64-apple-darwin",
+    "binary_sha256": "1b2e4ee77da946bdeab9d19be4ace024d2a560fe6f198eb5d9801f2f50690f8a",
+    "file": "target/s3b-finish/qjs-x86-agents: Mach-O 64-bit executable x86_64",
+    "smoke_exit": 0,
+    "smoke_stdout": "3\n",
+    "source": "8413f925"
+  },
+  {
+    "configuration": "perf-counters",
+    "target": "x86_64-apple-darwin",
+    "binary_sha256": "a795256131f3c61c9f2a5e002b7aabf5bda8db02dee87af8f996cb2710f68cb1",
+    "file": "target/s3b-r2-x86-extra/x86_64-apple-darwin/release/qjs: Mach-O 64-bit executable x86_64",
+    "smoke_exit": 0,
+    "smoke_stdout": "3\n",
+    "source": "8413f925"
+  }
+]

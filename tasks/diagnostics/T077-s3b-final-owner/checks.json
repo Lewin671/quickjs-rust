@@ -1,0 +1,100 @@
+{
+  "verify": {
+    "passed": 2695,
+    "failed": 0,
+    "ignored": 0,
+    "filtered": 0,
+    "log_sha256": "fa36e0f97520846f76b4ad9803ef00befa92505f0b79a52854926d782912b7fe"
+  },
+  "force": {
+    "passed": 2695,
+    "failed": 0,
+    "ignored": 0,
+    "filtered": 0,
+    "log_sha256": "b24745408e3feb663d1768ae6b67eda3155c09628fba2c27891dd7a5e215dfaf"
+  },
+  "poison": {
+    "passed": 2695,
+    "failed": 0,
+    "ignored": 0,
+    "filtered": 0,
+    "log_sha256": "4d03f0be4cda5e36f6bb989b0e12a3cf07b5670dcd33f87a58da408c3d8e3a3f"
+  },
+  "ic-verify": {
+    "passed": 2695,
+    "failed": 0,
+    "ignored": 0,
+    "filtered": 0,
+    "log_sha256": "f65fcae2ee75e3efdfbeeff292849ba1faf48e3de5871c74bf781cb75f246cc9"
+  },
+  "combined": {
+    "passed": 2695,
+    "failed": 0,
+    "ignored": 0,
+    "filtered": 0,
+    "log_sha256": "2b0354749929a72dd596a0ea68f39133802bb93233d6d3f3c0792ef2a7b7f407"
+  },
+  "combined-off": {
+    "passed": 2653,
+    "failed": 0,
+    "ignored": 0,
+    "filtered": 42,
+    "log_sha256": "0cb73feee856991f5851f186fda4492ed988ba2478ef6794a2364896888ed560"
+  },
+  "full_gate": {
+    "exit": 0,
+    "test262_subset": 5174,
+    "runtime_test_results": [
+      "test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 2685 filtered out; finished in 0.15s",
+      "test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 2715 filtered out; finished in 0.12s",
+      "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s",
+      "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.87s",
+      "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s",
+      "test result: ok. 64 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "test result: ok. 274 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s",
+      "test result: ok. 59 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "test result: ok. 2695 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 138.63s",
+      "test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s",
+      "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+    ],
+    "stages": [
+      "check: ok format (1s)",
+      "check: ok clippy (1s)",
+      "check: ok clippy (agents) (15s)",
+      "check: ok agents feature tests (21s)",
+      "check: ok clippy (perf-counters) (15s)",
+      "check: ok perf-counters feature tests (24s)",
+      "check: ok workspace tests (155s)",
+      "check: ok benchmark tool tests (349s)",
+      "check: ok performance unit plans (24s)",
+      "check: ok agent context (1s)",
+      "check: ok script tests (1s)",
+      "check: ok git hook worktree isolation (3s)",
+      "check: ok benchmark shell syntax (0s)",
+      "check: ok file-size guard (1s)",
+      "check: ok Test262 subset (172s)"
+    ],
+    "log_sha256": "19e808216a379a4244b17719c0262536d9a2a4821d04b7dbd709b5ffcc771caa"
+  },
+  "full-agents": {
+    "passed": 2706,
+    "failed": 0,
+    "ignored": 0,
+    "filtered": 0,
+    "log_sha256": "f95b6ff9680b7f662106cbc981f7e383d58449c2cefdbce2826a317af4af7267",
+    "command": "cargo test -p qjs-runtime --features agents --lib -- --test-threads=4"
+  },
+  "full-perf-counters": {
+    "passed": 2739,
+    "failed": 0,
+    "ignored": 0,
+    "filtered": 0,
+    "log_sha256": "7d9e61f2b1778babdf3d0041d86d157620cbdc6f540f67f842f58f0123790ff1",
+    "command": "cargo test -p qjs-runtime --features perf-counters --lib -- --test-threads=4"
+  }
+}

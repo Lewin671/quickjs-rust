@@ -1,0 +1,20 @@
+{
+  "revision": "3cc12c6f8d93ffd6eae91d1bd44efe74134ae195",
+  "only_source_deltas": [
+    "crates/qjs-runtime/src/bytecode/compact_fn/activation.rs",
+    "crates/qjs-runtime/src/bytecode/compact_fn/wide/activation.rs",
+    "crates/qjs-runtime/src/bytecode/vm_bindings.rs",
+    "crates/qjs-runtime/src/diagnostics.rs",
+    "crates/qjs-runtime/src/function/call.rs",
+    "crates/qjs-runtime/src/function/env.rs"
+  ],
+  "instrumentation_patch": "tasks/diagnostics/T077-s3b-round1/base-instrumentation.patch",
+  "patch_sha256": "75dfd736bc32991c7fefac363877bb716b4de871345915cfd768b796006c4b5b",
+  "reverse_patch_applies": true,
+  "binaries": {
+    "target/s3b-main-baseline-counts/release/qjs": "a427c681c33998bfa14306414eb7f12d5bdb15db7eb3fa13d444354c650e0e8d",
+    "target/s3b-main-baseline-production/release/qjs": "56ccf003d55cbeda87210166fe210707c10b8728a0a7e9f1448e08fab461a7d7",
+    "target/s3b-main-baseline-production/debug/qjs": "1b89b9a88ebc80cd511f0e84a0bde318598f2fd9f245c9684b0100c93ceb836e"
+  },
+  "non_counter_builds": "Counter macros compile away; depth uses default-feature production/debug binaries, never counter-enabled timing."
+}

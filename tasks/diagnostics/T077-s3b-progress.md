@@ -7,10 +7,12 @@ S1+S2 integration (runtime `dc710e4b`, acceptance `fc3deef7`). Frozen brief:
 The integrated S2 semantic API is the input; Context does not access NamedStore
 internals. Prototype/layout follow-up paths remain outside this owner boundary.
 
-Predecessor performance endpoint is this accepted S1+S2 base; cumulative endpoint
-is `6663738f` per T077. Lead owns exact timing binaries/corpus/recipe pinning and
-formal/held-out/RSS acceptance; owner collects public86 quick triage via the iMac
-queue only. No performance standing is claimed by this record.
+Final comparison endpoint is accepted main **3cc12c6f** (S2 follow-up); the
+cumulative rebuild endpoint remains `6663738f` per T077. Lead owns exact formal
+binary/corpus/recipe pinning and formal/held-out/RSS acceptance. Owner's final
+public86 is a healthy loss in every lane; the [final owner receipt](T077-s3b-final-owner/README.md)
+owns the final qualification, and [public86](T077-s3b-final-public86/README.md)
+owns all lane/case numbers. No formal performance acceptance is claimed.
 
 ## Pre-code inventory recount
 
@@ -1134,3 +1136,47 @@ comments, while compare-qjs flattens source newlines. Removing the stale
 before/after inline comments preserves executable JavaScript and allows its
 closing braces to reach the parser. Runtime and generated engine binaries are
 unchanged. The failed default pass is retained; all fixture modes rerun below.
+
+
+## Final owner finish: correctness qualified, payoff missed
+
+Runtime **e1405670**, final order/candidate **8413f925**, baseline **3cc12c6f**.
+[Final owner receipt](T077-s3b-final-owner/README.md) records the complete standing:
+full gate **2,695 runtime / 5,174 curated**, full agents **2,706** and counters
+**2,739**, five debug stress suites **2,695** each, combined IC-off **2,653** with
+42 IC-enabled mechanism controls covered separately; **318 NG scripts** in seven
+modes and six module entries plus two dependency smokes per mode. Both production
+targets/default/agents/perf-counters build and smoke; no dependency or unsafe added.
+The fixture's initial newline-flattening parse failure is retained and repaired
+without changing the runtime. Public correctness is **351/351** invocations across
+86 cases / 258 case-modes. All **31** depth maximum/landmark probes preserve base
+success, and all ten development sources/stdout/full counter maps reproduce twice
+per side. Retired environment events remain zero; new allocation/work events stay
+separate and do not imply a speedup.
+
+Both complete exact cached and IC-off scans exit 0: **42,672/42,672 Rust passes**,
+zero fail/timeout/not-run/gap, unchanged **10,900** configuration skips; NG
+**42,602 passes / 70 failures**. Their 53,572-row case maps are byte-identical to
+the accepted-S2 map. Complete burndowns are appended at runtime **e1405670** and
+tool/source **7ce2ab30**, with unchanged ARM runtime/harness/binary inputs; the
+final x86 order is irrelevant to ARM. No partial scan or historical row is replaced.
+
+[Final differential](T077-s3b-final-differential/README.md): **6,000 programs /
+36,000 invocations**, 2,000 per profile, stable hashes and zero mode disagreement,
+panic, crash or timeout. Raw overlapping tags remain MATCH **3,199**, FIXED
+**2,570**, PRE **535**, CHANGED **395**, REGR **31**, exit 1 retained. All 742
+PRE/CHANGED/REGR programs are triaged; reference HasProperty/finally/eval/catch
+and assignment-order differences are explained with spec rules and independent
+Node observations. Only inherited CLI error-prefix spelling/index remains outside
+those semantic matches. Receiver **2,000/2,000** matches; all 44 invalid counter
+programs now run. No unexplained candidate-only semantic disagreement remains.
+
+[Public86](T077-s3b-final-public86/README.md), job
+**20261101T043615Z-t077-s3b-final-public86**, is complete and healthy: **430/430**
+valid attempts, zero invalid/heavy samples, budget met, original verdict **likely
+loss**. Every lane regresses in both wall and instructions; the linked record owns
+all lane ratios (portfolio **1.161922 / 1.184748**). **S3b misses its payoff
+requirement and is not accepted.** No tuning or timing retry follows in this finish.
+Lead owns formal/held-out/RSS, re-review and disposition before dependent stages
+advance. Existing inherited/next-stage owners remain. Owner commits this evidence
+and stops; no origin push or main merge.

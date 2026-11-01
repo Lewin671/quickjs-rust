@@ -7,7 +7,7 @@ update the resume block in the commit that lands it. When a task closes, move it
 ## Active
 | Task | Status | What it is |
 | --- | --- | --- |
-| [T077](T077-core-rebuild.md) core rebuild | active | Authorized rebuild; S3a, S1+S2 and the S2 follow-up integrated (cumulative development 0.881, held-out 0.929 vs baseline); S3b in progress. |
+| [T077](T077-core-rebuild.md) core rebuild | active | Authorized rebuild; S3a, S1+S2 and the S2 follow-up integrated (cumulative development 0.881, held-out 0.929 vs baseline); S3b owner qualification finished; public payoff failed, lead disposition pending. |
 | [T073](T073-local-read-bimodal.md) local-read bimodality | active | Diagnosis complete: candidate text-layout CPU tails; T017 adopts case-health containment only. |
 | [T074](T074-direct-eval-scope-model.md) direct eval scope model | implementation (owner branch) | Approved model is being implemented under T077 S3b; context/suspension and verification cuts remain. |
 | [T057](T057-string-code-units.md) string code units | active | Stage 1 and UTF-16 correctness extraction integrated; stage 2 abandoned (0 attempts); linear-search follow-up awaits screening. |
