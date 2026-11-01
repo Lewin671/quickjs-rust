@@ -1139,11 +1139,68 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
     let typed_entry_counts = (0..probed_backedges.len())
         .map(|_| std::cell::Cell::new((0, 0)))
         .collect();
+    let mut writes = vec![false; register_count];
+    for &slot in bytecode.parameter_slots() {
+        if slot < register_count {
+            writes[slot] = true;
+        }
+    }
+    for &slot in &lexical_slots {
+        writes[slot as usize] = true;
+    }
+    for op in &ops {
+        match *op {
+            WideOp::LoadConst { dst, .. }
+            | WideOp::Move { dst, .. }
+            | WideOp::LoadUpvalueLocal { dst, .. }
+            | WideOp::Binary { dst, .. }
+            | WideOp::Call { dst, .. }
+            | WideOp::Dup { dst, .. }
+            | WideOp::LoadThis { dst }
+            | WideOp::GetPropNamed { dst, .. }
+            | WideOp::CallResolved { dst, .. }
+            | WideOp::Unary { dst, .. }
+            | WideOp::Typeof { dst, .. }
+            | WideOp::ToNumeric { dst }
+            | WideOp::Update { dst, .. }
+            | WideOp::GetProp { dst, .. }
+            | WideOp::GetPropThis { dst, .. }
+            | WideOp::SetPropThis { dst, .. }
+            | WideOp::GetPropIndex { dst, .. }
+            | WideOp::LoadGlobal { dst, .. }
+            | WideOp::New { dst, .. }
+            | WideOp::NewArray { dst, .. }
+            | WideOp::MoveChecked { dst, .. }
+            | WideOp::AssignChecked { dst, .. }
+            | WideOp::ToPropertyKey { dst } => writes[dst as usize] = true,
+            WideOp::SetPropNamed { obj, .. } => writes[obj as usize] = true,
+            WideOp::ClearLocal { slot } => writes[slot as usize] = true,
+            WideOp::Exit { .. } => {
+                for (slot, written) in writes.iter_mut().enumerate() {
+                    if slot >= local_registers || slot < 128 && own_locals & (1u128 << slot) != 0 {
+                        *written = true;
+                    }
+                }
+            }
+            WideOp::ReferenceCheck { .. }
+            | WideOp::StoreUpvalueLocal { .. }
+            | WideOp::Drop { .. }
+            | WideOp::JumpIfFalsy { .. }
+            | WideOp::Jump { .. }
+            | WideOp::Return { .. }
+            | WideOp::Throw { .. }
+            | WideOp::JumpIfTruthy { .. }
+            | WideOp::CompareJump { .. }
+            | WideOp::CheckCoercible { .. } => {}
+        }
+    }
+    let written = crate::bytecode::frame_bank::written_ranges(writes);
     Some(WideProgram {
         ops,
         named_reads,
         named_writes,
         register_count,
+        written,
         required_authoritative_slots,
         requires_this,
         global_reads: global_names.iter().map(|_| Default::default()).collect(),

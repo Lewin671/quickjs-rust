@@ -1,10 +1,10 @@
 # T077 S3c: owning activations and priced S3b recovery
 
-- Status: design and inventory only; awaiting lead approval; base `8322fc98`.
-- Implementation: absent. No runtime, compiler, Cargo or production script change.
+- Status: lead decision 2 supersedes the original ABI; v2 C1/C2 present on the new owner branch, local checkpoint missed; stopped for lead review.
+- Implementation: contiguous indexed value/header stacks, lazy Context and stable suspendable boxes are present. See [v2 progress](../diagnostics/T077-s3c2-progress.md).
 - Evidence: [inventory](T077-s3c-inventory.md), [counting receipt](../diagnostics/T077-s3c-counting.md), [records](../diagnostics/T077-s3c-counts.json).
 - Authority: [S3 split](T077-s3-plan.md), [execution target](../../docs/design/core-rebuild-execution.md), [protected bindings](../../docs/design/env-model-rewrite.md), [S3b acceptance](../diagnostics/T077-s3b-acceptance.md). The acceptance receipt supersedes the split's neutral-S3c allowance.
-- Next action: lead approves the ABI, recovery scope and migration below before runtime work. No push or integration is authorized by this design.
+- Next action: record the single requested iMac v2 triage and stop; [checkpoint](../diagnostics/T077-s3c2-checkpoint/README.md) records local misses/attribution. No origin push or main merge.
 
 ## Decision
 
@@ -310,15 +310,17 @@ Callee/receiver/new.target/home occupy four prefix slots before each window;
 only semantically used prefix slots are written. The callee owns its code and
 creation metadata, so ordinary entries need no second Rc clone or full seed bind.
 
-On arm64 and x86_64 the repr(C), align-8 header budget is: optional root Code
-owner 8, lazy Context owner 8, optional cold state 8, three typed CallSlotRefs 12,
-base/width/written boundary/PC/return-register/argc/flags as seven u32 = 28:
-**64 bytes**. Compile-time size/alignment/offset checks cover both targets.
+On arm64 and x86_64 the repr(C), align-8 header is **64 bytes**: the
+Context owner at 0 (8), three typed refs at 8 (12), base at 20 (4), optional
+root Code at 24 (8), cold owner at 32 (8), then width/written boundary/PC/
+return-register/argc/flags at 40/44/48/52/56/60 (six u32). Owner/refs/base form a
+24-byte borrow capability, keeping the Context facade small. Compile-time
+size/alignment/offset checks cover both targets.
 The Context owner is an inline OnceCell containing an optional box, not an
 allocated OnceCell per frame. A real service demand may materialize Context;
 ordinary entries do not allocate, reserve IDs, compare callees, or rebind owners.
-CallSlotRefs select the sole authority; input ownership is released after its
-transfer. Escaped cells/leases/call owners retain independent heap identities.
+CallSlotRefs select the sole authority. Materialization switches the refs to
+Context; prefix input references cease being read and are cleared on return. Escaped cells/leases/call owners retain independent heap identities.
 
 A segment splits prefix from `regs = &mut values[base..base+width]` once.
 Code/PC, receiver/strict facts and that zero-based slice remain bound through

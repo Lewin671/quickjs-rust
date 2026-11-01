@@ -1115,7 +1115,7 @@ impl<'a, 's, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, 's, F> {
                             } else {
                                 let context = crate::context::Context {
                                     runtime: self.runtime,
-                                    activation: &mut frame.env,
+                                    activation: (&mut frame.env).into(),
                                     native: None,
                                 };
                                 cache

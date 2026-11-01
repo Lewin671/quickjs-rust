@@ -31,7 +31,7 @@ mod peephole;
 #[cfg(test)]
 mod tests;
 
-pub(in crate::bytecode) use activation::try_run_standalone;
+pub(in crate::bytecode) use activation::{try_run_indexed, try_run_standalone};
 
 /// Register-addressed form of the subset of `Op` this tier admits.
 ///
@@ -271,6 +271,7 @@ pub(in crate::bytecode) struct WideProgram {
     named_writes: Vec<NamedWriteSite>,
     /// Total register file width: locals followed by former stack slots.
     register_count: usize,
+    written: Box<[std::ops::Range<u16>]>,
     /// Locals this body reads through indexed storage. Entry declines unless
     /// the frame reports every one of them as authoritative.
     required_authoritative_slots: u128,

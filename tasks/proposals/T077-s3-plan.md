@@ -1,11 +1,11 @@
 # T077 S3: landable execution rebuild proposal
 
 - Status: approved by the lead 2026-10-29 with amendments in [T077](../T077-core-rebuild.md) (S3a may land before S1/S2; S3e prices growing the wide tier).
-- Implementation: S3a integrated on main (`71294a20`); S3b integrated on main `8322fc98` ([acceptance](../diagnostics/T077-s3b-acceptance.md)); [S3c design/inventory](T077-s3c-brief.md) awaits lead approval; S3d/e remain planned. See [S3a results](../diagnostics/T077-s3a-results.md), [S3a acceptance](../diagnostics/T077-s3a-acceptance.md).
+- Implementation: S3a integrated on main (`71294a20`); S3b integrated on main `8322fc98` ([acceptance](../diagnostics/T077-s3b-acceptance.md)); [S3c revised C1/C2](T077-s3c-brief.md#lead-decision-2-2026-11-01-abi-revised-after-the-c2-checkpoint) is present on its v2 owner branch; local checkpoint gates miss and runtime work stopped; S3d/e remain planned. See [S3a results](../diagnostics/T077-s3a-results.md), [S3a acceptance](../diagnostics/T077-s3a-acceptance.md).
 - Verified at: S3a review repair `03c8680c`, 2026-10-30; full check/257 NG fixtures, debug/release depth parity, twenty development counter runs, and all 42,672 configured exact Rust cases pass; zero gaps/not-run, fresh ledger line.
 - Evidence: [counts/reproduction](../diagnostics/T077-s3-counts.md), [Op map](T077-s3-op-map.md), [construction inventory](T077-s3-activation-inventory.md), [native/executor inventory](T077-s3-native-executors.md).
-- Unresolved: S3c is a payoff stage under S3b acceptance, superseding the neutral-S3c allowance below; its recovery scope/ABI awaits lead approval. The known Rust-stack gap is S3d-owned.
-- Next action: lead reviews the S3c brief and counted recovery shortfall before runtime implementation.
+- Unresolved: S3c is a payoff stage under S3b acceptance, superseding the neutral-S3c allowance below; its v2 checkpoint misses call instructions and debug depth. The new deficit against S3b is C2-owned; the older gap against 3cc12c6f remains S3d-owned.
+- Next action: complete the single requested iMac v2 checkpoint receipt and stop for lead review; C3–C5 remain unstarted.
 
 ## Recommendation and authority at every landing
 

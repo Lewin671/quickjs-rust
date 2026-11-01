@@ -37,7 +37,7 @@ pub(super) enum Action {
 /// variant added later, takes the ordinary drop. A mistake in that list
 /// therefore costs a branch, never a leak.
 #[inline(always)]
-pub(super) fn store(slot: &mut Value, value: Value) {
+pub(in crate::bytecode) fn store(slot: &mut Value, value: Value) {
     if matches!(
         slot,
         Value::Number(_) | Value::Boolean(_) | Value::Null | Value::Undefined

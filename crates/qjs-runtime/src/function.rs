@@ -77,9 +77,7 @@ pub(crate) use value::{
     InstanceFieldInitializer, InstancePrivateElement, PrivateFieldInit,
 };
 
+pub(crate) use call::bind_indexed_call_owner;
 #[cfg(test)]
 pub(crate) use call::enter_indexed_activation;
-pub(crate) use call::{
-    bind_indexed_call_owner, keep_released_activation, reenter_indexed_activation,
-    released_indexed_activation,
-};
+pub(crate) use call::enter_indexed_activation_with_creation;

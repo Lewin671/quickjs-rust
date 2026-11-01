@@ -126,13 +126,13 @@ Tests: `context/call_owner.rs`, `function/call_activation_tests.rs`, `class_keys
 
 `context/creation.rs` owns shared realm, referrer, module routes, private context and
 explicit global selection. `context/activation.rs` owns logical variable identity
-(minted on first exposure), call owner, scope roots, mode and strictness. **Reuse:**
-only a returned, never-exposed activation (unminted identity, inline owner, no
-scopes/holders/saved references) enters a pool bounded in count and bytes; no lease,
-cell, closure, arguments object, continuation, generator or eval holder can reference
-it, and an identical later entry rebinds it. Related realms mint non-wrapping tokens in
-their AtomDomain boundary. Parameter/body entry changes only its scope boundary.
-Module-root routing stays a scope fact; creation/module metadata holds cell routes only.
+(minted on first exposure), call owner, scope roots, mode and strictness. **Storage:**
+only cleared register/header capacity is pooled, under count/byte limits. Context, cells, closures, arguments, continuations, generators and eval holders
+keep independent identities; none refer into a recyclable register stack. Prefix refs
+select one call-value authority, switching to Context on real demand. Metadata queries borrow creation facts without minting an activation. Dynamic creation is
+selected at entry; later property changes affect subsequent calls. Related realms
+mint non-wrapping AtomDomain tokens. Parameter/body entry changes scope boundary;
+module-root routing stays a scope fact and module metadata holds cell routes only.
 
 `Context<'a>` borrows services/activation; it is never cloned or retained. NativeSite
 borrows call info, target and eval sources; callee realm is lazy. Vm/tiers own callee

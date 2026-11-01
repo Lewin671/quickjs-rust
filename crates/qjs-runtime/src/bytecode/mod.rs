@@ -60,6 +60,7 @@ mod compiler_references;
 mod compiler_try;
 mod compiler_values;
 mod enumerate_keys_cache;
+pub(crate) mod frame_bank;
 mod frame_owner;
 mod frame_program;
 mod frame_stack;
@@ -544,3 +545,14 @@ pub(crate) fn eval_bytecode_with_env_ephemeral_global_lexicals(
 }
 
 pub(crate) use vm_generator::start_with_call_inputs;
+
+#[inline(always)]
+pub(crate) fn try_eval_indexed_call(
+    function: &crate::Function,
+    receiver: &mut Option<Value>,
+    target: &mut Option<Value>,
+    arguments: &[Value],
+    runtime: &mut crate::context::RuntimeServices,
+) -> Option<Result<Value, RuntimeError>> {
+    compact_fn::try_run_indexed(function, receiver, target, arguments, runtime)
+}

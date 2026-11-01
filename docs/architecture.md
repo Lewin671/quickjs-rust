@@ -71,10 +71,10 @@ in order:
    2. the this-property leaf, a closed-form evaluation of a body that only
       combines own data properties of its receiver or arguments
       (`bytecode/vm_this_property_leaf.rs`);
-   3. a callee-owned compact activation: numeric plan/compact, then wide
-      (`bytecode/compact_fn/activation.rs`); each frame owns its activation
-      (a released one rebound when identical, `compact_fn/activation_stack.rs`)
-      and borrows runtime services, without caller-context substitution;
+   3. numeric plan/compact, then wide (`bytecode/compact_fn/activation.rs`):
+      callee inputs live in a contiguous register stack with 64-byte headers;
+      Context materializes only on real service demand, and metadata queries
+      borrow creation facts without constructing an activation;
    4. a slot-seeded frame (`eval_direct_call_bytecode`, `bytecode/vm.rs`).
       It first offers the body to the compact tiers standalone: the numeric
       compact tier, which tries its `f64` plan
@@ -91,7 +91,7 @@ The interpreter's own call instruction applies the same predicate
 direct route (`try_construct_direct_leaf_function`).
 
 The compact tiers execute a whole body on registers without a `FrameState`.
-Both run admitted callees in a window of their own register stack and
+Both use the same RuntimeServices pool of cleared owning stacks and headers and
 re-enter `call_function` for everything else. The wide tier can also exit to
 an interpreter frame mid-body, and take a loop back from it
 (`bytecode/vm/wide_resume.rs`).

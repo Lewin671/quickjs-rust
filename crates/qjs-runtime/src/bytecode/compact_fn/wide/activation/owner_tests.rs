@@ -2,7 +2,7 @@
 use super::*;
 
 fn assert_owner_survives_exit(construct: bool, source: &str) {
-    let mut callee = crate::eval(source).unwrap();
+    let callee = crate::eval(source).unwrap();
     let Value::Function(function) = callee.clone() else {
         panic!("function")
     };
@@ -14,90 +14,43 @@ fn assert_owner_survives_exit(construct: bool, source: &str) {
         std::collections::HashMap::new(),
         function.creation_realm().atoms(),
     ));
-    let mut supplied = Some(receiver.clone());
-    let mut registers = Vec::new();
-    let mut frames = Vec::new();
-    let mut activations = crate::bytecode::compact_fn::activation_stack::ActivationStack::default();
-    let mut current = Value::Undefined;
-    let (mut base, mut len, mut pc) = (0, 0, 0);
-    if construct {
-        let (inline, instance) = admit_constructor(
+    let mut storage = FrameStorage::default();
+    storage
+        .push(Value::Undefined, Value::Undefined, None, 0, 0, 0, 0)
+        .unwrap();
+    let width = super::super::program_for(&bytecode).unwrap().register_count;
+    let (actual_input, target) = if construct {
+        let (_, instance) = admit_constructor(
             &callee,
             &mut crate::context::Context {
                 runtime: &mut runtime,
-                activation: &mut root_activation,
+                activation: (&mut root_activation).into(),
                 native: None,
             },
-            frames.len(),
+            1,
         )
         .unwrap()
         .expect("admitted constructor");
-        push_constructor_frame(
-            callee.clone(),
-            inline,
-            instance,
-            &bytecode,
-            &mut runtime,
-            &mut registers,
-            &mut frames,
-            &mut activations,
-            &mut current,
-            &mut base,
-            &mut len,
-            0,
-            0,
-            0,
-            0,
-        );
-        assert!(
-            activations
-                .current(&mut root_activation, frames.len())
-                .lexical_new_target()
-                .unwrap()
-                .same_value(&callee)
-        );
+        (Value::Object(instance), Some(callee.clone()))
     } else {
-        entry::enter_call(
-            inline_callee(&callee).expect("admitted callee"),
-            &mut callee,
-            &mut supplied,
-            &bytecode,
-            &mut runtime,
-            &mut registers,
-            &mut frames,
-            &mut activations,
-            &mut current,
-            &mut base,
-            &mut len,
-            &mut pc,
-            0,
-            0,
-            0,
-            0,
-        )
+        (receiver.clone(), None)
+    };
+    storage
+        .push(callee.clone(), actual_input, target, width, 0, 0, 0)
         .unwrap();
-        let callee_activation = activations.current(&mut root_activation, frames.len());
-        assert!(callee_activation.lexical_new_target().is_none());
-        assert!(
-            callee_activation
-                .this_value()
-                .unwrap()
-                .same_value(&receiver)
-        );
-    }
-    // The callee runs in its own slot; the caller's activation stays put.
     assert!(
         root_activation
             .this_value()
             .unwrap()
             .same_value(&caller_this)
     );
-    let mut env = crate::context::Context {
-        runtime: &mut runtime,
-        activation: activations.current(&mut root_activation, frames.len()),
-        native: None,
-    };
-    let actual_receiver = env.caller().this_value().unwrap();
+    let header = storage.frames.last_mut().unwrap();
+    let base = header.service.base as usize;
+    let (prefix, window) = storage.registers.split_at_mut(base);
+    let mut root = RootActivation::Full(&mut root_activation);
+    let mut env = root.view(&mut runtime, header, &prefix[base - PREFIX..base], false);
+    assert_eq!(env.caller().lexical_new_target().is_some(), construct);
+    let actual_receiver = env.activation.this_value().unwrap();
     assert!(matches!(actual_receiver, Value::Object(_)));
     match (function.home_object(), env.caller().home_object()) {
         (None, None) => {}
@@ -110,7 +63,7 @@ fn assert_owner_survives_exit(construct: bool, source: &str) {
         .position(|op| matches!(op, crate::bytecode::ir::Op::LoadGlobal(name) if name == "this"))
         .unwrap();
     let result = exit_to_interpreter(
-        &current,
+        &prefix[base - PREFIX],
         &bytecode,
         RootExit {
             upvalues: crate::bytecode::DirectCallUpvalues::Function(&function),
@@ -119,7 +72,7 @@ fn assert_owner_survives_exit(construct: bool, source: &str) {
         ip as u32,
         0,
         0,
-        &mut registers[base..base + len],
+        &mut window[..width],
         &mut env,
     );
     let ExitOutcome::Finished(Ok(value)) = result else {
@@ -282,16 +235,7 @@ fn inline_error_discards_its_activation_and_clears_pooled_frames() {
     assert!(activation.this_value().unwrap().same_value(&receiver));
     assert!(parked.this_value().unwrap().same_value(&receiver));
     assert_eq!(parked.variable_identity(), parked_id);
-    FRAME_STORAGE.with(|cell| {
-        let storage = cell.borrow();
-        assert!(storage.frames.is_empty());
-        assert!(
-            storage
-                .registers
-                .iter()
-                .all(|v| matches!(v, Value::Undefined))
-        );
-    });
+    assert!(runtime.frame_stacks.is_cleared());
     drop(activation);
     assert_eq!(
         crate::eval("(function(){return 7;})()"),

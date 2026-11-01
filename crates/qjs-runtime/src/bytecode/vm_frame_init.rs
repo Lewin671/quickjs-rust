@@ -148,7 +148,7 @@ impl<'a, 's> Vm<'a, 's> {
             .then(|| {
                 crate::array_prototype(&crate::context::Context {
                     runtime,
-                    activation: &mut env,
+                    activation: (&mut env).into(),
                     native: None,
                 })
             })
@@ -174,7 +174,7 @@ impl<'a, 's> Vm<'a, 's> {
                 if env.has_dynamic_function_realm_global()
                     && let Some(prototype) = crate::array_prototype(&crate::context::Context {
                         runtime,
-                        activation: &mut env,
+                        activation: (&mut env).into(),
                         native: None,
                     })
                 {
@@ -234,7 +234,7 @@ impl<'a, 's> Vm<'a, 's> {
                 &mut local_upvalues,
                 &crate::context::Context {
                     runtime,
-                    activation: &mut env,
+                    activation: (&mut env).into(),
                     native: None,
                 },
             );

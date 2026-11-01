@@ -146,7 +146,7 @@ pub(super) fn exit_to_interpreter(
     ) = (
         bytecode.code.get(ip as usize),
         bytecode.code.get(ip as usize + 1),
-    ) && env.activation.saved_references.is_none()
+    ) && !env.activation.has_saved_references()
         && let Some(pc) = program.resume_pc(ip as usize + 2, usize::from(depth) - 2)
         && let Some(site) = program.global_write_site(ip as usize + 1)
     {
@@ -161,11 +161,11 @@ pub(super) fn exit_to_interpreter(
     {
         let top = usize::from(program.local_registers) + usize::from(depth) - 1;
         // PutValue on the reference its `ReferenceCheck` selected.
-        if env.activation.saved_references.is_some()
+        if env.activation.has_saved_references()
             && let Some((reference, strict)) = bytecode
                 .binding_plan
                 .references
-                .take_saved_store(ip as usize, env.activation)
+                .take_saved_store(ip as usize, &mut env.activation)
         {
             let value = std::mem::replace(&mut window[top], Value::Undefined);
             return match reference.assign(value, strict, env) {

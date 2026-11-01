@@ -1,0 +1,36 @@
+{
+  "source": "C2 frozen source in this commit",
+  "checks": {
+    "c2-full-final": {
+      "sha256": "c2d0e261acdeb897ec0bbc1fbc19fe45aa429a3761484118d9864bf3c50edf09",
+      "exit": 0
+    },
+    "c2-final-counters": {
+      "sha256": "497851ceae8d767b17fd8eac7c5c3b8f985a5fcae8e227c61a31c081a6e405e7",
+      "exit": 0
+    },
+    "c2-clippy4": {
+      "sha256": "c360bb6c0e058335eeb4950709c643e1e5f97c500b1f0a8b6bd7832a69605a36",
+      "exit": 0
+    },
+    "x86-final": {
+      "sha256": "497ddd03542088d2a686407f025892f0296ec63589bd5987f2e2177ccf1e6165",
+      "exit": 0
+    },
+    "staged-fast": {
+      "sha256": "b5c9757b5e506f0e1c4614979d61dd1433eb182efbb89764786ec1121f7f33d0",
+      "exit": 0,
+      "focused_test262": 117
+    }
+  },
+  "runtime_tests": 2733,
+  "counter_tests": 2784,
+  "curated_test262": 5174,
+  "ng_scripts_per_mode": 322,
+  "ng_modules_per_mode": 10,
+  "ng_modes": 9,
+  "public_pass": 351,
+  "fuzz_per_profile": 500,
+  "depth_gate_met": false,
+  "no_runtime_changes_after_checkpoint": true
+}

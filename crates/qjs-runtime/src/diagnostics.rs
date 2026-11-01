@@ -69,6 +69,7 @@ declare_counters! {
     /// Calls a VM call opcode dispatched to a user function with a bytecode
     /// body, before any tier decides how to run it. A workload that claims N
     /// calls must report about N here, or the workload is not measuring calls.
+    indexed_context_materializations,
     ordinary_call_attempts,
     /// Host/callback forwarding to the direct-leaf entry; not a second JS call.
     ordinary_call_forwardings,

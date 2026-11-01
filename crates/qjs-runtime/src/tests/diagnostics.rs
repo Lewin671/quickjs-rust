@@ -589,3 +589,23 @@ fn fresh_class_chain_links_are_linear_and_existing_cycles_still_checked() {
     assert_eq!(value, Value::Boolean(true));
     assert!(counts.prototype_cycle_visits >= baseline.prototype_cycle_visits + 3);
 }
+
+#[test]
+fn unexposed_indexed_calls_do_not_materialize_context_per_entry() {
+    for template in [
+        "var x=0;function bump(v){x+=v;return x;}function run(n){var s=0;for(var i=0;i<n;i++)s+=bump(1);return s;}run(COUNT);",
+        "function mk(){var x=0;return function(v){x+=v;return x;};}function run(n){var bump=mk(),s=0;for(var i=0;i<n;i++)s+=bump(1);return s;}run(COUNT);",
+    ] {
+        let mut observed = Vec::new();
+        for n in [3, 3000] {
+            crate::reset_counters();
+            crate::eval(&template.replace("COUNT", &n.to_string())).unwrap();
+            observed.push(crate::counters().unwrap().indexed_context_materializations);
+        }
+        assert_eq!(
+            observed[0], observed[1],
+            "one owner only on real service demand"
+        );
+        assert!(observed[1] < 10);
+    }
+}

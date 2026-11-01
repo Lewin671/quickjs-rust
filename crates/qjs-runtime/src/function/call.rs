@@ -371,6 +371,42 @@ pub(crate) fn call_direct_leaf_function(
         return Ok(value);
     }
     crate::diagnostics::count!(direct_leaf_frames);
+    call_direct_indexed(function, this_value, argument_values, env)
+}
+
+#[inline(always)]
+fn call_direct_indexed(
+    function: &Function,
+    this_value: Value,
+    argument_values: &[Value],
+    env: &mut crate::context::Context<'_>,
+) -> Result<Value, RuntimeError> {
+    let mut receiver = Some(this_value);
+    if let Some(result) = crate::bytecode::try_eval_indexed_call(
+        function,
+        &mut receiver,
+        &mut None,
+        argument_values,
+        env.runtime,
+    ) {
+        return result;
+    }
+    call_direct_indexed_fallback(
+        function,
+        receiver.take().expect("declined root keeps receiver"),
+        argument_values,
+        env,
+    )
+}
+
+#[inline(never)]
+fn call_direct_indexed_fallback(
+    function: &Function,
+    this_value: Value,
+    argument_values: &[Value],
+    env: &mut crate::context::Context<'_>,
+) -> Result<Value, RuntimeError> {
+    let bytecode = function.bytecode.as_ref().expect("guarded compiled call");
     let PreparedFunctionActivation {
         env: call_env,
         direct_call_slots,
@@ -391,13 +427,13 @@ pub(crate) fn call_direct_leaf_function(
         env.runtime,
         &mut Some(direct_call_slots),
     );
-    recycle_callback_activation(env.runtime, call_env);
+    drop(call_env);
     result
 }
 
 /// Constructs an ordinary bytecode function through the same slot-seeded
 /// direct-leaf frame an ordinary call uses, instead of the general
-/// `construct_function` path that builds a name-keyed compatibility frame.
+/// `construct_function` path that initializes the complete semantic frame.
 ///
 /// Declines, before any observable step, unless the callee is a plain
 /// constructable non-class bytecode function admitted by the direct-leaf
@@ -442,27 +478,27 @@ pub(crate) fn try_construct_direct_leaf_function(
     {
         return Some(Err(error));
     }
-    let PreparedFunctionActivation {
-        env: call_env,
-        direct_call_slots,
-        ..
-    } = enter_indexed_function_activation(
+    let mut this_value = Some(Value::Object(receiver.clone()));
+    let mut target = Some(callee.clone());
+    let result = match crate::bytecode::try_eval_indexed_call(
         function,
-        bytecode,
-        Value::Object(receiver.clone()),
+        &mut this_value,
+        &mut target,
         argument_values,
-        env,
-        Some(callee.clone()),
-    );
-    let direct_call_slots = direct_call_slots.expect("guarded direct leaf calls always seed slots");
-    let mut call_env = Some(call_env);
-    let result = eval_direct_call_bytecode(
-        bytecode,
-        &mut call_env,
         env.runtime,
-        &mut Some(direct_call_slots),
-    );
-    recycle_callback_activation(env.runtime, call_env);
+    ) {
+        Some(result) => result,
+        None => construct_direct_fallback(
+            function,
+            bytecode,
+            this_value
+                .take()
+                .expect("declined constructor keeps receiver"),
+            target.take(),
+            argument_values,
+            env,
+        ),
+    };
     Some(match result {
         Ok(
             value @ (Value::Array(_)
@@ -475,6 +511,39 @@ pub(crate) fn try_construct_direct_leaf_function(
         Ok(_) => Ok(Value::Object(receiver)),
         Err(error) => Err(error),
     })
+}
+
+#[inline(never)]
+fn construct_direct_fallback(
+    function: &Function,
+    bytecode: &Bytecode,
+    this_value: Value,
+    target: Option<Value>,
+    argument_values: &[Value],
+    env: &mut crate::context::Context<'_>,
+) -> Result<Value, RuntimeError> {
+    let PreparedFunctionActivation {
+        env: call_env,
+        direct_call_slots,
+        ..
+    } = enter_indexed_function_activation(
+        function,
+        bytecode,
+        this_value,
+        argument_values,
+        env,
+        target,
+    );
+    let direct_call_slots = direct_call_slots.expect("guarded direct leaf calls always seed slots");
+    let mut call_env = Some(call_env);
+    let result = eval_direct_call_bytecode(
+        bytecode,
+        &mut call_env,
+        env.runtime,
+        &mut Some(direct_call_slots),
+    );
+    drop(call_env);
+    result
 }
 
 /// Whether `new` on a class constructor may take the direct-leaf construct
@@ -1232,13 +1301,13 @@ fn enter_indexed_function_activation<'a>(
     // Ordinary leaf calls and direct base class constructions both reach
     // this frame; the class-constructor TypeError is the caller's concern.
     debug_assert!(can_seed_slot_backed_call(function, bytecode));
-    let mut frame_env = released_indexed_activation(env.runtime, function);
+    let mut frame_env = enter_indexed_activation(function);
     let receiver = if bytecode.uses_lexical_this() {
         function_call_this(
             Some(this_value),
             &crate::context::Context {
                 runtime: env.runtime,
-                activation: &mut frame_env,
+                activation: (&mut frame_env).into(),
                 native: None,
             },
             function.is_strict,
@@ -1287,7 +1356,7 @@ fn enter_function_activation<'a>(
                 Some(this_value),
                 &crate::context::Context {
                     runtime: env.runtime,
-                    activation: &mut frame_env,
+                    activation: (&mut frame_env).into(),
                     native: None,
                 },
                 function.is_strict,
@@ -1484,6 +1553,14 @@ mod activation_tests;
 mod context_tests;
 
 pub(crate) fn enter_indexed_activation(function: &Function) -> crate::context::ActivationContext {
+    enter_indexed_activation_with_creation(function, selected_function_creation(function))
+}
+
+/// A creation selected at entry is not reselected when lazy state is demanded.
+pub(crate) fn enter_indexed_activation_with_creation(
+    function: &Function,
+    creation: Rc<crate::context::CreationContext>,
+) -> crate::context::ActivationContext {
     let call = match function.call_owner_inputs() {
         super::value::CallOwnerInputs::Lexical(owner) => {
             crate::context::LexicalCallContext::Shared(owner)
@@ -1497,84 +1574,7 @@ pub(crate) fn enter_indexed_activation(function: &Function) -> crate::context::A
             crate::context::LexicalCallContext::Inline(owner)
         }
     };
-    crate::context::ActivationContext::for_call(
-        selected_function_creation(function),
-        call,
-        function.is_strict,
-    )
-}
-
-/// Rebinds a released activation (`ActivationContext::release_for_reuse`) to
-/// an indexed entry of `function` when that entry would build the identical
-/// fresh activation: plain creation selection and no retained lexical owner;
-/// the class state is set to the function's. False leaves the activation
-/// untouched for the caller to replace with `enter_indexed_activation`.
-#[inline]
-pub(crate) fn reenter_indexed_activation(
-    activation: &mut crate::context::ActivationContext,
-    function: &Function,
-) -> bool {
-    !function.has_dynamic_function_realm_override.get()
-        && !function.has_dynamic_function_realm
-        && activation.reuse_for_call(
-            function.creation_context(),
-            function.owner_kind,
-            function.is_strict,
-            |class| function.rebind_class_state(class),
-        )
-}
-
-/// Released activations the services keep for later entries, bounded in
-/// count and bytes (`context/activation.rs` reuse invariant).
-const MAX_RELEASED_ACTIVATIONS: usize = 16;
-const _: () = assert!(
-    MAX_RELEASED_ACTIVATIONS
-        * (std::mem::size_of::<crate::context::ActivationContext>()
-            + std::mem::size_of::<crate::context::ClassOwner>())
-        <= 4 * 1024,
-    "released activations stay within 4 KiB"
-);
-
-/// An indexed activation for `function`: the services' last released one
-/// rebound when it is exactly what a fresh entry would build, else a fresh one.
-#[inline]
-pub(crate) fn released_indexed_activation(
-    runtime: &mut crate::context::RuntimeServices,
-    function: &Function,
-) -> crate::context::ActivationContext {
-    if let Some(mut activation) = runtime.released_activations.pop()
-        && reenter_indexed_activation(&mut activation, function)
-    {
-        return activation;
-    }
-    enter_indexed_activation(function)
-}
-
-/// Returns a callback's activation to the services' pool when the tier only
-/// borrowed it and it holds only ordinary call state; anything it retained or
-/// exposed is dropped with it.
-#[inline]
-fn recycle_callback_activation(
-    runtime: &mut crate::context::RuntimeServices,
-    activation: Option<crate::context::ActivationContext>,
-) {
-    if let Some(mut activation) = activation
-        && activation.release_for_reuse(runtime.binding_debug.poisoning_activations())
-    {
-        keep_released_activation(runtime, activation);
-    }
-}
-
-/// Keeps an activation `release_for_reuse` accepted for a later entry,
-/// within the services' bound.
-#[inline]
-pub(crate) fn keep_released_activation(
-    runtime: &mut crate::context::RuntimeServices,
-    activation: crate::context::ActivationContext,
-) {
-    if runtime.released_activations.len() < MAX_RELEASED_ACTIVATIONS {
-        runtime.released_activations.push(activation);
-    }
+    crate::context::ActivationContext::for_call(creation, call, function.is_strict)
 }
 
 /// Finalize an admitted indexed entry before executing its body. VM exits and

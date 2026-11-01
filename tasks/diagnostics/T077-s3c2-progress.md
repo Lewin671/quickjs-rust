@@ -29,3 +29,25 @@ IC-off and IC-verify each pass **322/322**, using a 300-second correctness
 fixture budget. C2's
 contiguous common header/lazy Context and storage-protocol deletions are next;
 no performance target is claimed yet.
+
+## C2: contiguous indexed frames and the revised checkpoint
+
+C1 is committed at **a8ae898c**. C2 replaces both tier-specific/TLS owners with
+one RuntimeServices pool of cleared contiguous value/header stacks. The header
+is 64 bytes on both production targets; callee/used call inputs live in its
+prefix, and returns clear compiler-declared written ranges and used prefix
+slots. Argument borrows pin the detached owning stack across native callbacks.
+Lazy Context borrows creation/receiver facts; no per-inline-call boxing, code
+copy, directory or activation-rebind protocol remains. Seven stress modes,
+combined-off, all-mode NG, public sweep, full/counter checks and fuzz pass at the
+frozen source; [the checkpoint receipt](T077-s3c2-checkpoint/README.md) owns numbers.
+
+The revised checkpoint **misses**: upw0 saves 71.1 instructions/call, upw1 66.0,
+upw4 33.0 (each required >=70). Hash-map instructions are 1.0220; the supplied
+method reproducer and tofte improve, but strict fannkuch/broad-method controls
+also miss. Counters prove the same tier/semantic reach and only one Context per
+process; the 45+3a+3w lifecycle estimate is not isolated from the remaining dispatch
+cost, and its expected net payoff is not demonstrated. Debug depth falls in six probes while release depth improves. Native
+debug disassembly shows wide driver's frame 15,408→19,952 bytes, numeric
+5,504→7,664, explaining the new native-stack pressure. Runtime work stopped at
+these misses. The single iMac run remains to be recorded; no C3–C5 work follows.

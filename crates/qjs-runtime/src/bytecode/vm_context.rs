@@ -5,7 +5,7 @@ impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
     pub(super) fn context(&mut self) -> crate::context::Context<'_> {
         crate::context::Context {
             runtime: self.runtime,
-            activation: &mut self.current.env,
+            activation: (&mut self.current.env).into(),
             native: None,
         }
     }

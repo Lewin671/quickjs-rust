@@ -34,7 +34,7 @@ impl HostRoot {
     pub(crate) fn context(&mut self) -> Context<'_> {
         Context {
             runtime: &mut self.runtime,
-            activation: &mut self.activation,
+            activation: (&mut self.activation).into(),
             native: None,
         }
     }

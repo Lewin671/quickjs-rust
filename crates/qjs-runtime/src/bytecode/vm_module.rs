@@ -54,7 +54,7 @@ pub(super) fn new_module_realm() -> Realm {
     initialize_builtins(
         &mut crate::context::Context {
             runtime: &mut runtime,
-            activation: &mut env,
+            activation: (&mut env).into(),
             native: None,
         },
         &global_this,
@@ -186,7 +186,7 @@ fn eval_async_module_body(
     ));
     let mut services = crate::context::Context {
         runtime: &mut runtime,
-        activation: &mut job_activation,
+        activation: (&mut job_activation).into(),
         native: None,
     };
     let result_promise = crate::async_function::drive_async_module(&context, &mut services);
