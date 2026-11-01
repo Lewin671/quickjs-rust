@@ -1,0 +1,27 @@
+{
+  "candidate": "ca5ab643c2de99d7268df7022c3370596f7b8b41",
+  "runtime_revision": "1e91be92c2af7b876efdc68f7d8698820b44dfe1",
+  "baseline": "3cc12c6f8d93ffd6eae91d1bd44efe74134ae195",
+  "mode": "cached",
+  "test262_pin": "4249661388e5d3f92a85186213da140a6481490f",
+  "ng_pin": "f7830186043e4488f2998759d60a514faf07cbc9",
+  "binary_sha256": "fb492869e525b8def3f02b023853481b2faa2f9a1b520c8890dc3d8f9a0ce202",
+  "command": "./scripts/find-qjsng-gaps.sh --exact --all --no-recommend --out-dir target/s3b-r2-exact-cached",
+  "environment": {
+    "QJS_AGENTS": "1",
+    "QJS_CLI_PROFILE": "release",
+    "QJS_CLI_BIN": "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/target/s3b-r2-agents/release/qjs",
+    "TEST262_DIR": "/Users/qingyingliu/Code/co-work-space/projects/quickjs-rust/third_party/test262",
+    "TEST262_BASELINE_JOBS": "6",
+    "TEST262_TIMEOUT_RETRIES": "1",
+    "TEST262_CASE_TIMEOUT_SECONDS": "20"
+  },
+  "other_QJS_flags": {},
+  "complete": true,
+  "exit": 0,
+  "hashes": {
+    "summary.json": "cffdf394963ec66c41d006192593e9975e6b082a55483748550b7a9fb866e80f",
+    "cases.jsonl": "2263183d8df546cb37338205c107cc4614a7ddee069a711be6181c0e27c2f61a",
+    "baseline.log": "5234540cc50e6aad5e80981e9c9003d9f98bd7b7515a79c41877d0b7e3968341"
+  }
+}

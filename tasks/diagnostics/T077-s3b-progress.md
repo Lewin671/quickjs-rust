@@ -1065,3 +1065,9 @@ binary. The x86 order is not an ARM build input, and its post-order rebuild is
 byte-identical; runtime/harness/configuration are unchanged between both source
 revisions. Public86 still requires the pending explicit hostname qualification
 decision. Neither partial exact scans nor missing timing establish acceptance.
+
+Repaired cached exact is complete: **42,672/42,672 configured passes**, zero
+failure/timeout/not-run/gap, unchanged 10,900 configuration skips and no lost
+baseline passes. [Cached receipt](T077-s3b-exact-ca5-cached/README.md) owns raw
+summary, commands and hashes. Its burndown is appended at runtime `1e91be92`;
+the prior rejected row remains. IC-off is running on the same frozen binary.
