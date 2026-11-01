@@ -27,6 +27,7 @@ mod frame_cold_state;
 mod functions;
 mod generators;
 mod global;
+mod global_references;
 mod iterator_helpers;
 mod json;
 mod maps;

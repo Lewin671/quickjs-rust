@@ -138,14 +138,16 @@ pub(super) fn exit_to_interpreter(
         _ => {}
     }
     // `g = g + value` on a global string: appended in place, then the store
-    // is skipped (see `compile::appends_to_global`).
+    // is skipped (see `compile::appends_to_global`). A store whose reference
+    // was selected before its RHS keeps that reference instead.
     if let (
         Some(crate::bytecode::ir::Op::Binary(qjs_ast::BinaryOp::Add)),
         Some(crate::bytecode::ir::Op::StoreLocalOrGlobalSloppy { name, .. }),
     ) = (
         bytecode.code.get(ip as usize),
         bytecode.code.get(ip as usize + 1),
-    ) && let Some(pc) = program.resume_pc(ip as usize + 2, usize::from(depth) - 2)
+    ) && env.activation.saved_references.is_none()
+        && let Some(pc) = program.resume_pc(ip as usize + 2, usize::from(depth) - 2)
     {
         let top = usize::from(program.local_registers) + usize::from(depth);
         let (left, right) = window[top - 2..top].split_at_mut(1);
@@ -157,6 +159,19 @@ pub(super) fn exit_to_interpreter(
         bytecode.code.get(ip as usize)
     {
         let top = usize::from(program.local_registers) + usize::from(depth) - 1;
+        // PutValue on the reference its `ReferenceCheck` selected.
+        if env.activation.saved_references.is_some()
+            && let Some((reference, strict)) = bytecode
+                .binding_plan
+                .references
+                .take_saved_store(ip as usize, env.activation)
+        {
+            let value = std::mem::replace(&mut window[top], Value::Undefined);
+            return match reference.assign(value, strict, env) {
+                Ok(()) => ExitOutcome::Continue { pc: resume_pc },
+                Err(error) => ExitOutcome::Finished(Err(error)),
+            };
+        }
         if property::try_store_global_var(name, &window[top], env) {
             execute::store(&mut window[top], Value::Undefined);
             return ExitOutcome::Continue { pc: resume_pc };
@@ -168,13 +183,7 @@ pub(super) fn exit_to_interpreter(
             return ExitOutcome::Continue { pc: resume_pc };
         }
     }
-    let (upvalues, realm_upvalue_slots) = match callee {
-        Value::Function(function) => (
-            crate::bytecode::DirectCallUpvalues::Function(function),
-            function.realm_upvalue_slots,
-        ),
-        _ => (root.upvalues, root.realm_upvalue_slots),
-    };
+    let (upvalues, realm_upvalue_slots) = exit_upvalues(callee, root);
     let (mut ip, mut depth) = (ip, depth);
     let probe_target = probe.and_then(|_| match bytecode.code.get(ip as usize) {
         Some(crate::bytecode::ir::Op::Jump(target)) => Some(*target),
@@ -247,6 +256,21 @@ pub(super) fn exit_to_interpreter(
     )
 }
 
+/// The received cells an exit hands over: an inlined callee's own, or the
+/// root activation's.
+fn exit_upvalues<'a>(
+    callee: &'a Value,
+    root: RootExit<'a>,
+) -> (crate::bytecode::DirectCallUpvalues<'a>, u128) {
+    match callee {
+        Value::Function(function) => (
+            crate::bytecode::DirectCallUpvalues::Function(function),
+            function.realm_upvalue_slots,
+        ),
+        _ => (root.upvalues, root.realm_upvalue_slots),
+    }
+}
+
 /// Continues an activation on the interpreter at bytecode `ip`, with `depth`
 /// operand-stack values in its stack registers.
 #[allow(clippy::too_many_arguments)]
@@ -276,9 +300,13 @@ fn resume_in_interpreter(
         depth: depth as usize,
         tdz_marker: &program.tdz_marker,
     };
+    // References selected before an RHS move with the activation; the
+    // interpreter frame adopts them (`resume_direct_call_bytecode`).
+    let mut continuation = env.activation.retain_continuation();
+    continuation.saved_references = env.activation.saved_references.take();
     match crate::bytecode::vm::resume_direct_call_bytecode(
         bytecode,
-        env.activation.retain_continuation(),
+        continuation,
         env.runtime,
         slots,
         ip as usize,
@@ -345,13 +373,7 @@ fn enter_loop_at_header(
     if !ready {
         return ExitOutcome::Continue { pc: resume_pc };
     }
-    let (upvalues, realm_upvalue_slots) = match callee {
-        Value::Function(function) => (
-            crate::bytecode::DirectCallUpvalues::Function(function),
-            function.realm_upvalue_slots,
-        ),
-        _ => (root.upvalues, root.realm_upvalue_slots),
-    };
+    let (upvalues, realm_upvalue_slots) = exit_upvalues(callee, root);
     match run_typed_loop_here(
         bytecode,
         program,

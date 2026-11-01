@@ -10,8 +10,9 @@ use std::rc::Rc;
 /// call frames. Module setup uses copy-on-write so environment clones preserve
 /// their previous routing table while ordinary scripts and nested functions
 /// retain only one pointer-sized empty map.
-pub(crate) type ModuleImports =
-    Rc<crate::value::name_hash::NameMap<String, (DynamicBindings, String)>>;
+pub(crate) type ModuleImports = Rc<ModuleImportMap>;
+pub(crate) type ModuleImportMap =
+    crate::value::name_hash::NameMap<String, (DynamicBindings, String)>;
 
 #[derive(Clone)]
 pub(crate) struct ModuleContext {

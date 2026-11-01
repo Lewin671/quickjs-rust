@@ -48,7 +48,12 @@ pub(crate) struct ActivationContext {
     pub(crate) variable: VariableEnvIdentity,
     pub(crate) mode: ExecutionMode,
     pub(crate) strict: bool,
+    /// References a tier without a VM frame selected before an RHS, by plan
+    /// lifetime (`reference_admission`). Normally `None`; an interpreter
+    /// continuation of the activation adopts them.
+    pub(crate) saved_references: Option<Box<SavedReferences>>,
 }
+pub(crate) type SavedReferences = Vec<(usize, crate::binding::ResolvedReference)>;
 impl ActivationContext {
     pub(crate) fn new(creation: Rc<CreationContext>, mode: ExecutionMode) -> Self {
         let activation = creation.realm.atoms().next_variable_identity();
@@ -62,6 +67,7 @@ impl ActivationContext {
             },
             mode,
             strict: false,
+            saved_references: None,
         }
     }
 
@@ -73,6 +79,7 @@ impl ActivationContext {
             variable: self.variable,
             mode: self.mode,
             strict: self.strict,
+            saved_references: None,
         }
     }
 }

@@ -64,10 +64,10 @@ impl Vm<'_, '_> {
         op: &Op,
     ) -> Result<bool, RuntimeError> {
         for index in &event.starts {
-            let site = &plan.sites[*index];
-            if plan.stable(site, &self.env) {
+            if plan.start_elidable(*index, &self.env) {
                 continue;
             }
+            let site = &plan.sites[*index];
             let life = &plan.lifetimes[site.lifetime];
             if self
                 .cold()

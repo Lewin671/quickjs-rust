@@ -12,7 +12,7 @@ pub(crate) use intrinsics::{
 };
 mod eval_cache;
 mod realm;
-pub(crate) use realm::{Realm, new_realm_sharing_atoms};
+pub(crate) use realm::{Realm, RealmState, new_realm_sharing_atoms};
 
 /// Parse/declaration facts belonging to the immediate direct-eval call site.
 /// B5 borrows this through NativeSite instead of retaining it on a service view.
@@ -40,5 +40,6 @@ pub(crate) use realm::new_realm;
 #[cfg(test)]
 mod tests;
 
+pub(crate) use creation::ModuleImportMap;
 #[cfg(test)]
 pub(crate) use creation::ModuleImports;

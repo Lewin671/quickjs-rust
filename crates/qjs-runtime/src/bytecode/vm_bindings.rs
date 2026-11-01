@@ -509,15 +509,17 @@ impl Vm<'_, '_> {
         {
             return None;
         }
-        // The generic store's fast branch only applies once the frame holds a
-        // value (a global hoist reads its canonical realm cell instead) and
-        // the global property already exists. Keeping that same
-        // boundary means the first creation and every unusual reconfiguration
-        // retain the ordinary interpreter path.
-        let value = if self.bytecode.global_scope && local.hoisted {
-            self.env.get_realm(name)?
-        } else {
-            self.locals.get(slot)?.as_ref()?.clone()
+        // The global property must already exist, so the first creation and
+        // every unusual reconfiguration retain the ordinary interpreter path.
+        // A global hoist, and a fallback slot holding no copy (canonical
+        // realm-cell routing clears it after a published write; its load
+        // reads the same realm cell), take the canonical cell's value; the
+        // guards below prove property, cell and realm agree on it.
+        let global_hoist = self.bytecode.global_scope && local.hoisted;
+        let value = match self.locals.get(slot)? {
+            Some(value) if !global_hoist => value.clone(),
+            None if !(global_hoist || local.sloppy_global_fallback) => return None,
+            _ => self.env.get_realm(name)?,
         };
         if !matches!(
             value,
@@ -958,7 +960,7 @@ impl Vm<'_, '_> {
                 }
                 if is_sloppy_global_fallback || self.has_realm_or_global_this_binding(name) {
                     self.store_realm_or_global_this_sloppy(name.to_owned(), value.clone())?;
-                    self.store_local(slot, value)?;
+                    self.mirror_global_write_in_slot(slot, value)?;
                 } else {
                     self.store_local(slot, value)?;
                 }
@@ -970,7 +972,7 @@ impl Vm<'_, '_> {
                         return Ok(());
                     }
                     self.store_realm_or_global_this_sloppy(name.to_owned(), value.clone())?;
-                    self.store_local(slot, value)?;
+                    self.mirror_global_write_in_slot(slot, value)?;
                     return Ok(());
                 }
                 self.store_global_sloppy(name, value)?;
@@ -988,6 +990,25 @@ impl Vm<'_, '_> {
                 message: "bytecode local index out of bounds".to_owned(),
             }),
         }
+    }
+
+    /// After a sloppy global write already reached the global binding,
+    /// mirrors it into the fallback slot. A captured realm cell whose object
+    /// route was invalidated (deleted or replaced by an accessor) no longer
+    /// names that binding: loads already fall through to the current global,
+    /// so the stale cell is left untouched rather than written a second time.
+    fn mirror_global_write_in_slot(
+        &mut self,
+        slot: usize,
+        value: Value,
+    ) -> Result<(), RuntimeError> {
+        if self
+            .local_upvalue_cell(slot)
+            .is_some_and(BindingCell::object_route_is_invalidated)
+        {
+            return Ok(());
+        }
+        self.store_local(slot, value)
     }
 
     pub(super) fn clear_local(&mut self, slot: usize) -> Result<(), RuntimeError> {

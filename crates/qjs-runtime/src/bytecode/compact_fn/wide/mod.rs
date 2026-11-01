@@ -40,6 +40,12 @@ pub(in crate::bytecode) use activation::try_run_standalone;
 /// which keeps the operation word at eight bytes.
 #[derive(Debug, Clone, Copy)]
 enum WideOp {
+    /// The checked global reference starts of a compiled reference event
+    /// (`reference_admission`): each is elided or selected here, before any
+    /// RHS effect, into the activation's saved references.
+    ReferenceCheck {
+        event: u32,
+    },
     LoadConst {
         dst: u16,
         index: u32,

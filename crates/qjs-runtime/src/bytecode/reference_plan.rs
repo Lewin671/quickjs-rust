@@ -1,6 +1,7 @@
 //! Identifier-reference evaluation intervals in the existing instruction stream.
 //! Sites capture their lexical scope before RHS lowering can enter another scope.
 //! The plan owns no values; bank entries exist only while an evaluation is live.
+//! Runtime elision of those intervals is decided in `reference_admission`.
 use super::ir::{Bytecode, Op};
 use crate::binding::{BindingKind, ScopeId, ScopeKind};
 
@@ -36,6 +37,10 @@ pub(super) struct ReferenceSite {
     pub(super) target: ReferenceTarget,
     pub(super) lifetime: usize,
     pub(super) append: bool,
+    /// A global Name site with no read at its own start. Only such a site
+    /// can observe its start resolvability later: a site that reads at its
+    /// start throws there when unresolvable, before any RHS effect.
+    pub(super) checked: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -62,6 +67,13 @@ pub(super) struct ReferencePlan {
     pub(super) events: Vec<ReferenceEvent>,
     pub(super) sloppy_eval: bool,
     pub(super) global_code: bool,
+    /// Any with, eval-variable or parameter site, or explicit with reference:
+    /// these always select through the VM's dynamic resolver.
+    pub(super) dynamic: bool,
+    /// Whether any site is `checked`.
+    pub(super) has_checked: bool,
+    /// Structural admission proofs (`reference_admission`); never values.
+    pub(super) admission: std::cell::RefCell<Option<super::reference_admission::AdmissionCache>>,
 }
 
 impl ReferencePlan {
@@ -113,6 +125,7 @@ impl ReferencePlan {
                 target,
                 lifetime,
                 append,
+                checked: target == ReferenceTarget::Name && draft.read != Some(draft.start),
             });
         }
         // Existing explicit with references already have producing/consuming
@@ -149,6 +162,16 @@ impl ReferencePlan {
                 temporary: Some(*object_slot),
             });
         }
+        plan.dynamic = !plan.explicit.is_empty()
+            || plan.sites.iter().any(|site| {
+                matches!(
+                    site.target,
+                    ReferenceTarget::With
+                        | ReferenceTarget::EvalVariable
+                        | ReferenceTarget::Parameter
+                )
+            });
+        plan.has_checked = plan.sites.iter().any(|site| site.checked);
         plan.events = events
             .into_iter()
             .map(|(pc, mut event)| {
@@ -157,56 +180,6 @@ impl ReferencePlan {
             })
             .collect();
         plan
-    }
-
-    pub(super) fn can_skip(&self, env: &crate::context::ActivationContext) -> bool {
-        self.explicit.is_empty() && self.sites.iter().all(|site| self.stable(site, env))
-    }
-
-    pub(super) fn can_skip_range(
-        &self,
-        start: usize,
-        end: usize,
-        env: &crate::context::ActivationContext,
-    ) -> bool {
-        let first = self.sites.partition_point(|site| site.start < start);
-        self.sites[first..]
-            .iter()
-            .take_while(|site| site.start <= end)
-            .all(|site| self.stable(site, env))
-            && self
-                .lifetimes
-                .iter()
-                .filter(|life| life.temporary.is_some())
-                .all(|life| life.start > end || life.end <= start)
-    }
-
-    pub(super) fn stable(
-        &self,
-        site: &ReferenceSite,
-        env: &crate::context::ActivationContext,
-    ) -> bool {
-        if matches!(
-            site.target,
-            ReferenceTarget::With | ReferenceTarget::EvalVariable | ReferenceTarget::Parameter
-        ) {
-            return false;
-        }
-        let global_variable = self.global_code || env.has_global_binding_root();
-        if env.scope_cursor().is_some() || self.sloppy_eval && !global_variable {
-            return false;
-        }
-        if site.target == ReferenceTarget::Received {
-            return true;
-        }
-        if env.has_module_import(&site.name) {
-            return true;
-        }
-        if env.can_cache_realm_globals() && env.is_global_lexical_binding(&site.name) {
-            return true;
-        }
-        matches!(env.selected_global_this(), Some(crate::Value::Object(object))
-            if object.own_property(&site.name).is_some_and(|property| !property.configurable))
     }
 }
 

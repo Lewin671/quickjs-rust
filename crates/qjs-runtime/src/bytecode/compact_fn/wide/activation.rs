@@ -1157,6 +1157,16 @@ fn run_frames(
                     // driver's action type and its match stay exactly as they
                     // were: growing either re-rolls this loop's register
                     // allocation (docs/performance-knowledge.md, "Codegen").
+                    WideOp::ReferenceCheck { event } => {
+                        let references = &activation.bytecode.binding_plan.references;
+                        if !references
+                            .event_starts_elidable(event as usize, activation.env.activation)
+                            && let Err(error) =
+                                references.select_checked_starts(event as usize, activation.env)
+                        {
+                            break Err(error);
+                        }
+                    }
                     WideOp::Exit { ip, depth } => {
                         break Ok(Action::Call {
                             dst: depth,
@@ -1560,7 +1570,22 @@ pub(in crate::bytecode) fn try_run_standalone(
     runtime: &mut crate::context::RuntimeServices,
     slots: &mut DirectCallSlots<'_>,
 ) -> Option<Result<Value, RuntimeError>> {
-    if !env.indexed_bindings_only() || !bytecode.binding_plan.references.can_skip(env) {
+    if !env.indexed_bindings_only() {
+        crate::diagnostics::count!(indexed_binding_admission_rejections);
+        super::super::activation::trace_reference_decline(
+            bytecode,
+            "dynamic scope or selected global",
+        );
+        return None;
+    }
+    // Checked global starts run as compiled checkpoints (`ReferenceCheck`);
+    // only sites that need the dynamic resolver keep the interpreter.
+    if bytecode
+        .binding_plan
+        .references
+        .needs_dynamic_resolution(env)
+    {
+        super::super::activation::trace_reference_decline(bytecode, "dynamic reference sites");
         return None;
     }
     let entry = admit(bytecode, slots.upvalues)?;

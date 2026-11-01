@@ -696,14 +696,23 @@ pub(in crate::bytecode) fn try_run_standalone(
     // This tier resolves every name by slot index. An environment that can
     // still answer a name, that carries deoptimized dynamic bindings, or that
     // overrides the realm global belongs on the general path.
-    if !env.indexed_bindings_only() || !bytecode.binding_plan.references.can_skip(env) {
+    if !env.indexed_bindings_only() {
+        crate::diagnostics::count!(indexed_binding_admission_rejections);
+        trace_reference_decline(bytecode, "dynamic scope or selected global");
         return None;
     }
     // A body outside this tier's numeric set may still be one the wide tier
-    // runs; that tier re-checks admission on its own program.
+    // runs; that tier checks its own reference admission and checkpoints.
     let Some(entry) = admit(bytecode, slots.upvalues) else {
         return super::wide::try_run_standalone(bytecode, env, runtime, slots);
     };
+    // This tier has no reference checkpoints: every site must be elidable for
+    // the whole activation (it compiles no global store, so only dynamic
+    // sites can fail here).
+    if !bytecode.binding_plan.references.can_skip(env) {
+        trace_reference_decline(bytecode, "reference sites need selection");
+        return None;
+    }
     if let Some(value) = run_numeric_plan(bytecode, slots, env) {
         return Some(Ok(value));
     }
@@ -719,6 +728,19 @@ pub(in crate::bytecode) fn try_run_standalone(
         call_slots.parameter_slots,
         call_slots.arguments,
     ))
+}
+
+/// `QJS_CF_TRACE=1` names a standalone entry declined before any tier ran.
+#[cfg_attr(not(feature = "perf-counters"), allow(unused_variables))]
+pub(in crate::bytecode) fn trace_reference_decline(bytecode: &Bytecode, reason: &str) {
+    #[cfg(feature = "perf-counters")]
+    if std::env::var_os("QJS_CF_TRACE").is_some() {
+        eprintln!(
+            "CFDECLINE params=({}) len={} {reason}",
+            bytecode.parameter_names().join(","),
+            bytecode.code.len()
+        );
+    }
 }
 
 /// Runs an admitted body's numeric plan (`numeric_plan`), when it has one

@@ -85,16 +85,16 @@ The resolver walks descriptor/cells, own holder, with object and parent in lexic
 order. With uses HasProperty and unscopables, releasing every storage/cell borrow
 before hooks. BindingPlan reference intervals save the selected cell/holder/global
 base before RHS effects; consumption, abrupt exit or short-circuit releases it.
+A global start bound without observable work (lexical, import, own global property)
+or read at its start saves nothing; `bytecode/reference_admission.rs` owns that proof.
 
 Sloppy function eval declares in the caller's selected own holder after checking
-active lexical/parameter conflicts. Strict eval owns a new holder and lexical
-scope. Global script/eval builders explicitly select global routes; function-shaped
-eval IR must not imply a function variable environment. Global setters are not
-published as data cells. Host scripts install function descriptors before the
-body and preserve their non-configurable attributes.
-
-Compiled eval caches retain plans and parse context only. Every invocation uses
-its current chain; the old selected-name cached execution view is deleted.
+active lexical/parameter conflicts. Strict eval owns a new holder and lexical scope.
+Global script/eval builders explicitly select global routes; function-shaped eval
+IR must not imply a function variable environment. Global setters are not published
+as data cells. Host scripts install function descriptors before the body and
+preserve their non-configurable attributes. Compiled eval caches retain plans and
+parse context only; every invocation uses its current chain.
 
 ## Immutable names and imports
 

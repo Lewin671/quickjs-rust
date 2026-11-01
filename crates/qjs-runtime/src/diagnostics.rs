@@ -207,6 +207,28 @@ declare_counters! {
     /// Backward edges where both accelerators were consulted and both
     /// declined. On such an edge the entire probe chain is overhead.
     declined_loop_plan_edges,
+    /// Backward edges never offered to an accelerator because the activation
+    /// resolves names through a dynamic scope chain.
+    scope_blocked_loop_edges,
+    /// Backward edges never offered to an accelerator because a reference
+    /// site in the region could not be elided at entry.
+    reference_blocked_loop_edges,
+    /// Activation admissions that need the VM's dynamic reference resolver
+    /// (with/eval/parameter sites or a dynamic scope chain).
+    reference_admission_dynamic,
+    /// Activation admissions that run with per-start reference checkpoints
+    /// because some checked global site is bound but configurable, or absent.
+    reference_admission_checkpoints,
+    /// Structural reference proofs answered from a plan's cache.
+    reference_admission_cache_hits,
+    /// Structural reference proofs recomputed by name.
+    reference_admission_cache_misses,
+    /// Tier checkpoints whose start could not be elided and selected its
+    /// reference through ordered resolution instead.
+    reference_checkpoint_selections,
+    /// Standalone tier entries declined because the activation can still
+    /// resolve a name dynamically (`indexed_bindings_only`).
+    indexed_binding_admission_rejections,
     /// Bytecode instructions actually dispatched by the interpreter loop.
     executed_ops,
     /// Generic-dispatch opcode families. Together these counters partition

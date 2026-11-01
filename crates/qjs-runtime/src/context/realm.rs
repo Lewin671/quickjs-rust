@@ -313,6 +313,14 @@ impl RealmState {
         self.global_this.clone()
     }
 
+    /// The realm's global object, borrowed rather than cloned.
+    pub(crate) fn global_object(&self) -> Option<&ObjectRef> {
+        match &self.global_this {
+            Some(Value::Object(global)) => Some(global),
+            _ => None,
+        }
+    }
+
     /// Whether `object` is this realm's global object, without cloning it.
     pub(crate) fn is_global_object(&self, object: &ObjectRef) -> bool {
         matches!(&self.global_this, Some(Value::Object(global)) if global.ptr_eq(object))

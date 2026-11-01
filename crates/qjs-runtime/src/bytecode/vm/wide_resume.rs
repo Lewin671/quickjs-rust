@@ -77,13 +77,14 @@ pub(in crate::bytecode) enum ResumeFrom {
 /// probed backedge whose accelerators decline.
 pub(in crate::bytecode) fn resume_direct_call_bytecode(
     bytecode: &Bytecode,
-    env: crate::context::ActivationContext,
+    mut env: crate::context::ActivationContext,
     runtime: &mut crate::context::RuntimeServices,
     direct_call_slots: DirectCallSlots<'_>,
     ip: usize,
     registers: WideRegisters<'_>,
     from: ResumeFrom,
 ) -> Resumed {
+    let saved_references = env.saved_references.take();
     let mut vm = Vm::new_with_globals_upvalues_with_stack_and_direct_call_slots(
         bytecode,
         runtime,
@@ -93,6 +94,15 @@ pub(in crate::bytecode) fn resume_direct_call_bytecode(
         Some(direct_call_slots),
     );
     vm.enter_function_body();
+    // References the tier selected before a live RHS: the frame's reference
+    // events consume them at the recorded store, exactly as its own.
+    if let Some(saved) = saved_references {
+        let lifetimes = &bytecode.binding_plan.references.lifetimes;
+        for (lifetime, reference) in *saved {
+            vm.save_reference(lifetimes[lifetime].bank, lifetime, reference);
+        }
+        vm.current.reference_hooks = true;
+    }
     for (slot, register) in registers.locals.iter_mut().enumerate() {
         if !is_own(registers.own_locals, slot) {
             continue;
@@ -140,6 +150,7 @@ pub(in crate::bytecode) fn resume_direct_call_bytecode(
                 // A loop the accelerator finished leaves the frame past its
                 // backedge; the rest of the body runs on the tier again.
                 if vm.current.ip > ip
+                    && vm.current.active_reference_count == 0
                     && compact_fn::resumes_at(bytecode, vm.current.ip, vm.current.stack.len())
                 {
                     Resumed::LoopFinished {
@@ -224,12 +235,15 @@ impl Vm<'_, '_> {
     /// It does when it was resumed at a probed backedge, is the only frame on
     /// this VM, and stands at another probed backedge with the operand stack
     /// the tier expects there. The jump is undone so the tier performs it.
+    /// A frame holding a selected reference keeps it: the tier's checkpoint
+    /// state is not rebuilt from the interpreter's bank.
     #[cold]
     pub(super) fn hand_back_to_wide(&mut self, backedge: usize) -> Option<FrameExit> {
         let Some(Some(None)) = self.current.cold().map(|cold| cold.wide_handback) else {
             return None;
         };
         if !self.callers.is_empty()
+            || self.current.active_reference_count != 0
             || !compact_fn::hands_back_at(
                 &self.current.bytecode,
                 backedge,

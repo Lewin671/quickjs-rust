@@ -69,6 +69,7 @@ mod ir_pools;
 mod linked_code;
 mod named_property_cache;
 mod operand_stack;
+mod reference_admission;
 mod reference_plan;
 mod typed_loop;
 mod upvalue_resolver;

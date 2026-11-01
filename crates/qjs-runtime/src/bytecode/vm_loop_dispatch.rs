@@ -67,15 +67,29 @@ impl Vm<'_, '_> {
         target: usize,
         backedge: usize,
     ) -> bool {
-        if target >= backedge
-            || self.env.scope_cursor().is_some()
-            || self.reference_hooks
-                && !self
-                    .bytecode
-                    .binding_plan
-                    .references
-                    .can_skip_range(target, backedge, &self.env)
+        if target >= backedge {
+            self.ip = target;
+            return false;
+        }
+        // Count each reason a backward edge never reaches the accelerators,
+        // so a declined loop cannot hide outside `loop_backedges`.
+        if self.env.scope_cursor().is_some() {
+            crate::diagnostics::count!(scope_blocked_loop_edges);
+            self.ip = target;
+            return false;
+        }
+        if self.reference_hooks
+            && !self
+                .bytecode
+                .binding_plan
+                .references
+                .can_skip_range(target, backedge, &self.env)
         {
+            crate::diagnostics::count!(reference_blocked_loop_edges);
+            #[cfg(feature = "perf-counters")]
+            if std::env::var_os("QJS_TL_TRACE").is_some() {
+                eprintln!("TLBLOCK references region {target}..{backedge}");
+            }
             self.ip = target;
             return false;
         }
