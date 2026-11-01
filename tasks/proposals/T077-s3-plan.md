@@ -1,11 +1,11 @@
 # T077 S3: landable execution rebuild proposal
 
 - Status: approved by the lead 2026-10-29 with amendments in [T077](../T077-core-rebuild.md) (S3a may land before S1/S2; S3e prices growing the wide tier).
-- Implementation: S3a integrated on main (`71294a20`); S3b brief frozen ([S3b brief](T077-s3b-brief.md)); S3c–e remain planned. See [S3a results](../diagnostics/T077-s3a-results.md), [S3a acceptance](../diagnostics/T077-s3a-acceptance.md).
+- Implementation: S3a integrated on main (`71294a20`); S3b integrated on main `8322fc98` ([acceptance](../diagnostics/T077-s3b-acceptance.md)); [S3c design/inventory](T077-s3c-brief.md) awaits lead approval; S3d/e remain planned. See [S3a results](../diagnostics/T077-s3a-results.md), [S3a acceptance](../diagnostics/T077-s3a-acceptance.md).
 - Verified at: S3a review repair `03c8680c`, 2026-10-30; full check/257 NG fixtures, debug/release depth parity, twenty development counter runs, and all 42,672 configured exact Rust cases pass; zero gaps/not-run, fresh ledger line.
 - Evidence: [counts/reproduction](../diagnostics/T077-s3-counts.md), [Op map](T077-s3-op-map.md), [construction inventory](T077-s3-activation-inventory.md), [native/executor inventory](T077-s3-native-executors.md).
-- Unresolved: S3b starts after S2 lands (T074 contracts approved 2026-10-30); the known Rust-stack gap is S3d-owned.
-- Next action: S3b implementation from the frozen brief once S2 is integrated.
+- Unresolved: S3c is a payoff stage under S3b acceptance, superseding the neutral-S3c allowance below; its recovery scope/ABI awaits lead approval. The known Rust-stack gap is S3d-owned.
+- Next action: lead reviews the S3c brief and counted recovery shortfall before runtime implementation.
 
 ## Recommendation and authority at every landing
 
@@ -25,8 +25,10 @@ before code. No stage lands merely because a later stage might fix correctness.
 Formal wall evidence uses clean non-counter binaries and sealed held-out
 acceptance only; these counts select scope, never prove speedup.
 
-S3a/b are proposed payoff landings (all four aggregates improve). S3c may be
-neutral only with named payer S3d, which must improve all four and development
+S3a is a payoff landing. S3b was accepted as an enabling stage despite three
+aggregate losses; [S3b acceptance](../diagnostics/T077-s3b-acceptance.md) now makes
+S3c its mandatory payoff stage, superseding the original neutral-S3c allowance.
+S3d retains its all-four improvement requirement and development comparison
 against the accepted S3b endpoint. S3e may be neutral only with S4 as already
 specified by T077; retain S4 versus accepted S2 and all original milestone-pair
 comparisons. Lead must freeze these extra endpoints, not silently reinterpret
@@ -37,7 +39,7 @@ source-level old-path fallback. The fresh lead baseline remains pending here.
 | --- | --- | --- | --- |
 | S3a native entries and slice transport | Bind every native operation at installation; native call/construct and host/callback slice entry. Delete native_family cache, 28-family Option probe chain and ordinary native argument Vec copies. | 10,986,795 family/core calls; 78,693,537 declined family probes, including 28 declines for each of 2,810,361 core calls. Native slice bypass also reaches some of 7,438,472 pop_arguments constructions; do not claim all are native. | 1–2 engineer-weeks; entry/installation owner, array and string-family API tests in parallel; no S1-owned paths. |
 | S3b typed Context + T074 binding authority | Replace CallEnv everywhere, scope leases/BindingPlan/context fields; delete empty-env factories, slot-name snapshots/apply-back and caller-env equality proof. | 24,987,337 CallEnv constructions/clones across ten programs; fresh frame factory alone 20,665,887. Early payoff is service/context deletion on current IR, not bytecode compression. | 3–5 weeks; one shared Context/binding owner; family capability ports parallel after API freeze. T074 approval required. |
-| S3c owning activations and suspension reuse | One fieldwise activation/block owner and bounded pool; generator/async/TLA suspend/reattach same block. Delete GeneratorSnapshot reconstruction and by-value FrameState ownership protocol. | 2,137,517 frame/VM constructions and operand-vector requests establish surface; suspend-specific savings are **not** priced by the development corpus. Enabling stage; S3d pays. | 2–3 weeks; one activation/storage owner, suspension/jobs owner after ownership ABI freeze. Serialized with S3b. |
+| S3c owning activations and suspension reuse | One fieldwise activation/block owner and bounded pool; generator/async/TLA suspend/reattach same block. Delete GeneratorSnapshot reconstruction and by-value FrameState ownership protocol. | 2,137,517 frame/VM constructions and operand-vector requests establish surface; suspend-specific savings are **not** priced by the development corpus. S3c is now a mandatory payoff stage; [fresh inventory/recovery pricing](T077-s3c-brief.md) awaits lead approval. | 2–3 weeks; one activation/storage owner, suspension/jobs owner after ownership ABI freeze. Serialized with S3b. |
 | S3d explicit JS activation stack | General call/construct, eval and effectful JS hooks enter one driver; direct writes into callee storage, cold semantic continuations, checked native boundaries. Delete nested JS Vm creation, dormant frame_stack machinery and ordinary JS argument Vec transport. | 2,137,517 old VM constructions, 7,438,472 pop-argument vectors, 448,836 tier-fallback vectors, 5,259 slice fallbacks. Retain semantic spread/bound/rest arrays and expose their counts separately. | 3–5 weeks; lead driver/call owner, effect-continuation family owners after request ABI freeze. Depends S3c and settled S2 hooks. |
 | S3e universal register Code and executor retirement | All 120 Op variants lower universally; verifier/single PC loop, typed/mutation exit maps. Delete executable Op, stack dispatch, numeric/this leaves, compact/numeric-plan/wide drivers, caller admissions, virtual streams and handback. | 831,246,923 compact/wide register ops versus 289,414,045 general ops; wide inline entries 18,305,031. Deletion has large throughput risk; S4 is payer, no compression-only gain promised. | 4–6 weeks; one builder/verifier owner, lead dispatcher/semantic integration, loop-map owner. S3d first; no family-by-family backend landing. |
 
