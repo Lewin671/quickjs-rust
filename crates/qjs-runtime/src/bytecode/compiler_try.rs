@@ -240,11 +240,16 @@ impl Compiler {
     }
 
     fn compile_try_body(&mut self, body: &[Stmt], result_slot: usize) -> Result<(), RuntimeError> {
-        for stmt in body {
-            self.compile_stmt(stmt)?;
-            self.emit(Op::StoreLocal(result_slot));
-        }
-        Ok(())
+        let blocked = annex_b_blocked_names(body, self.strict);
+        self.with_annex_b_blocked_function_names(&blocked, |compiler| {
+            compiler.predeclare_current_scope_lexicals(body);
+            compiler.compile_hoisted_function_decls(body)?;
+            for stmt in body {
+                compiler.compile_stmt(stmt)?;
+                compiler.emit(Op::StoreLocal(result_slot));
+            }
+            Ok(())
+        })
     }
 
     fn lexical_cleanup_slots_since(&self, start: usize) -> Vec<usize> {
@@ -324,11 +329,7 @@ impl Compiler {
         self.emit_load_undefined();
         self.emit(Op::StoreLocal(finally_result_slot));
         self.with_lexical_scope(|compiler| {
-            for stmt in finalizer {
-                compiler.compile_stmt(stmt)?;
-                compiler.emit(Op::StoreLocal(finally_result_slot));
-            }
-            Ok(())
+            compiler.compile_try_body(finalizer, finally_result_slot)
         })?;
 
         self.pop_try_result_slot();

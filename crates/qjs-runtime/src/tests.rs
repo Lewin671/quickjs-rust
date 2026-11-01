@@ -44,6 +44,7 @@ mod proxy;
 mod reflect;
 mod regexp;
 mod regexp_program_cache;
+mod scope_instantiation;
 mod sets;
 mod statements;
 mod strings;
