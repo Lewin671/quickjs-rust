@@ -1,0 +1,19 @@
+   Compiling qjs-runtime v0.1.0 (/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3b/crates/qjs-runtime)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 9.17s
+     Running unittests src/lib.rs (target/debug/deps/qjs_runtime-75a63d361e38909b)
+
+running 1 test
+
+thread 'function::value::tests::captures_beyond_the_inline_mask_keep_their_cell_routes' (423347387) panicked at crates/qjs-runtime/src/function/value.rs:471:28:
+attempt to shift left with overflow
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test function::value::tests::captures_beyond_the_inline_mask_keep_their_cell_routes ... FAILED
+
+failures:
+
+failures:
+    function::value::tests::captures_beyond_the_inline_mask_keep_their_cell_routes
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 2643 filtered out; finished in 0.07s
+
+error: test failed, to rerun pass `-p qjs-runtime --lib`

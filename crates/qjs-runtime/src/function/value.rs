@@ -463,13 +463,13 @@ impl Function {
             .received_upvalue_slots()
             .iter()
             .zip(&upvalues)
-            .filter_map(|(slot, cell)| {
-                (*slot < u128::BITS as usize
+            .filter(|&(slot, cell)| {
+                *slot < u128::BITS as usize
                     && bytecode
                         .local_name_at(*slot)
-                        .is_some_and(|name| realm.is_binding_cell(name, cell)))
-                .then_some(1_u128 << *slot)
+                        .is_some_and(|name| realm.is_binding_cell(name, cell))
             })
+            .map(|(slot, _)| 1_u128 << *slot)
             .fold(0, |slots, slot| slots | slot);
         let has_dynamic_function_realm = realm.has_dynamic_function_realm_global()
             || !matches!(creation.global, crate::context::GlobalSelection::Default);

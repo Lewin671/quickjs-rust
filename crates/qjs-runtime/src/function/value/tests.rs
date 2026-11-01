@@ -5,6 +5,27 @@ use super::{Function, FunctionData};
 use crate::{NativeFunction, Value, eval};
 
 #[test]
+fn captures_beyond_the_inline_mask_keep_their_cell_routes() {
+    for count in [128, 129, 130] {
+        let names: Vec<_> = (0..count).map(|index| format!("x{index}")).collect();
+        let declarations: String = names
+            .iter()
+            .enumerate()
+            .map(|(index, name)| format!("let {name}={index};"))
+            .collect();
+        let source = format!(
+            "(function(){{{declarations}return function(){{return {};}};}})()();",
+            names.join("+")
+        );
+        assert_eq!(
+            eval(&source),
+            Ok(Value::Number(f64::from(count * (count - 1) / 2))),
+            "{count} captured cells"
+        );
+    }
+}
+
+#[test]
 fn cloning_function_reuses_the_backing_allocation() {
     let domain = crate::property::atom::AtomDomain::new();
     let function = Function::new_native_in_domain(
