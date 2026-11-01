@@ -1081,3 +1081,22 @@ completion/blocker state. Fresh candidate-host audit at 09:24 CST still finds
 only the hostname mismatch. Public86 has no valid measurements, its alias-only
 qualification proposal remains unapplied pending explicit decision, and no
 performance/stage acceptance is claimed.
+
+## Round-2 repairs and public correctness gate
+
+Main's hostname normalization is integrated by lead merge `55f5d1d6`; the old
+alias proposal is historical and never applied. R1's inline/VM receiver split
+is repaired in `28228ff1`, deleting receiver side channels and using one call
+owner on every route. The public sweep discovers a pre-existing high-capture
+shift panic, repaired in `78e8ebc3`. R2's discarded numeric-call bug is repaired
+independently in `a6de336d`, with an explicit effect model and pass audit; its
+numeric files/tests alone also pass on a main source archive.
+
+[Round-2 handoff](T077-s3b-round2-final/README.md) owns final evidence: 2,670
+runtime/65 curated fast gate, 302 NG scripts and four modules in three modes,
+focused owner/effect/mask tests, and every public workload (86 cases, 258
+case-modes, 351/351 invocations). First failed sweep remains recorded. The final
+verifier keeps IC checks, debug assertions and overflow checks enabled; no
+deadline/case/output is waived. No held-out program or timing is run. Full/exact
+requalification is deliberately deferred until remaining lead review findings,
+then one requalification; earlier receipts are source-bound history.

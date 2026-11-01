@@ -1,0 +1,39 @@
+{
+  "runtime_revision": "a6de336d80c4328155bddd02a02f5467cf3e8c88",
+  "sweep_request_parent": "78e8ebc3fb302cfb6f804d8c7d68cdee61b4c82d",
+  "sweep_rust_inputs_match_committed_tree": true,
+  "verify_build": [
+    "cargo",
+    "build",
+    "--release",
+    "-p",
+    "qjs-cli",
+    "--config",
+    "profile.release.debug-assertions=true",
+    "--config",
+    "profile.release.overflow-checks=true"
+  ],
+  "full_exact_requalification": "not started; lead round-2 instruction",
+  "timing": false,
+  "ng": {
+    "default": {
+      "cases": 302,
+      "log_sha256": "4e44951a7a0b951308af80a00a163039161ceb08a5a20e19b429e0edbd7c3e1e"
+    },
+    "off": {
+      "cases": 302,
+      "log_sha256": "4e44951a7a0b951308af80a00a163039161ceb08a5a20e19b429e0edbd7c3e1e"
+    },
+    "verify": {
+      "cases": 302,
+      "log_sha256": "4e44951a7a0b951308af80a00a163039161ceb08a5a20e19b429e0edbd7c3e1e"
+    }
+  },
+  "fast_gate_sha256": "17a8a3acc282348397c7f7251ab3864b5cdcc455a59264738e52e4b9508ebc8f",
+  "files": {
+    "request.json": "99994fa453d0ab68c8f12a42e02d4f6588e3cf53161c9cca1cff6ba37bc5551a",
+    "summary.json": "babc1ddf589a0bca1c046375b57313a936c1986df8e69b938fe0f87b61060579",
+    "cases.jsonl": "0a84bed91923bb88d916c4b438ddceb940a859e07f69c739843d00a7964017f7",
+    "modules.json": "a3a78e004bdd6a30320d5656062bc99f97ee91af560237daf12a45d836c71413"
+  }
+}

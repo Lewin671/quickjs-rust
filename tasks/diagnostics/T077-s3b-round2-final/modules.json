@@ -1,0 +1,133 @@
+{
+  "tz": "UTC",
+  "cases": [
+    {
+      "mode": "default",
+      "source": "tests/fixtures/compare-modules/deferred-key-arguments.mjs",
+      "source_sha256": "44d067f0257e9b40cef5a3838377079788427c86466992e22bea359fa9d6a499",
+      "binary_sha256": "037399af0f5a7c7456563f6e399af12a1148a15a987bb5072a9322d7982716fb",
+      "flags": {},
+      "exit": 0,
+      "stdout": "undefined:undefined:undefined:undefined\nfunction:function\n"
+    },
+    {
+      "mode": "default",
+      "source": "tests/fixtures/compare-modules/numeric-discarded-call-jobs.mjs",
+      "source_sha256": "3f214b95ec4b72f6cc8b6b7fb5b1f24f1800867862478e56be8545676479555b",
+      "binary_sha256": "037399af0f5a7c7456563f6e399af12a1148a15a987bb5072a9322d7982716fb",
+      "flags": {},
+      "exit": 0,
+      "stdout": "1:2\ntrue\n"
+    },
+    {
+      "mode": "default",
+      "source": "tests/fixtures/compare-modules/s3b-context-imports-dep.mjs",
+      "source_sha256": "96e9a708b67eb43c53624cc7846fd7ac30afe8ed4e5f7a06bb77975c7842e8a5",
+      "binary_sha256": "037399af0f5a7c7456563f6e399af12a1148a15a987bb5072a9322d7982716fb",
+      "flags": {},
+      "exit": 0,
+      "stdout": ""
+    },
+    {
+      "mode": "default",
+      "source": "tests/fixtures/compare-modules/s3b-context-imports.mjs",
+      "source_sha256": "91c9a512b922fb1dda4b9519a5c077863689c9469e265c05bd4121fa1c3a5b71",
+      "binary_sha256": "037399af0f5a7c7456563f6e399af12a1148a15a987bb5072a9322d7982716fb",
+      "flags": {},
+      "exit": 0,
+      "stdout": "7:undefined:undefined:undefined\n9:9\n"
+    },
+    {
+      "mode": "off",
+      "source": "tests/fixtures/compare-modules/deferred-key-arguments.mjs",
+      "source_sha256": "44d067f0257e9b40cef5a3838377079788427c86466992e22bea359fa9d6a499",
+      "binary_sha256": "037399af0f5a7c7456563f6e399af12a1148a15a987bb5072a9322d7982716fb",
+      "flags": {
+        "QJS_DISABLE_IC": "1"
+      },
+      "exit": 0,
+      "stdout": "undefined:undefined:undefined:undefined\nfunction:function\n"
+    },
+    {
+      "mode": "off",
+      "source": "tests/fixtures/compare-modules/numeric-discarded-call-jobs.mjs",
+      "source_sha256": "3f214b95ec4b72f6cc8b6b7fb5b1f24f1800867862478e56be8545676479555b",
+      "binary_sha256": "037399af0f5a7c7456563f6e399af12a1148a15a987bb5072a9322d7982716fb",
+      "flags": {
+        "QJS_DISABLE_IC": "1"
+      },
+      "exit": 0,
+      "stdout": "1:2\ntrue\n"
+    },
+    {
+      "mode": "off",
+      "source": "tests/fixtures/compare-modules/s3b-context-imports-dep.mjs",
+      "source_sha256": "96e9a708b67eb43c53624cc7846fd7ac30afe8ed4e5f7a06bb77975c7842e8a5",
+      "binary_sha256": "037399af0f5a7c7456563f6e399af12a1148a15a987bb5072a9322d7982716fb",
+      "flags": {
+        "QJS_DISABLE_IC": "1"
+      },
+      "exit": 0,
+      "stdout": ""
+    },
+    {
+      "mode": "off",
+      "source": "tests/fixtures/compare-modules/s3b-context-imports.mjs",
+      "source_sha256": "91c9a512b922fb1dda4b9519a5c077863689c9469e265c05bd4121fa1c3a5b71",
+      "binary_sha256": "037399af0f5a7c7456563f6e399af12a1148a15a987bb5072a9322d7982716fb",
+      "flags": {
+        "QJS_DISABLE_IC": "1"
+      },
+      "exit": 0,
+      "stdout": "7:undefined:undefined:undefined\n9:9\n"
+    },
+    {
+      "mode": "verify",
+      "source": "tests/fixtures/compare-modules/deferred-key-arguments.mjs",
+      "source_sha256": "44d067f0257e9b40cef5a3838377079788427c86466992e22bea359fa9d6a499",
+      "binary_sha256": "9a772652cbddb1872a7bb36117f13a22b8b7de550284e35282c3b72ba449c520",
+      "flags": {
+        "QJS_VERIFY_IC": "1",
+        "QJS_VERIFY_BINDINGS": "1"
+      },
+      "exit": 0,
+      "stdout": "undefined:undefined:undefined:undefined\nfunction:function\n"
+    },
+    {
+      "mode": "verify",
+      "source": "tests/fixtures/compare-modules/numeric-discarded-call-jobs.mjs",
+      "source_sha256": "3f214b95ec4b72f6cc8b6b7fb5b1f24f1800867862478e56be8545676479555b",
+      "binary_sha256": "9a772652cbddb1872a7bb36117f13a22b8b7de550284e35282c3b72ba449c520",
+      "flags": {
+        "QJS_VERIFY_IC": "1",
+        "QJS_VERIFY_BINDINGS": "1"
+      },
+      "exit": 0,
+      "stdout": "1:2\ntrue\n"
+    },
+    {
+      "mode": "verify",
+      "source": "tests/fixtures/compare-modules/s3b-context-imports-dep.mjs",
+      "source_sha256": "96e9a708b67eb43c53624cc7846fd7ac30afe8ed4e5f7a06bb77975c7842e8a5",
+      "binary_sha256": "9a772652cbddb1872a7bb36117f13a22b8b7de550284e35282c3b72ba449c520",
+      "flags": {
+        "QJS_VERIFY_IC": "1",
+        "QJS_VERIFY_BINDINGS": "1"
+      },
+      "exit": 0,
+      "stdout": ""
+    },
+    {
+      "mode": "verify",
+      "source": "tests/fixtures/compare-modules/s3b-context-imports.mjs",
+      "source_sha256": "91c9a512b922fb1dda4b9519a5c077863689c9469e265c05bd4121fa1c3a5b71",
+      "binary_sha256": "9a772652cbddb1872a7bb36117f13a22b8b7de550284e35282c3b72ba449c520",
+      "flags": {
+        "QJS_VERIFY_IC": "1",
+        "QJS_VERIFY_BINDINGS": "1"
+      },
+      "exit": 0,
+      "stdout": "7:undefined:undefined:undefined\n9:9\n"
+    }
+  ]
+}
