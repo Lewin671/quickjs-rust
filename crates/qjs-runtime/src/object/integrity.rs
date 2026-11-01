@@ -1,3 +1,4 @@
+//! Object integrity levels; mapped arguments use descriptor semantics before bulk freezing.
 use crate::{RuntimeError, Value};
 
 /// `[[IsExtensible]]` over any value: ordinary objects report their slot, an
@@ -219,7 +220,13 @@ pub(crate) fn native_object_freeze(
         Value::Object(object) if crate::typed_array::is_typed_array_object(object) => {
             freeze_typed_array_object(object.clone(), &target, env)?;
         }
-        Value::Object(object) => object.freeze(),
+        Value::Object(object) => {
+            if object.to_string_tag().as_deref() == Some("Arguments") {
+                object.prevent_extensions();
+                super::descriptor::freeze_mapped_argument_properties(object, env)?;
+            }
+            object.freeze();
+        }
         Value::Map(map) => map.object().freeze(),
         Value::Set(set) => set.object().freeze(),
         Value::Array(elements) => elements.freeze(),

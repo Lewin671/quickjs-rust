@@ -1,3 +1,4 @@
+//! Own-property descriptor semantics, including mapped-arguments alias transitions.
 use crate::{
     NativeFunction, ObjectRef, Property, PropertyKey, RuntimeError, Value, call_function,
     function_own_property_descriptor, function_own_symbol_property_descriptor,
@@ -348,6 +349,32 @@ fn define_array_length_property(
 struct MappedArgumentAccessors {
     get: Value,
     set: Value,
+}
+
+/// Freezing mapped arguments must snapshot each mapped value and remove its
+/// parameter alias using the same DefineOwnProperty route as writable:false.
+/// Called only for the internal Arguments brand, before bulk descriptor freeze.
+pub(super) fn freeze_mapped_argument_properties(
+    object: &ObjectRef,
+    env: &mut crate::context::Context<'_>,
+) -> Result<(), RuntimeError> {
+    for name in object.own_property_names() {
+        if mapped_argument_accessors(object.own_property(&name).as_ref()).is_none() {
+            continue;
+        }
+        if !define_property_descriptor_on_value_key(
+            Value::Object(object.clone()),
+            PropertyKey::String(name),
+            PropertyDescriptor::integrity_frozen_data(),
+            env,
+        )? {
+            return Err(RuntimeError {
+                thrown: None,
+                message: "TypeError: Cannot freeze mapped argument".into(),
+            });
+        }
+    }
+    Ok(())
 }
 
 fn mapped_argument_accessors(property: Option<&Property>) -> Option<MappedArgumentAccessors> {

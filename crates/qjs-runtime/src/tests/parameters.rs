@@ -764,3 +764,27 @@ fn default_parameter_closures_keep_enclosing_cells_outside_body_declarations() {
         Ok(Value::String("changed:inner:changed".into()))
     );
 }
+
+#[test]
+fn freezing_arguments_snapshots_and_severs_only_its_mapped_parameters() {
+    for target in ["arguments", "new Proxy(arguments,{})"] {
+        let source = format!(
+            "function f(a,b){{a=3;Object.freeze({target});a=5;b=6;return [a,b,arguments[0],arguments[1],Object.isFrozen(arguments)].join();}}f(1,2);"
+        );
+        assert_eq!(
+            eval(&source),
+            Ok(Value::String("5,6,3,2,true".into())),
+            "{source}"
+        );
+    }
+    assert_eq!(
+        eval("function f(a){Object.seal(arguments);a=5;return arguments[0];}f(1);"),
+        Ok(Value::Number(5.0))
+    );
+    assert_eq!(
+        eval(
+            "function f(a,a){Object.freeze(arguments);a=5;return [arguments[0],arguments[1],a].join();}f(1,2);"
+        ),
+        Ok(Value::String("1,2,5".into()))
+    );
+}

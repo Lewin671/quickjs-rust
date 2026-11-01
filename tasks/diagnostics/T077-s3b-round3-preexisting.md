@@ -112,3 +112,18 @@ capture cannot adopt an import homonym.
 Focused module test covers concatenation/array, rest, destructured and captured
 parameter homonyms, alongside unchanged unshadowed import values. The original
 module repro has a portable relative dependency and is a permanent .mjs fixture.
+
+## Object.freeze(mapped arguments)
+
+Parent `30c04716`. Bulk ordinary-object freeze treated internal mapped accessors
+as ordinary accessors, leaving the parameter aliases active. For the existing
+internal Arguments brand, freezing now prevents extension and applies the
+existing writable:false mapped-descriptor transition before bulk freezing.
+That snapshots the current parameter value and severs the mapping; ordinary
+objects keep their bulk path, and sealing keeps aliases. User Symbol.toStringTag
+is separate from the internal brand. No new representation or dependency.
+
+Focused tests cover current-value snapshots, subsequent parameter writes,
+duplicate mappings, Proxy forwarding and seal control. Exact lead f(1) behavior
+is included in the permanent NG fixture. Before: mapped arguments continued
+changing with parameters; after: all discriminators pass.

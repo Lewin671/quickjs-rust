@@ -40,13 +40,13 @@ parameter leaf bindings are parameters too; raw pattern inputs are not bindings.
    can discard it unread. Arrows inherit the binding; parameters/lexicals shadow
    it. Absent arguments is unresolvable, not a TDZ cell.
 6. **Mapped indices alias parameter cells.** Supplied simple-sloppy indices use
-   the last duplicate position; descriptor/delete operations sever mappings.
+   the last duplicate position; descriptors/delete/freeze sever mappings; seal retains them.
    Strict/non-simple is unmapped. Parameter/body cells can share one lazy object.
    Tests: `parameters.rs`, `binding/cell.rs`, `function/call_activation_tests.rs`.
-7. **Parameter/body targets are distinct where needed.** Non-simple parameters
-   keep their own bindings and TDZ during defaults. Same-named body vars get
-   their own locations initialized from the parameters; default-created closures
-   retain the parameter location. Simple parameters share the body variable target.
+7. **Parameter/body targets are distinct where needed.** Parameter expressions
+   require a separate body variable target; same-named body vars copy parameters.
+   Parameter-created closures retain parameter/enclosing cells outside body declarations.
+   Expression-free rest/pattern lists share the parameter/body variable target.
 8. **Global lexicals are canonical cells.** Realm binding storage holds their
    metadata/state; there is no copied lexical value projection or mutability side
    set. A global property of the same name remains independent. Ordinary global
