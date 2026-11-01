@@ -1,11 +1,11 @@
 # T077: In-place core rebuild
 
-- Status: active; S3b owner qualification finished, correctness passes. Healthy public86 **misses the payoff requirement in every lane**; lead disposition pending, no stage acceptance.
+- Status: active; lead round 4 authorizes ordered performance recovery from the verified 7b3ed258 correctness floor. Public payoff still fails; no stage acceptance.
 - Implementation: present through runtime `e1405670`, final x86 order/candidate `8413f925`. All ordered round-3 binding/effect/stress repairs and global-route invalidation are present; corrected differential generator is `7ce2ab30`. CallEnv/snapshots/apply-back/caller-env equality remain deleted; main's S2 layouts/ICs and cycle walkers remain.
 - Verified at: `e1405670` / `8413f925`, 2026-11-01 UTC: full gate (2,695 runtime, 5,174 curated), full agents 2,706/perf-counters 2,739, five stress suites 2,695 each, combined-off 2,653; 318 NG scripts and six module entries plus two dependency smokes in seven modes; public sweep 351/351; 31 depth parity probes and ten two-run counter maps; both production targets. Exact cached/off each 42,672/42,672 with zero gap/fail/timeout/not-run, unchanged exclusions and byte-identical case maps; both complete burndowns appended.
 - Evidence: [Final owner receipt](diagnostics/T077-s3b-final-owner/README.md), [6,000-program differential triage](diagnostics/T077-s3b-final-differential/README.md), [final public86 loss](diagnostics/T077-s3b-final-public86/README.md), [order](diagnostics/T077-s3b-final-order/README.md). Historical receipts remain revision-bound.
 - Unresolved: S3b payoff fails (portfolio wall/instructions 1.161922/1.184748 vs `3cc12c6f`); lead formal/held-out/RSS/re-review and disposition. Inherited CLI error-prefix spelling remains visible at differential binding-simple/170 and strict-delete PRE cases. Accepted predecessor regressions retain S3e/S4 ownership; class-construction complexity and native-stack policy retain existing owners.
-- Next action: lead reviews and decides S3b's disposition before dependent stages advance. Owner finish is complete and stops; do not tune/retry public86 in this finish. Never push to origin or merge into main.
+- Next action: execute causes 1→5 under the [round-4 recovery plan](proposals/T077-s3b-performance-recovery.md), preserving the correctness floor; collect cause-1/cause-2/final public86, then final requalification and stop. Never push to origin or merge into main.
 
 ## Authority and scope
 
