@@ -22,7 +22,7 @@ and runs `cargo fetch`.
 - `./scripts/check-ci.sh`: the hosted `check` job, for changes to CI,
   scripts or test scheduling.
 - `./scripts/compare-qjs.sh`: the `tests/fixtures/compare-qjs/` fixtures
-  against QuickJS-NG; not part of `check.sh`.
+  against QuickJS-NG; not part of `check.sh`. [Seeded binding fuzzing](binding-differential-fuzz.md) adds multi-mode/base comparisons.
 
 `check-touched.sh` selects by path: format, clippy and the file-size guard
 for Rust, Cargo, script or workflow changes; the tests of each touched crate
