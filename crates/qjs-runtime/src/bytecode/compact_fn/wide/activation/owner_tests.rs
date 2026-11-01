@@ -189,3 +189,30 @@ fn compound_member_assignments_after_deoptimization_keep_this() {
         Ok(Value::String("[[1,1,0],[1,1,0]]".into()))
     );
 }
+
+#[test]
+fn property_loaded_equality_preserves_every_iteration_and_receiver_read_path() {
+    for compare in ["== 1", "=== 1", "!= 0", "!== 0"] {
+        for condition in [format!("a.k {compare}"), format!("(q=a.k) {compare}")] {
+            for (before, after) in [
+                ("for(var i=0;i<4;i++){", "}"),
+                ("var i=0;while(i++<4){", "}"),
+                ("var i=0;do{", "}while(++i<4);"),
+            ] {
+                let source = format!(
+                    "var seen=[];function p(a){{var r=0,q;{before}if({condition}){{ \
+                    r+=(this===o);seen.push(typeof this+':'+this.v+':'+this['v']+':'+r); \
+                    }}{after}return r;}}var o={{v:2,p:p}};function calc(){{return o.p({{k:1}});}} \
+                    calc()+':'+seen.join(',');"
+                );
+                assert_eq!(
+                    crate::eval(&source),
+                    Ok(Value::String(
+                        "4:object:2:2:1,object:2:2:2,object:2:2:3,object:2:2:4".into()
+                    )),
+                    "{source}"
+                );
+            }
+        }
+    }
+}

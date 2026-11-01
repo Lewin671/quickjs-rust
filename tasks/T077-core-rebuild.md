@@ -1,11 +1,11 @@
 # T077: In-place core rebuild
 
-- Status: active; S3b round-2 repairs/checks committed and passing; awaiting remaining lead review before one requalification. Hostname qualification is resolved.
+- Status: active; S3b round-3 feedback in progress; round-2 repairs remain committed. Broader R1 resume discriminators pass (48 combinations, exact lead reproducer/NG and fast gate 2,671/65); ordered repairs precede one final requalification. Hostname qualification is resolved.
 - Implementation: through `a6de336d`: typed Context/bindings, single call-owner authority across wide/VM routes, checked capture-mask bounds and effect-aware numeric DCE. Main's generic hostname fix is integrated via `55f5d1d6`; its S2 layouts/ICs and allocation-free cycle walkers remain. CallEnv, snapshots/apply-back and caller-env equality entry remain deleted. [Progress](diagnostics/T077-s3b-progress.md).
 - Verified at: `a6de336d`: fast gate 2,670 runtime/65 curated, 302 NG scripts and four modules in default/off/verify, focused owner/effect/mask tests and main-only R2 overlay proof pass. Complete public sweep: 86 cases, 258 case-modes, 351/351 invocations pass. [Round-2 handoff](diagnostics/T077-s3b-round2-final/README.md). Full/exact requalification deliberately not started per [feedback](diagnostics/T077-s3b-lead-feedback-2.md); older exact receipts are historical.
 - Evidence: [S3b progress](diagnostics/T077-s3b-progress.md), [lead feedback](diagnostics/T077-s3b-lead-feedback-1.md), [follow-up acceptance](diagnostics/T077-s2fu-acceptance.md), [S1+S2 acceptance](diagnostics/T077-s1s2-acceptance.md), [target](../docs/design/core-rebuild.md), [baseline](diagnostics/T077-baseline.md), [S3 plan](proposals/T077-s3-plan.md), [S3b brief](proposals/T077-s3b-brief.md).
-- Unresolved: remaining lead fuzz review, fresh full/exact and performance requalification, and S3b payoff/acceptance. Accepted predecessor regressions retain S3e/S4 ownership; class-construction complexity and native-stack policy retain their existing owners.
-- Next action: report/stop for remaining lead findings, then fold confirmed issues into one fresh requalification. Lead owns formal/held-out/RSS and acceptance. The old alias proposal stays unapplied. Never push to origin or merge into main.
+- Unresolved: round-3 helper replay, binding/stress regressions and pre-existing scope findings; fresh fuzz/full/exact/performance qualification and S3b payoff/acceptance. Accepted predecessor regressions retain S3e/S4 ownership; class-construction complexity and native-stack policy retain their existing owners.
+- Next action: apply [round-3 feedback](diagnostics/T077-s3b-lead-feedback-3.md) in order, then run the single final requalification. Lead owns formal/held-out/RSS and acceptance. The old alias proposal stays unapplied. Never push to origin or merge into main.
 
 ## Authority and scope
 
