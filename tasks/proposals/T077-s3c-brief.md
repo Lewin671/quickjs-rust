@@ -299,3 +299,55 @@ instructions per call that are structural. This decision supersedes decision 1, 
 
    If the target is missed, stop with an attribution.
 6. Acceptance is unchanged from decision 1, item 4. The C3 scope stays approved.
+
+## Revised C1/C2 implementation addendum
+
+Ordinary register-tier runs own one contiguous `Vec<Value>` and a
+`Vec<FrameHeader>`, taken from RuntimeServices for the duration of the run.
+Taking ownership (not holding a RefCell borrow) permits native re-entry to take
+another empty stack. Both tiers use the same header and cleared-storage budget.
+Callee/receiver/new.target/home occupy four prefix slots before each window;
+only semantically used prefix slots are written. The callee owns its code and
+creation metadata, so ordinary entries need no second Rc clone or full seed bind.
+
+On arm64 and x86_64 the repr(C), align-8 header budget is: optional root Code
+owner 8, lazy Context owner 8, optional cold state 8, three typed CallSlotRefs 12,
+base/width/written boundary/PC/return-register/argc/flags as seven u32 = 28:
+**64 bytes**. Compile-time size/alignment/offset checks cover both targets.
+The Context owner is an inline OnceCell containing an optional box, not an
+allocated OnceCell per frame. A real service demand may materialize Context;
+ordinary entries do not allocate, reserve IDs, compare callees, or rebind owners.
+CallSlotRefs select the sole authority; input ownership is released after its
+transfer. Escaped cells/leases/call owners retain independent heap identities.
+
+A segment splits prefix from `regs = &mut values[base..base+width]` once.
+Code/PC, receiver/strict facts and that zero-based slice remain bound through
+ordinary backedges and known native-loop continuations. Calls end all borrows
+before either Vec grows. Return clears compiler-declared written ranges and
+used prefix slots, then pops the header. No address into either Vec escapes;
+natives pin the detached owning stack while borrowing arguments, and callbacks
+cannot borrow or recycle it. Retained empty stacks obey the existing count/byte
+bounds; poison checks cleared storage and owner separation, not callee matching.
+
+General execution keeps an owned FrameState directly in the driver for an
+ordinary frame; it does not box synchronous calls. Existing stack IR's local,
+operand and reference banks remain that record's semantic state until S3e lowers
+them to the universal register encoding. Immutable root/eval compilation owners
+are retained once; borrowed public entry APIs borrow that owner rather than
+cloning Bytecode. A suspendable entry instead selects the boxed owner before
+its prologue, retains that same complete record through yield/await/TLA and
+reattaches it on resume. No snapshot field reconstruction or code deep copy is
+needed. Per-segment declines and handback state reset at every re-entry; handler,
+cell, disposal and pending-completion state stay semantic frame state. FrameIds
+are absent on ordinary calls and allocated only if a suspended/exposed record
+needs directory lookup; existing direct owner handles need no eager ID.
+
+Expected unexposed inline-call lifecycle: **45+3a+3w instructions**, where a is
+moved arguments and w is written owning registers (including used prefix slots).
+The 45 budgets header push/pop, saved PC/destination, admission and authority
+selection; there is no directory/pool checkout, full Context bind/clear, RefCell
+or second bytecode owner per call. The estimate must be checked in assembly and
+N/2N slopes, not accepted as measured. Handling an already-native probed backedge
+inside its segment also removes repeated segment setup. Required checkpoint:
+all three call slopes at least 70 below `8322fc98`; the four named controls
+<=1.00 in instructions; public86 development/external instructions <1.00.
