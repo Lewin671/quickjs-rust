@@ -1180,3 +1180,70 @@ requirement and is not accepted.** No tuning or timing retry follows in this fin
 Lead owns formal/held-out/RSS, re-review and disposition before dependent stages
 advance. Existing inherited/next-stage owners remain. Owner commits this evidence
 and stops; no origin push or main merge.
+
+## Round-4 milestone 1: causes 1 and 2
+
+Commits **aea492db** (cause 1) and **f609c0ae** (cause 2) over `b33a3819`;
+baseline `3cc12c6f`. Plan: [recovery](../proposals/T077-s3b-performance-recovery.md),
+[attribution](T077-s3b-r4/attribution.md). Codex's unmeasured WIP was set aside.
+
+**Cause 1.** A bound global reference behaves as late resolution: PutValue on a
+global environment reference consults the declarative record, then the object
+record (ES2025 9.1.1.4.5), and so does a fresh lookup. Only a pure store whose name
+is unresolvable at its start can diverge (sloppy: a lexical or property created by
+the RHS; strict: the RHS creates the name); compound/update/append sites read at
+their start and throw first. `reference_admission.rs` proves per activation which
+starts need nothing (lexical, import, own global property), cached by realm,
+imports, binding generation and global-object layout. Unproven starts are selected
+before the RHS on every tier: the VM as before, typed loops via the A2 sink fix,
+the register tier through `ReferenceCheck` checkpoints whose selections survive
+exits into the interpreter continuation. Silent rejections now count and trace
+(`indexed_binding_admission_rejections`, `reference_blocked_loop_edges`,
+`scope_blocked_loop_edges`, CFDECLINE/TLBLOCK). `tests/global_references.rs` covers
+an RHS-created lexical, delete/recreate, strict missing names, eval-declared globals
+and delete/recreate before the callback, at top level, cold and on the register tier.
+
+**Cause 2.** Each call still owns its activation; the identity is minted on first
+exposure; owner inputs come from one borrow and only methods allocate class state.
+Inline callees run in `ActivationStack` slots (no moves; Context rebound only on a
+depth change; the root activation is never displaced). Returned unexposed
+activations are rebound to the next identical entry (same creation/kind/strictness,
+class state rewritten), across callbacks and runs through a bounded services pool.
+`tests/call_activations.rs` covers alternation of methods, strict/sloppy,
+constructor/plain callees, owner-exposing callbacks and inline errors.
+
+Reproducers, local arm64 instructions vs base (median of 3, `/usr/bin/time -l`):
+
+| Reproducer | before (`b33a3819`) | aea492db | f609c0ae |
+| --- | ---: | ---: | ---: |
+| bitand-global / partial-global | 39.40 / 25.15 | 1.018 / 1.017 | 1.019 / 1.016 |
+| validate-like | 2.015 | 1.076 | 1.069 |
+| upw0 / upw1 / upw4 | 1.539 / 1.512 / 1.487 | 1.551 / 1.523 / 1.497 | 1.164 / 1.168 / 1.177 |
+| call-implicit / call-var global write | 3.179 / 1.570 | 1.498 / 1.317 | 1.500 / 1.319 |
+
+The two global-write call reproducers' remainder is the global-code VM loop
+(per-op reference hooks, by-name routing: cause 5). Local 55-case instruction
+geomeans, development/external: before 1.0806/1.2553, aea492db 1.0791/1.0792,
+f609c0ae 1.0354/1.0526.
+
+Public86 quick triage `20261101T090800Z-t077-s3b-r4-m1` (f609c0ae vs 3cc12c6f),
+healthy, budget met, verdict likely loss; lane geomeans of case ratios:
+
+| Lane | Wall | Instructions | Final (`20261101T043615Z`) |
+| --- | ---: | ---: | ---: |
+| development | 1.041 | 1.034 | 1.087 / 1.108 |
+| external | 1.051 | 1.054 | 1.253 / 1.276 |
+| broad | 1.061 | 1.079 | 1.079 / 1.096 |
+| sentinel | 1.006 | 1.052 | 1.005 / 1.052 |
+
+Worst: date-format-xparb 1.686/1.604 and string-tagcloud 1.540/1.466 (cause 3);
+lodash 1.197/1.093, raytrace-public-class-fields 1.159/1.148, binary-trees
+1.134/1.154 and broad call cases about 1.15 (remaining per-call activation work).
+
+Checks at f609c0ae: fast gate 2,708 runtime + 117 curated Test262; perf-counters
+2,756; compare-qjs 318/318; public sweep 351/351; differential seeds 0–299 × three
+profiles, 900 programs with sources and tags identical to the final qualification
+for every seed and no mode disagreement; reference-sensitive Test262 slices (17
+prefixes) 3,779/3,779 cached and IC-off; depth maxima forEach 951, map 942, reduce
+1,000, call 3,567, apply 2,335, reflect_apply 2,492, yield_star 831, plain 4,096
+(all ≥ base). No timing ran locally. Next: causes 3–5 (milestone 2).
