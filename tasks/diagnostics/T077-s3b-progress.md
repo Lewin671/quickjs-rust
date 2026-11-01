@@ -1022,11 +1022,29 @@ at this source (5,171 curated cases), 2,636 default/2,691 feature runtime tests,
 comparisons pass. Every baseline debug/release success maximum and landmark is
 preserved. Production default/agents/perf-counters builds pass on both targets.
 
-Complete exact cached/off scans are running on the pinned agents release binary;
-no partial burndown is recorded. Initial merged public86 job
+The complete cached exact scan rejects this freeze: 42,669 passes / three failures,
+zero timeout/not-run; the complete burndown row is appended. IC-off discovery of
+this rejected source was stopped, with no partial burndown. [Checkpoint](T077-s3b-exact-73c-rejected/README.md) owns the failures and diagnosis. Initial merged public86 job
 `20261031T233745Z-t077-s3b-merged-public86` exits before measurement: policy expects
 `iMac.local`, actual is `iMac.lan`. Identity job
 `20261031T234927Z-t077-s3b-host-identity` confirms all other host/recipe fields
 identical. The proposed alias-only tooling change is pending explicit approval;
 no policy bands or identity guard have been bypassed. Final owner handoff remains
-pending complete scans and valid public86 improvement.
+pending repair/refreeze, complete scans and valid public86 improvement.
+
+## Exact-checkpoint repairs
+
+Free-name sloppy writes now select canonical global lexical cells before the
+object-cache route, including bindings created by host script entry after caller
+compilation and a nonextensible global object. The checked publisher remains
+object-only. A focused runtime test covers mutable let/class, const rejection and
+absence of object properties. The synthetic host shim now uses a callable
+nonconstructor for its Function prototype; the previous ordinary function's own
+prototype property could leak into bound wrappers through typed creation data.
+This changes no exclusion or expected failure. All three previously failing
+upstream cases are added to the curated allowlist and pass after repair.
+
+Repair gate: **2,637 default runtime tests and 5,174 curated Test262 cases**
+pass, along with formatting, strict workspace Clippy and context checks. Full
+exact affected slices pass **100/100 Function.bind** and **42/42 global-code**,
+with zero gaps/timeouts/not-run. These filtered slices create no burndown rows.

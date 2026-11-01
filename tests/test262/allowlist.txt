@@ -5174,3 +5174,7 @@ test/language/statements/const/global-closure-get-before-initialization.js
 test/language/statements/using/block-local-closure-get-before-initialization.js
 test/language/statements/using/function-local-closure-get-before-initialization.js
 test/language/statements/using/global-closure-get-before-initialization.js
+
+test/built-ins/Function/prototype/bind/get-fn-realm.js
+test/built-ins/Function/prototype/bind/get-fn-realm-recursive.js
+test/language/global-code/script-decl-lex.js

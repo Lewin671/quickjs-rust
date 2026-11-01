@@ -911,7 +911,12 @@ impl Vm<'_, '_> {
         if let Some(reference) = self.resolve_scope_binding(name, false)? {
             return self.assign_scope_binding(&reference, value, false);
         }
-        if self.uses_selected_object_binding(name) {
+        // Host script entry can add a global lexical after this bytecode was
+        // compiled. Its canonical cell wins over the sloppy fallback slot;
+        // publishing an object-cache value cannot assign a declarative.
+        if self.uses_selected_object_binding(name)
+            || (self.env.can_cache_realm_globals() && self.env.is_global_lexical_binding(name))
+        {
             return self.store_global_binding(name, value, false);
         }
 

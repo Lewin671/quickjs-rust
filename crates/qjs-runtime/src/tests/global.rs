@@ -860,6 +860,25 @@ fn eval_script_host_evaluates_global_script() {
 }
 
 #[test]
+fn eval_script_lexicals_assign_through_cells_on_a_nonextensible_global() {
+    assert_eq!(
+        eval(
+            "Object.preventExtensions(this); \
+             __quickjsRustEvalScript('let hostedLet = 1;'); \
+             hostedLet = 2; \
+             __quickjsRustEvalScript('const hostedConst = 3;'); \
+             let immutable = false; \
+             try { hostedConst = 4; } catch (error) { immutable = error instanceof TypeError; } \
+             __quickjsRustEvalScript('class HostedClass {}'); \
+             HostedClass = 5; \
+             [hostedLet, hostedConst, HostedClass, immutable, \
+              Object.hasOwn(this, 'hostedLet'), Object.hasOwn(this, 'HostedClass')].join(':');"
+        ),
+        Ok(Value::String("2:3:5:true:false:false".into()))
+    );
+}
+
+#[test]
 fn initializes_global_hoisted_bindings_before_script_execution() {
     assert_eq!(
         eval("var before = f; { function f() { return 9; } } before === undefined && f() === 9;"),
