@@ -139,3 +139,19 @@ fn abrupt_reentry_preserves_finally_reads_and_escaped_tdz_instances() {
         Ok(Value::String("ReferenceError:1".into()))
     );
 }
+
+#[test]
+fn separate_scripts_reject_lexical_redeclaration_over_an_independent_property() {
+    for declaration in ["let p=2;", "const p=2;", "class p{}"] {
+        let source = format!(
+            "globalThis.p=1;__quickjsRustEvalScript('let p=10;');var r; \
+            try{{__quickjsRustEvalScript('var side;{declaration}');r='missed';}}catch(e){{r=e.name;}} \
+            r+':'+p+':'+globalThis.p+':'+Object.prototype.hasOwnProperty.call(globalThis,'side');"
+        );
+        assert_eq!(
+            eval(&source),
+            Ok(Value::String("SyntaxError:10:1:false".into())),
+            "{source}"
+        );
+    }
+}

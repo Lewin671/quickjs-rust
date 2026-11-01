@@ -127,3 +127,16 @@ Focused tests cover current-value snapshots, subsequent parameter writes,
 duplicate mappings, Proxy forwarding and seal control. Exact lead f(1) behavior
 is included in the permanent NG fixture. Before: mapped arguments continued
 changing with parameters; after: all discriminators pass.
+
+## Repeated global scripts over an object-property homonym
+
+Parent `ac8a408d`. Global declaration validation inferred absence of a lexical
+from presence of an own global-object property. The records are independent:
+canonical lexical metadata now wins before the legacy object-record fallback.
+A second let/const/class declaration throws SyntaxError before instantiating any
+other declaration; the first lexical value (10) and object property (1) survive.
+
+Focused fixed-oracle tests cover all three redeclarations and atomic rejection.
+The portable .mjs fixture uses the Rust host evalScript or NG's std.evalScript
+via a conditional dynamic import; both execute actual separate global Scripts,
+not indirect eval's temporary lexical environment.

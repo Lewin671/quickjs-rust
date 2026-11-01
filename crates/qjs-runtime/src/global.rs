@@ -1227,8 +1227,10 @@ fn has_global_lexical_binding(
     if is_marked_dynamic_realm_global(env, global_this) {
         return false;
     }
-    !global_this.has_own_property(name)
-        && (env.is_global_lexical_binding(name) || env.realm_contains(name))
+    // Declarative and object records may contain the same name. An own
+    // global property cannot hide a canonical lexical declaration conflict.
+    env.is_global_lexical_binding(name)
+        || !global_this.has_own_property(name) && env.realm_contains(name)
 }
 
 fn can_declare_global_var(global_this: &ObjectRef, name: &str) -> bool {
