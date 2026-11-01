@@ -36,6 +36,9 @@ mode; TZ is UTC. The verifier must actually enable debug controls. Combined
 stress enables verify-bindings, forced exposure, poison and IC verification.
 Individual controls/full suites remain separate stage obligations.
 
+Receiver loops use distinct nested counters; generated index expressions follow
+the nearest loop so nested var/let counters cannot invalidate whole programs.
+
 Profiles are `binding` (scope/eval/with/NFE/default/rest/arguments/generators/
 classes/jobs), `binding-simple` (the review's alternative simple-parameter
 sampling distribution), and `receiver` (this/arguments/new.target and compound

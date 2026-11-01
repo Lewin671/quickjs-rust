@@ -1,0 +1,101 @@
+[
+  {
+    "profile": "binding",
+    "seed": 394,
+    "observation": "E18",
+    "candidate": "<missing>",
+    "ng": "caught ReferenceError",
+    "lines": 32,
+    "calls": 663
+  },
+  {
+    "profile": "binding",
+    "seed": 806,
+    "observation": "fs1",
+    "candidate": "throws ReferenceError",
+    "ng": "throws TypeError",
+    "lines": 15,
+    "calls": 146
+  },
+  {
+    "profile": "binding",
+    "seed": 1816,
+    "observation": "K67",
+    "candidate": "[[\"object\",\"function\"],[NaN,{..}],\"number\",\"function c() { return typeof b; }q\",undefined]",
+    "ng": "throws ReferenceError",
+    "lines": 64,
+    "calls": 1995
+  },
+  {
+    "profile": "binding",
+    "seed": 1822,
+    "observation": "fs5",
+    "candidate": "41",
+    "ng": "throws ReferenceError",
+    "lines": 32,
+    "calls": 494
+  },
+  {
+    "profile": "binding-simple",
+    "seed": 413,
+    "observation": "P22",
+    "candidate": "[4,null]",
+    "ng": "rej ReferenceError",
+    "lines": 29,
+    "calls": 428
+  },
+  {
+    "profile": "binding-simple",
+    "seed": 485,
+    "observation": "C8'",
+    "candidate": "[\"s\",undefined]",
+    "ng": "[fn,undefined]",
+    "lines": 20,
+    "calls": 294
+  },
+  {
+    "profile": "binding-simple",
+    "seed": 806,
+    "observation": "fs1",
+    "candidate": "throws ReferenceError",
+    "ng": "throws TypeError",
+    "lines": 15,
+    "calls": 146
+  },
+  {
+    "profile": "binding-simple",
+    "seed": 949,
+    "observation": "D47",
+    "candidate": "[true,\"string\"]",
+    "ng": "[true,\"undefined\"]",
+    "lines": 53,
+    "calls": 1345
+  },
+  {
+    "profile": "binding-simple",
+    "seed": 988,
+    "observation": "L68",
+    "candidate": "\"w\"",
+    "ng": "<missing>",
+    "lines": 44,
+    "calls": 1050
+  },
+  {
+    "profile": "binding-simple",
+    "seed": 1737,
+    "observation": "fs15",
+    "candidate": "[\"function\",true]",
+    "ng": "throws ReferenceError",
+    "lines": 60,
+    "calls": 1389
+  },
+  {
+    "profile": "binding-simple",
+    "seed": 1822,
+    "observation": "K21",
+    "candidate": "[[true,\"function\"],[fn,4],\"undefined\",\"undefined\",undefined]",
+    "ng": "[[true,\"function\"],[undefined,4],\"undefined\",\"undefined\",undefined]",
+    "lines": 36,
+    "calls": 851
+  }
+]

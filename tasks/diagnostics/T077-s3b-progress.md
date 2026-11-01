@@ -1112,3 +1112,17 @@ selection. Default/off/verify match NG and main `3cc12c6f` on both permanent
 script/module regressions. Focused runtime and staged gate pass 2,695 runtime
 and 65 selected Test262 cases. Corrected receiver generation, fresh seeded
 triage and final qualification remain; historical receipts are not current.
+
+
+## Final corrected differential run
+
+Runtime `e1405670`; corrected receiver counters in the accompanying tool commit.
+[Final differential receipt](T077-s3b-final-differential/README.md): 6,000 programs,
+36,000 invocations, stable hashes; zero mode disagreement/panic/crash/timeout.
+Receiver 2,000/2,000 matches all six engines/modes; all 44 invalid-counter seeds
+now run. Raw overlapping totals: MATCH 3,199, FIXED 2,570, PRE 535, CHANGED 395,
+REGR 31. Original runner exit 1 is retained. All 742 disagreement programs are
+triaged against an independent Node script oracle and binding/try semantics;
+only HasProperty trace differences and an inherited CLI error-label/index entry
+remain unmatched. All Get/Set sequences agree with Node. No unexplained new
+semantic difference remains; final qualification follows on this runtime.

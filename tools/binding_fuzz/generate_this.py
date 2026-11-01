@@ -15,6 +15,8 @@ import sys
 class G:
     def __init__(self, seed):
         self.r = random.Random(seed)
+        self.loop_serial = 0
+        self.loop_index = "j"
         self.np = self.r.randrange(1, 4)
         self.params = ['a', 'b', 'c'][:self.np]
         self.strict = self.r.random() < 0.2
@@ -36,7 +38,7 @@ class G:
         return '1'
 
     def idx(self):
-        return self.pick(['i', 'i', '0', '1', 'j'])
+        return self.pick(['i', 'i', '0', '1', self.loop_index])
 
     def lhs(self):
         return self.pk(self._lhs)
@@ -129,7 +131,15 @@ class G:
         if k < 13:
             return 'for (i = 0; i < 3; i++) {\n%s\n}' % self.body(d + 1)
         if k < 14:
-            return self.pick(['for (var j = 0; j < 2; j++) {\n%s\n}', 'for (let j = 0; j < 2; j++) {\n%s\n}', 'j = 0; do {\n%s\n} while (++j < 2);']) % self.body(d + 1)
+            # A nested var must not redeclare an enclosing lexical counter.
+            # Keep index expressions attached to the nearest generated loop.
+            counter = f"j_loop_{self.loop_serial}"
+            self.loop_serial += 1
+            shape = self.pick(['for (var INDEX = 0; INDEX < 2; INDEX++) {\n%s\n}', 'for (let INDEX = 0; INDEX < 2; INDEX++) {\n%s\n}', 'var INDEX = 0; do {\n%s\n} while (++INDEX < 2);'])
+            previous, self.loop_index = self.loop_index, counter
+            body = self.body(d + 1)
+            self.loop_index = previous
+            return shape.replace('INDEX', counter) % body
         if k < 15:
             return 'while (t < 2 && n++ < 4) {\n%s\nt += 1;\n}' % self.body(d + 1)
         return 'if (%s) {\n%s\n} else if (%s) {\n%s\n}' % (self.cond(), self.body(d + 1), self.cond(), self.body(d + 1))
