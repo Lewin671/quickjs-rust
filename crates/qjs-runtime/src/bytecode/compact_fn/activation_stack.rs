@@ -6,19 +6,37 @@
 //! call at that depth rebinds instead of rebuilding; a depth without one draws
 //! from the services' released activations, and a run that returns normally
 //! hands its released slots back there. Every call still owns one canonical
-//! activation; a released slot keeps only its creation and class handles.
+//! activation; a released slot keeps only its creation and class handles and
+//! obeys the reuse invariant of `context/activation.rs` (never exposed, never
+//! referenced, poisoned under `QJS_POISON_RELEASED_ACTIVATIONS`). Parked
+//! slots are bounded in count and bytes.
 use crate::context::ActivationContext;
 use crate::function::Function;
 
 /// Released slots kept above the current frame after a deep return.
 const MAX_PARKED: usize = 64;
+const _: () = assert!(
+    MAX_PARKED
+        * (std::mem::size_of::<ActivationContext>()
+            + std::mem::size_of::<crate::context::ClassOwner>())
+        <= 16 * 1024,
+    "parked activations stay within 16 KiB"
+);
 
 #[derive(Default)]
 pub(in crate::bytecode) struct ActivationStack {
     slots: Vec<ActivationContext>,
+    /// The run's `BindingDebug::poisoning_activations`.
+    poison: bool,
 }
 
 impl ActivationStack {
+    /// Starts a run with `runtime`'s stress policy.
+    pub(in crate::bytecode) fn begin(&mut self, runtime: &crate::context::RuntimeServices) {
+        debug_assert!(self.slots.is_empty(), "no activation outlives its run");
+        self.poison = runtime.binding_debug.poisoning_activations();
+    }
+
     /// The activation of the frame at `depth`.
     #[inline(always)]
     pub(in crate::bytecode) fn current<'a>(
@@ -61,15 +79,11 @@ impl ActivationStack {
     /// retained or exposed is dropped with it.
     #[inline]
     pub(in crate::bytecode) fn release(&mut self, depth: usize) {
-        if !self.slots[depth].release_for_reuse() {
+        if !self.slots[depth].release_for_reuse(self.poison) {
             self.slots.truncate(depth);
         } else if self.slots.len() > depth + MAX_PARKED {
             self.slots.truncate(depth + MAX_PARKED);
         }
-    }
-
-    pub(in crate::bytecode) fn is_empty(&self) -> bool {
-        self.slots.is_empty()
     }
 
     /// Ends a run: after a normal return every slot is released and goes

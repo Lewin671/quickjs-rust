@@ -1450,8 +1450,16 @@ pub(crate) fn reenter_indexed_activation(
         )
 }
 
-/// Released callback activations the services keep for later entries.
+/// Released activations the services keep for later entries, bounded in
+/// count and bytes (`context/activation.rs` reuse invariant).
 const MAX_RELEASED_ACTIVATIONS: usize = 16;
+const _: () = assert!(
+    MAX_RELEASED_ACTIVATIONS
+        * (std::mem::size_of::<crate::context::ActivationContext>()
+            + std::mem::size_of::<crate::context::ClassOwner>())
+        <= 4 * 1024,
+    "released activations stay within 4 KiB"
+);
 
 /// An indexed activation for `function`: the services' last released one
 /// rebound when it is exactly what a fresh entry would build, else a fresh one.
@@ -1477,7 +1485,7 @@ fn recycle_callback_activation(
     activation: Option<crate::context::ActivationContext>,
 ) {
     if let Some(mut activation) = activation
-        && activation.release_for_reuse()
+        && activation.release_for_reuse(runtime.binding_debug.poisoning_activations())
     {
         keep_released_activation(runtime, activation);
     }

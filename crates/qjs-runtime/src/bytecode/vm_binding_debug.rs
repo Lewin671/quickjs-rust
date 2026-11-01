@@ -132,6 +132,7 @@ mod tests {
             verify: true,
             force,
             poison: true,
+            poison_activations: true,
         };
         let mut vm = Vm::new(&bytecode, &mut runtime, activation)?;
         let value = vm.run()?;
@@ -186,6 +187,7 @@ mod tests {
                 verify: true,
                 force,
                 poison: true,
+                poison_activations: true,
             };
             let mut vm = Vm::new_with_globals(bytecode, &mut runtime, activation);
             vm.stop_at_prologue = true;

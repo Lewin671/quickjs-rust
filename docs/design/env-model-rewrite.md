@@ -1,9 +1,8 @@
 # Environment and binding model
 
-The runtime uses slot-indexed locals and shared cells. This is a protected
-boundary: ordinary calls must not copy a name-to-value environment. Source paths
-below are under `crates/qjs-runtime/src/`; tests are under `tests/` there.
-Migration: [T077 S3b](../../tasks/proposals/T077-s3b-brief.md).
+The runtime uses slot-indexed locals and shared cells, a protected boundary:
+ordinary calls must not copy a name-to-value environment. Paths are under
+`crates/qjs-runtime/src/`, tests under `tests/` there ([T077 S3b](../../tasks/proposals/T077-s3b-brief.md)).
 ## Compiled authority
 
 `bytecode/binding_plan.rs` owns one immutable BindingPlan per body. The existing
@@ -129,25 +128,27 @@ Tests: `context/call_owner.rs`, `function/call_activation_tests.rs`, `class_keys
 `context/creation.rs` owns shared realm, referrer, module routes, private
 context and explicit global selection. `context/activation.rs` owns logical
 variable identity (minted on first exposure), call owner, scope roots, mode and
-strictness; a returned unexposed one may be rebound to a later identical entry,
-never shared by live calls. Related realms mint non-wrapping tokens in their
-AtomDomain boundary. Parameter/body entry changes only its scope boundary.
-Module-root routing remains a scope fact while temporary class-key mode changes.
-Creation/module metadata contains cell routes, never settled lexical values.
+strictness. **Reuse:** only a returned, never-exposed activation (unminted
+identity, inline owner, no scopes/holders/saved references) enters a pool
+bounded in count and bytes; no lease, cell, closure, arguments object,
+continuation, generator or eval holder can reference it, and an identical later
+entry rebinds it. Related realms mint non-wrapping tokens in their AtomDomain
+boundary. Parameter/body entry changes only its scope boundary. Module-root
+routing stays a scope fact; creation/module metadata holds cell routes only.
 
 `Context<'a>` borrows services/activation; it is never cloned or retained.
 NativeSite borrows call info, target and eval sources; callee realm is lazy.
 Vm/tiers own callee state; no caller-equality proof or empty-env factory remains.
-RuntimeGroup shares AtomDomain/weak realm registry; host/agent services stay canonical.
-Dynamic Function reuses its callee Realm/live globals without execution projections.
-Debug RuntimeServices captures QJS_VERIFY_BINDINGS, QJS_FORCE_EVAL_EXPOSURE,
-QJS_POISON_RELEASED_SCOPES once; production ignores them. Forcing applies to
-materialized declarations; nonexposing admitted tiers retain their own storage.
-Class keys execute inline. A cold continuation owns the partial class/private
-context across yield/await; handlers restore regions and mode to their entry.
-Heritage validation precedes keys; each method installs before the next key.
-Static public/private fields and blocks run together in source order. The inner
-name stays TDZ through keys, initializes before static fields; inferred names bind none.
+RuntimeGroup shares AtomDomain/weak realm registry; host/agent services stay
+canonical; Dynamic Function reuses its callee Realm/live globals. Debug services
+capture QJS_VERIFY_BINDINGS, QJS_FORCE_EVAL_EXPOSURE, QJS_POISON_RELEASED_SCOPES
+and QJS_POISON_RELEASED_ACTIVATIONS (pooled activations hold a checked poison)
+once; production ignores them. Forcing applies to materialized declarations;
+nonexposing admitted tiers keep their storage. Class keys execute inline; a cold
+continuation owns partial class/private context across yield/await, handlers
+restore regions and mode. Heritage validation precedes keys; each method installs
+before the next; static fields/blocks run in source order; the inner name stays
+TDZ through keys, initializes before static fields; inferred names bind none.
 
 Compact/wide/leaf tiers retain their static cell paths; a retained dynamic chain
 is not a caller-environment equality proof, and admission rejects shortcuts that
@@ -155,6 +156,5 @@ could bypass live crossing names. T077 later retires these tiers separately.
 
 ## Known limits
 
-- Rc cycles between functions, cells, objects and private state are not collected;
-  the tracing collector/arena stage owns that replacement.
+- Rc cycles among functions, cells, objects and private state are not collected (collector stage).
 - Dynamic lookup is an uncached chain walk; no name/value cache or inherited map fork.

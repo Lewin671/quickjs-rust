@@ -421,7 +421,7 @@ fn run_frames(
     let frames = &mut storage.frames;
     let activations = &mut storage.activations;
     debug_assert!(frames.is_empty(), "a root activation starts its own stack");
-    debug_assert!(activations.is_empty(), "no activation outlives its run");
+    activations.begin(runtime);
 
     // `Value::Undefined` marks the root, whose bytecode the caller owns.
     let mut current_callee = Value::Undefined;

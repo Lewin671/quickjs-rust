@@ -20,7 +20,8 @@ from .generate_this import G
 
 PROFILES = ("binding", "binding-simple", "receiver")
 STRESS = {"QJS_VERIFY_BINDINGS": "1", "QJS_FORCE_EVAL_EXPOSURE": "1",
-          "QJS_POISON_RELEASED_SCOPES": "1", "QJS_VERIFY_IC": "1"}
+          "QJS_POISON_RELEASED_SCOPES": "1", "QJS_POISON_RELEASED_ACTIVATIONS": "1",
+          "QJS_VERIFY_IC": "1"}
 BLOCKERS = {"INCONS", "REGR", "CHANGED", "PANIC", "TIMEOUT", "CRASH", "REFERENCE_FAILURE"}
 
 

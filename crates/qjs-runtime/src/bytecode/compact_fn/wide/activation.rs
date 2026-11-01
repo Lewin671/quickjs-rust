@@ -701,7 +701,7 @@ fn run_frames(
     let frames = &mut storage.frames;
     let activations = &mut storage.activations;
     debug_assert!(frames.is_empty(), "a root activation starts its own stack");
-    debug_assert!(activations.is_empty(), "no activation outlives its run");
+    activations.begin(runtime);
 
     let mut current_callee = Value::Undefined;
     // The root body's upvalue owner; a callee entered on this driver owns
