@@ -14,7 +14,7 @@ import statistics
 from pathlib import Path
 
 from .held_out import MANIFEST_PATH, opportunity_ids
-from .layout_identity import ROOT, digest, write_json
+from .layout_identity import ROOT, digest, write_json, same_node
 from .layout_policy import HELD_OUT_RULE, analyze, geomean, load_policy, round_up, rows
 from .layout_power import precision_record
 
@@ -75,7 +75,7 @@ def inputs(parent, parent_sha, a2, original, development_a2, aa, image):
         raise ValueError('held-out estimator input differs from the parent policy evidence')
     held, raw = replay(a2, image, 'held-out')
     development, development_raw = replay(development_a2, image)
-    if held['host'] != parent['host'] or held['host_node'] != parent['host_node']:
+    if held['host'] != parent['host'] or not same_node(held['host_node'], parent['host_node']):
         raise ValueError('held-out A2 host differs from parent policy')
     packet = replay_calibration(aa, fixture['calibration_binary_sha256'])
     from .case_schedule import require_same

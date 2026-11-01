@@ -12,7 +12,7 @@ import platform
 import statistics
 from pathlib import Path
 
-from .layout_identity import OFFSETS, digest, host_identity
+from .layout_identity import OFFSETS, digest, host_identity, same_node
 from .statistics import relative_half_width
 
 # v4 policies resolve held-out wall excesses with six matching layouts.
@@ -101,7 +101,7 @@ def load_policy(path: Path, sha256: str, *, live=True):
         raise ValueError('layout policy is not qualified')
     if policy.get('offsets') != list(OFFSETS):
         raise ValueError('layout policy offsets mismatch')
-    if live and (policy['host'] != host_identity() or policy.get('host_node') != platform.node()):
+    if live and (policy['host'] != host_identity() or not same_node(policy.get('host_node'), platform.node())):
         raise ValueError('layout policy host/recipe mismatch: recalibration required')
     for group in ('cases', 'held_out'):
         if not policy[group]:
@@ -144,7 +144,7 @@ def with_held_out_successor(policy, sha256, successor=None):
     from .layout_identity import ROOT
     value = load_policy(ROOT / successor['path'], successor['sha256'], live=False)
     if (value.get('held_out_rule') != HELD_OUT_RULE or value['host'] != policy['host']
-            or value.get('host_node') != policy.get('host_node') or set(value['held_out']) != set(policy['held_out'])):
+            or not same_node(value.get('host_node'), policy.get('host_node')) or set(value['held_out']) != set(policy['held_out'])):
         raise ValueError('held-out successor policy does not match the frozen parent host/inventory')
     from .case_schedule import require_same
     require_same(policy, value)

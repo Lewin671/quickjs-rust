@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 from . import host_manifest
-from .layout_identity import ROOT, digest
+from .layout_identity import ROOT, digest, same_node
 from .resource_schema import load_resource_manifest
 from .resource_analysis_schema import load_resource_analysis
 from .resource_validation import validate_resource_run
@@ -54,7 +54,7 @@ def verify(report_path, raw_path, policy, engines):
     validated = validate_resource_run(raw_path, manifest)
     if build_resource_report(validated, manifest, analysis) != report:
         raise ValueError('resource report differs from raw replay')
-    if report['run']['host']['node'] != policy['host_node']:
+    if not same_node(report['run']['host']['node'], policy['host_node']):
         raise ValueError('resource evidence host differs from policy')
     actual = {e['role']: e for e in report['run']['engines']}
     for role in ('candidate', 'base'):

@@ -59,6 +59,7 @@ class ResourceSchemaTests(unittest.TestCase):
                 "scripts/resource-benchmark-report.sh",
                 "tools/__init__.py",
                 "tools/benchmark/__init__.py",
+                "tools/benchmark/layout_identity.py",
                 "tools/benchmark/planning.py",
                 "tools/benchmark/receipts.py",
                 "tools/benchmark/records.py",
@@ -86,7 +87,7 @@ class ResourceSchemaTests(unittest.TestCase):
         )
         self.assertEqual(
             analysis.protocol_sha256,
-            "8bbfc9907719f10f49a9e014e2a43c6273922acd20a2a5d5fb72a4a937af2546",
+            "3e266bed5136ec4bc29374df55d1b5a08e02996e69b7073138e822a3ac66eed3",
         )
         self.assertNotIn("tools/benchmark/resource_runner.py", analysis.protocol_file_ids)
 

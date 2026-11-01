@@ -9,7 +9,7 @@ import json
 import os
 from pathlib import Path
 
-from .layout_identity import digest, OFFSETS
+from .layout_identity import digest, OFFSETS, same_node
 from .layout_policy import rows
 from .screen_replay import replay_case
 
@@ -18,7 +18,7 @@ def replay(path: Path, policy, engines=None, *, held=False):
     evidence = json.loads(path.read_text())
     if (evidence.get('schema_version') != 1 or evidence.get('artifact_type') != 'quickjs-layout-panel'
             or evidence.get('host') != policy['host'] or evidence.get('held_out') != held
-            or evidence.get('host_node') != policy.get('host_node')):
+            or not same_node(evidence.get('host_node'), policy.get('host_node'))):
         raise ValueError('layout evidence schema/host/lane mismatch')
     if len(evidence['panels']) not in (1, 6):
         raise ValueError('incomplete layout panel')
@@ -33,7 +33,7 @@ def replay(path: Path, policy, engines=None, *, held=False):
     paths = []
     for role in ('base', 'candidate'):
         matrix = evidence[role]
-        if (matrix['host'] != policy['host'] or matrix.get('host_node') != policy.get('host_node')
+        if (matrix['host'] != policy['host'] or not same_node(matrix.get('host_node'), policy.get('host_node'))
                 or not matrix['static_pass'] or matrix['offsets'] != list(OFFSETS)):
             raise ValueError('layout matrix identity/audit mismatch')
         if len(matrix['variants']) != 6:

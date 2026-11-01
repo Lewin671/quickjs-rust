@@ -5,8 +5,12 @@
 repository-relative `policy_path` and `policy_sha256`; policy changes require
 a new version. `host` records machine/OS/CPU/memory/toolchain/linker, Cargo
 configuration, canonical recipe and manifest hashes; `host_node` binds the
-specific machine. Analysis verifies the recorded host; collectors also
-verify the live host. An unqualified policy is never usable.
+specific machine by its case-insensitive short hostname, ignoring the DNS
+domain suffix (`iMac.local`, `iMac.lan` and `iMac` identify the same node).
+`layout_identity.same_node` owns this comparison; recorded node names retain
+their raw values for provenance. All other host/recipe fields remain exact.
+Analysis verifies the recorded host; collectors also verify the live host.
+An unqualified policy is never usable.
 
 `cases` maps the 76 legacy selection cases (86 with development) to `wall_band` B_i and
 `instruction_band` I_i; `held_out` maps all nine acceptance programs to their

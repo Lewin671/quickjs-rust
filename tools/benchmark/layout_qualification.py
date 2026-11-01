@@ -8,7 +8,7 @@ import os
 import statistics
 from pathlib import Path
 
-from .layout_identity import OFFSETS, digest, write_json
+from .layout_identity import OFFSETS, digest, write_json, same_node
 from .layout_policy import analyze, round_up, rows
 
 
@@ -208,7 +208,7 @@ def main():
     verify_formal_load(args.formal_load_log.read_text(), attestation['started_at'])
     recorded = packets['portfolio']['host']
     current = attestation['host']
-    if seed.get('source_host_node') != attestation['node']:
+    if not same_node(seed.get('source_host_node'), attestation['node']):
         raise ValueError('A2 bands belong to a different host: recalibrate the layout envelope')
     verify_host_inputs(seed['source_host'], current, args.band_context)
     verify_host_inputs(recorded, current, args.screen_context)
@@ -234,7 +234,7 @@ def main():
             raise ValueError('duplicate latest continuation case')
         pilot = args.held_out if name.startswith('held-out/') else args.portfolio
         ratios, _, extended_host = replay_continuation(path.resolve(),pilot.resolve(),name)
-        if extended_host != current or value.get('host_node') != attestation['node']:
+        if extended_host != current or not same_node(value.get('host_node'), attestation['node']):
             raise ValueError('power continuation host/recipe mismatch')
         extensions[name] = ratios
         paths['continuation/'+name] = path
@@ -244,7 +244,7 @@ def main():
         value=json.loads(path.read_text());name=value['case_id']
         if name in formal_extensions:raise ValueError('duplicate formal continuation case')
         ratios,extended_host=replay_formal(path.resolve(),folder.resolve(),name,pilot=formal[name])
-        if extended_host!=current or value.get('host_node')!=attestation['node']:
+        if extended_host!=current or not same_node(value.get('host_node'), attestation['node']):
             raise ValueError('formal continuation host/recipe mismatch')
         formal_extensions[name]=ratios
         paths['formal-continuation/'+name]=path

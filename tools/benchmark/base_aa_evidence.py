@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from .layout_identity import same_host
 from .external_preview import _EXPECTED_STDOUT_BY_ROLE
 from .external_report import paired_effect
 from .performance_evidence import MAX_WIDTH, MIN_BLOCKS, interval
@@ -16,6 +17,13 @@ from .performance_schema import PerformanceDecisionError, _integer, _keys, _read
 CONTEXT_KEYS = ("host", "manifest_sha256", "bundle_sha256", "argv", "metric",
                 "timer", "timer_phase_boundary", "timeout_seconds", "source_revision",
                 "source_files", "preview_id", "schema_version", "record_type", "suite_id", "case_id")
+
+
+def _same_context(a, b):
+    """Keep the launch protocol exact while comparing the host's short node."""
+    return (same_host(a.get('host'), b.get('host'))
+            and {k: v for k, v in a.items() if k != 'host'}
+            == {k: v for k, v in b.items() if k != 'host'})
 
 
 def case_context(external_path: Path, case_id: str):
@@ -32,7 +40,7 @@ def case_context(external_path: Path, case_id: str):
     if not base or len(base) != len(candidate):
         raise PerformanceDecisionError(f"{case_id}: missing complete raw instruction pairs")
     context = {key: base[0][key] for key in CONTEXT_KEYS}
-    if any({key: r[key] for key in CONTEXT_KEYS} != context for r in base):
+    if any(not _same_context({key: r[key] for key in CONTEXT_KEYS}, context) for r in base):
         raise PerformanceDecisionError(f"{case_id}: inconsistent base launch protocol")
     count = len(base)
     instructions = paired_effect(candidate, base, count, "instructions")
@@ -50,7 +58,7 @@ def replay_aa(payload, summary, summary_sha, context, required_blocks, metric):
         raise PerformanceDecisionError("unsupported base A/A evidence schema")
     if payload["base_engine"] != summary["engines"]["base"]:
         raise PerformanceDecisionError("base A/A executable/revision mismatch")
-    if payload["summary_sha256"] != summary_sha or payload["context"] != context:
+    if payload["summary_sha256"] != summary_sha or not _same_context(payload["context"], context):
         raise PerformanceDecisionError("base A/A bundle or launch protocol mismatch")
     if metric not in {"cycles", "wall_time"}:
         raise PerformanceDecisionError("base A/A unknown judged metric")
@@ -73,7 +81,7 @@ def replay_aa(payload, summary, summary_sha, context, required_blocks, metric):
             raise PerformanceDecisionError("base A/A duplicate or missing role/block")
         seen.add((role, block))
         if (row.get("binary_sha256") != payload["base_engine"]["binary_sha256"]
-                or {key: row.get(key) for key in CONTEXT_KEYS} != context
+                or not _same_context({key: row.get(key) for key in CONTEXT_KEYS}, context)
                 or row.get("measurement_blocks") != blocks
                 or row.get("phase") != "measurement"
                 or row.get("status") != "ok" or row.get("exit_code") != 0

@@ -50,6 +50,7 @@ class AnalysisManifestTests(unittest.TestCase):
                 "tools/benchmark/analysis_schema.py",
                 "tools/benchmark/artifact.py",
                 "tools/benchmark/health.py",
+                "tools/benchmark/layout_identity.py",
                 "tools/benchmark/linearity.py",
                 "tools/benchmark/planning.py",
                 "tools/benchmark/raw_contract.py",

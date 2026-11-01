@@ -58,6 +58,21 @@ class BaseAaEvidenceTests(unittest.TestCase):
         self.assertAlmostEqual(result["instruction_floor"]["lower"], 1 / 1.001)
         self.assertEqual(result["cycles"]["valid_blocks"], 30)
 
+    def test_context_and_sample_nodes_ignore_dns_suffix_only(self):
+        expected = self.replay()
+        self.context['host'] = {'node': 'iMac.local', 'system': 'Darwin'}
+        payload = copy.deepcopy(self.payload)
+        payload['context']['host']['node'] = 'IMAC.lan'
+        for row in payload['samples']:
+            row['host'] = {'node': 'iMac.lan', 'system': 'Darwin'}
+        self.assertEqual(self.replay(payload), expected)
+        payload['samples'][0]['host']['node'] = 'mini.lan'
+        with self.assertRaisesRegex(PerformanceDecisionError, 'identity/protocol'):
+            self.replay(payload)
+        payload['samples'][0]['host'] = {'node': 'iMac.lan', 'system': 'Linux'}
+        with self.assertRaisesRegex(PerformanceDecisionError, 'identity/protocol'):
+            self.replay(payload)
+
     def test_precise_base_cannot_claim_instability(self):
         p = copy.deepcopy(self.payload)
         for row in p["samples"]:

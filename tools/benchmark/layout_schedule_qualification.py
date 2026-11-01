@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 from .case_schedule import require_same
-from .layout_identity import OFFSETS, digest
+from .layout_identity import OFFSETS, digest, same_node
 from .layout_policy import HELD_OUT_RULE, analyze, rows
 from .layout_power import precision_record
 
@@ -88,7 +88,7 @@ def replay_formal(folder, seed, revision, attestation, load):
     if errors:
         raise ValueError('formal qualification unhealthy: ' + '; '.join(errors))
     host = json.loads(attestation.read_text())
-    if host['host'] != seed['host'] or host['node'] != seed['host_node']:
+    if host['host'] != seed['host'] or not same_node(host['node'], seed['host_node']):
         raise ValueError('formal qualification host/recipe mismatch')
     verify_formal_load(load.read_text(), host['started_at'])
     return extract(folder, seed['host_node'], development=True)

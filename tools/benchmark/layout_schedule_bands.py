@@ -10,7 +10,7 @@ import statistics
 from .case_schedule import binding, require_same
 from .development import MANIFEST_PATH as DEVELOPMENT
 from .held_out import MANIFEST_PATH as HELD_OUT
-from .layout_identity import digest
+from .layout_identity import digest, same_node
 from .layout_policy import geomean, round_up, rows
 from .layout_held_out_policy import reciprocal, spread, aa_envelope
 
@@ -64,7 +64,8 @@ def inputs(a2_paths, held_aa, images, parent_sha):
     pilot = replay_calibration(held_aa, images['held-out'])
     schedule = {'measurement_schedule': binding(4)}
     require_same(schedule, pilot, *packets)
-    if any((p['host'], p['host_node']) != (packets[0]['host'], packets[0]['host_node']) for p in packets):
+    if any(p['host'] != packets[0]['host']
+           or not same_node(p['host_node'], packets[0]['host_node']) for p in packets):
         raise ValueError('A2 calibration host mismatch')
     if pilot['host'] != packets[0]['host']:
         raise ValueError('held-out estimator host mismatch')

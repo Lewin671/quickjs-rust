@@ -6,6 +6,7 @@ import json
 import math
 from typing import Any
 
+from .layout_identity import same_host
 from .records import parse_result
 from .receipts import ReceiptError, canonical_receipt_sha256
 from .schema import Manifest
@@ -271,7 +272,7 @@ def validate_sample_common(
         "runner_repo": start["runner_repo"],
     }
     for field, value in exact.items():
-        if row[field] != value:
+        if not (same_host(row[field], value) if field == "host" else row[field] == value):
             raise ReportError(f"{where}.{field}: identity mismatch")
     for field in (
         "measurement_eligible", "timed_out", "stdout_truncated", "stderr_truncated",

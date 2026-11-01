@@ -12,6 +12,7 @@ import statistics
 from pathlib import Path
 from typing import Any, TYPE_CHECKING
 
+from .layout_identity import same_host
 from .statistics import paired_block_bootstrap, relative_half_width
 
 if TYPE_CHECKING:
@@ -247,7 +248,8 @@ def replay(
             "metric": manifest.measurement.metric, "timer": "python.perf_counter_ns",
             "timer_phase_boundary": manifest.measurement.phase_boundary,
         }
-        if any(row.get(key) != value for key, value in expected.items()):
+        if any(not (same_host(row.get(key), value) if key == "host" else row.get(key) == value)
+               for key, value in expected.items()):
             raise ExternalPreviewError("external raw: identity or physical plan mismatch")
         start = _integer(row.get("timer_started_ns"), "external timer start", 1)
         end = _integer(row.get("timer_finished_ns"), "external timer end", start + 1)

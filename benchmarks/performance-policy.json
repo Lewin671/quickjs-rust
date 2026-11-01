@@ -16,7 +16,7 @@
     "throughput_analysis": {
       "manifest_path": "benchmarks/analysis.json",
       "protocol_id": "quickjs-analysis-protocol-v6",
-      "protocol_sha256": "0a59121cee6e7a71098dc0f5aca2712bab6437e07741b692f40923cf93cad176"
+      "protocol_sha256": "8c0a06d2df7348d13129d8eb941976adda15cba4ed87f35f1a0ec209b62e1e54"
     },
     "resource_measurement": {
       "manifest_path": "benchmarks/resources.json",
@@ -26,7 +26,7 @@
     "resource_analysis": {
       "manifest_path": "benchmarks/resource-analysis.json",
       "protocol_id": "quickjs-resource-analysis-protocol-v1",
-      "protocol_sha256": "8bbfc9907719f10f49a9e014e2a43c6273922acd20a2a5d5fb72a4a937af2546"
+      "protocol_sha256": "3e266bed5136ec4bc29374df55d1b5a08e02996e69b7073138e822a3ac66eed3"
     }
   },
   "external_corpora": {
@@ -115,7 +115,7 @@
       "tools/benchmark/preview_sentinel.py",
       "tools/benchmark/preview_summary.py"
     ],
-    "aggregate_sha256": "f8261e9780ca619f32c018f6bee3c34934914825f4fe3eb6e0089a8aee9a4494"
+    "aggregate_sha256": "66d058e63336a4ce32464378377d24a823b826935ff15c3394c0a3b7e5e673d5"
   },
   "hosted_pr": {
     "tier": "informational_preview",
@@ -181,9 +181,9 @@
         ],
         "required_protocol_sha256": {
           "throughput_measurement": "ab67b7cf62e3e980e86d133109d318bc18bc0f6bf345de47a137571df367a541",
-          "throughput_analysis": "0a59121cee6e7a71098dc0f5aca2712bab6437e07741b692f40923cf93cad176",
+          "throughput_analysis": "8c0a06d2df7348d13129d8eb941976adda15cba4ed87f35f1a0ec209b62e1e54",
           "resource_measurement": "a17fec25fa30769441c0a29b16300364332a7aa17ec9ddefc28ab2a5f57541c7",
-          "resource_analysis": "8bbfc9907719f10f49a9e014e2a43c6273922acd20a2a5d5fb72a4a937af2546",
+          "resource_analysis": "3e266bed5136ec4bc29374df55d1b5a08e02996e69b7073138e822a3ac66eed3",
           "sentinel_measurement": "d5ae2485115579cfeb0898def36b8dd07753fe37b01fdda7bf271129301bb620"
         }
       }
@@ -203,9 +203,9 @@
         ],
         "required_protocol_sha256": {
           "throughput_measurement": "ab67b7cf62e3e980e86d133109d318bc18bc0f6bf345de47a137571df367a541",
-          "throughput_analysis": "0a59121cee6e7a71098dc0f5aca2712bab6437e07741b692f40923cf93cad176",
+          "throughput_analysis": "8c0a06d2df7348d13129d8eb941976adda15cba4ed87f35f1a0ec209b62e1e54",
           "resource_measurement": "a17fec25fa30769441c0a29b16300364332a7aa17ec9ddefc28ab2a5f57541c7",
-          "resource_analysis": "8bbfc9907719f10f49a9e014e2a43c6273922acd20a2a5d5fb72a4a937af2546",
+          "resource_analysis": "3e266bed5136ec4bc29374df55d1b5a08e02996e69b7073138e822a3ac66eed3",
           "sentinel_measurement": "d5ae2485115579cfeb0898def36b8dd07753fe37b01fdda7bf271129301bb620"
         }
       }
@@ -226,9 +226,9 @@
         ],
         "required_protocol_sha256": {
           "throughput_measurement": "ab67b7cf62e3e980e86d133109d318bc18bc0f6bf345de47a137571df367a541",
-          "throughput_analysis": "0a59121cee6e7a71098dc0f5aca2712bab6437e07741b692f40923cf93cad176",
+          "throughput_analysis": "8c0a06d2df7348d13129d8eb941976adda15cba4ed87f35f1a0ec209b62e1e54",
           "resource_measurement": "a17fec25fa30769441c0a29b16300364332a7aa17ec9ddefc28ab2a5f57541c7",
-          "resource_analysis": "8bbfc9907719f10f49a9e014e2a43c6273922acd20a2a5d5fb72a4a937af2546",
+          "resource_analysis": "3e266bed5136ec4bc29374df55d1b5a08e02996e69b7073138e822a3ac66eed3",
           "sentinel_measurement": "d5ae2485115579cfeb0898def36b8dd07753fe37b01fdda7bf271129301bb620"
         }
       }

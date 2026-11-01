@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from .layout_identity import same_node
 from .performance_evidence import load_archived_manifest
 from .raw_validation import validate_run
 
@@ -20,7 +21,7 @@ def extract(folder: Path, host_node: str, *, development=None):
         manifest = load_archived_manifest(folder / (prefix + 'manifest.json'), lane)
         run = validate_run(folder / (prefix + 'raw.jsonl'), manifest)
         if (not run.comparison_input_complete or run.invalid_blocks or run.blocks < 30
-                or run.start['host']['node'] != host_node):
+                or not same_node(run.start['host']['node'], host_node)):
             raise ValueError('formal layout input incomplete or on a different host')
         counts.add(run.blocks)
         for case in manifest.cases:
@@ -36,7 +37,7 @@ def extract(folder: Path, host_node: str, *, development=None):
         for row in records:
             if row.get('phase') != 'measurement' or row.get('role') not in ('base', 'candidate'):
                 continue
-            if row['status'] != 'ok' or row['host']['node'] != host_node:
+            if row['status'] != 'ok' or not same_node(row['host']['node'], host_node):
                 raise ValueError('formal whole-process layout input invalid or on a different host')
             name = f"{lane}/{row['suite_id']}/{row['case_id']}"
             key = (name, row['role'], row['block'])

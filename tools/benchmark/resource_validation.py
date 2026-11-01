@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
+from .layout_identity import same_host
 from .planning import measurement_plan
 from .receipts import ReceiptError, canonical_receipt_sha256
 from .records import parse_result
@@ -323,7 +324,7 @@ def _validate_sample(
         "order": expected_order, "role": engine["role"],
     }
     for field, expected in exact.items():
-        if row[field] != expected:
+        if not (same_host(row[field], expected) if field == "host" else row[field] == expected):
             raise ResourceReportError(f"{where}.{field}: identity/plan mismatch")
     for field in ENGINE_FIELDS - {"role"}:
         if row[field] != engine[field]:

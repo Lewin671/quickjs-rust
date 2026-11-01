@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import sys
 
+from .layout_identity import same_host
 from .base_aa_evidence import case_context
 from .bundle import verify
 from .external_preview import _record, _sha256_file, load_manifest
@@ -29,7 +30,7 @@ def collect(summary_path, case_id, blocks, output, cwd):
     context, required, _ = case_context(external_path, case_id)
     if blocks < max(30, required):
         raise PerformanceDecisionError("base A/A requires at least the bundle's block count")
-    if _host_metadata() != context["host"]:
+    if not same_host(_host_metadata(), context["host"]):
         raise PerformanceDecisionError("base A/A host differs from bundle")
     manifest = load_manifest(folder / "external-manifest.json")
     manifest = replace(manifest, measurement=replace(manifest.measurement, blocks=blocks))

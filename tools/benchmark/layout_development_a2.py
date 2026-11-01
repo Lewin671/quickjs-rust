@@ -15,7 +15,7 @@ from pathlib import Path
 from . import screen
 from .case_health import mark_readiness, exit_status
 from .development import MANIFEST_PATH, opportunity_ids
-from .layout_identity import OFFSETS, digest, host_identity, write_json
+from .layout_identity import OFFSETS, digest, host_identity, write_json, same_node
 from .layout_panel import matrix
 from .layout_policy import geomean, round_up, rows
 from .pair_disturbance import Monitor, quieting_preflight, verify_run
@@ -68,7 +68,7 @@ def collect(matrix_path, output, expected_hash, lane='development', workers=1):
     monitor = Monitor.from_queue()
     source = matrix(matrix_path)
     host = host_identity()
-    if source['host'] != host or source['host_node'] != platform.node():
+    if source['host'] != host or not same_node(source['host_node'], platform.node()):
         raise ValueError('A2 matrix host mismatch')
     if source['variants'][0]['sha256'] != expected_hash:
         raise ValueError('A2 natural image differs from frozen source')
@@ -119,7 +119,7 @@ def replay(path, expected_hash, lane='development'):
     source = value['source']
     if (not source['static_pass'] or source['offsets'] != list(OFFSETS)
             or source['variants'][0]['sha256'] != expected_hash or len(value['panels']) != 6
-            or source['host'] != value['host'] or source['host_node'] != value['host_node']):
+            or source['host'] != value['host'] or not same_node(source['host_node'], value['host_node'])):
         raise ValueError('development A2 matrix mismatch')
     files, raw = set(), {}
     for k, packet in enumerate(value['panels']):

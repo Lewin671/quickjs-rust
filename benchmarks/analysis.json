@@ -18,6 +18,7 @@
       "tools/benchmark/analysis_schema.py",
       "tools/benchmark/artifact.py",
       "tools/benchmark/health.py",
+      "tools/benchmark/layout_identity.py",
       "tools/benchmark/linearity.py",
       "tools/benchmark/planning.py",
       "tools/benchmark/raw_contract.py",
@@ -28,7 +29,7 @@
       "tools/benchmark/schema.py",
       "tools/benchmark/statistics.py"
     ],
-    "aggregate_sha256": "0a59121cee6e7a71098dc0f5aca2712bab6437e07741b692f40923cf93cad176"
+    "aggregate_sha256": "8c0a06d2df7348d13129d8eb941976adda15cba4ed87f35f1a0ec209b62e1e54"
   },
   "bootstrap": {
     "samples": 20000,

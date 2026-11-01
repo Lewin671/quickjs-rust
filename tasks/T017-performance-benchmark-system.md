@@ -8,17 +8,17 @@
   `scripts/performance-*.sh`). Formal comparisons and screens run on a
   platform other than the frozen arm64 profile
   (`tools/benchmark/host_manifest.py`, `tools/benchmark/cycle_trust.py`).
-  M6/M7 are not started. T073 part 1 case-health containment and job reporting are present.
-- Verified at: case-health review fixes on `63b6fb82` plus this change,
-  2026-10-23: full gate, 753 tool tests and byte-identical artifacts pass (review record).
+  M6/M7 are not started. T073 case-health containment/reporting and raw-preserving short-hostname comparisons are present.
+- Verified at: parent `3cc12c6f` plus this host-node change, 2026-10-31: 761 benchmark tests, fast/context gates pass; full gate lacks Test262 input (host-node record).
+  Case-health at `63b6fb82` plus its review fixes, 2026-10-23: full gate, 753 tool tests and byte-identical artifacts pass (review record).
   Earlier platform evidence: 2026-10-12 on the x86_64 host: at `07897ce4` a three-block
   `perf-compare.sh` bundle (state success, 76 cases, wall time) and a queue
   built from it; at `195b4341` a `perf-loop.sh` screen. The hosted preview's staged,
   sharded workflow was verified at `d9fb83f3`, 2026-10-09. At `d1313d52`,
   `benchmarks/performance-policy.json` still has `fixed_hardware.configured`
   false, an empty `evidence_entries` list and every gate disabled.
-- Evidence: [case-health review](diagnostics/t017-case-health-review.md), records below, `benchmarks/performance-policy.json` and `docs/benchmarking.md`; raw bundles are not retained.
-- Unresolved: no fixed-hardware fingerprint, no A/A shadow reports, no noise
+- Evidence: [host-node change](diagnostics/t017-host-node-identity.md), [case-health review](diagnostics/t017-case-health-review.md), records below, `benchmarks/performance-policy.json` and `docs/benchmarking.md`; raw bundles are not retained.
+- Unresolved: host-node full gate needs initialized Test262 input (record); no fixed-hardware fingerprint, no A/A shadow reports, no noise
   envelope, no false-positive budget. Concurrent lanes and four workers are
   qualified on the x86_64 host only, each from one run against the same
   sequential reference.
