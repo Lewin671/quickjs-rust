@@ -79,7 +79,7 @@ impl ActivationStack {
     /// retained or exposed is dropped with it.
     #[inline]
     pub(in crate::bytecode) fn release(&mut self, depth: usize) {
-        if !self.slots[depth].release_for_reuse(self.poison) {
+        if !self.slots[depth].release_for_reuse(cfg!(debug_assertions) && self.poison) {
             self.slots.truncate(depth);
         } else if self.slots.len() > depth + MAX_PARKED {
             self.slots.truncate(depth + MAX_PARKED);

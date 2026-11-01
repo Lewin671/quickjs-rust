@@ -139,7 +139,8 @@ impl ActivationContext {
         {
             return false;
         }
-        if poison {
+        // Release builds never poison (`BindingDebug`); keep the check out.
+        if cfg!(debug_assertions) && poison {
             owner.this = super::ThisBinding::Initialized(crate::Value::Number(f64::NAN));
             owner.new_target = Some(crate::Value::Number(f64::NAN));
             self.variable_boundary = POISONED_BOUNDARY;
@@ -171,7 +172,7 @@ impl ActivationContext {
         if !rebind_class(&mut owner.class) {
             return false;
         }
-        if self.variable_boundary == POISONED_BOUNDARY {
+        if cfg!(debug_assertions) && self.variable_boundary == POISONED_BOUNDARY {
             assert!(
                 matches!(&owner.this, super::ThisBinding::Initialized(crate::Value::Number(value)) if value.is_nan())
                     && matches!(&owner.new_target, Some(crate::Value::Number(value)) if value.is_nan())
