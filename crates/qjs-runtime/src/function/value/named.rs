@@ -61,6 +61,11 @@ impl Function {
                 .clone()
                 .or_else(|| creation.realm.function_prototype())
         });
+        self.initialize_named_with_prototype(prototype);
+    }
+
+    /// Initial authority for an unpublished function, without mutation checks.
+    pub(super) fn initialize_named_with_prototype(&self, prototype: Option<Prototype>) {
         *self.named.borrow_mut() = crate::value::layout::NamedStorage::new(
             self.property_domain(),
             prototype,

@@ -273,6 +273,7 @@ impl Prototype {
         let mut power = 1usize;
         let mut span = 0usize;
         while let Some(prototype) = next {
+            crate::diagnostics::count!(prototype_cycle_visits);
             let identity = match &prototype {
                 Self::Map(m) => (1, m.object_ref().address()),
                 Self::Set(s) => (1, s.object_ref().address()),

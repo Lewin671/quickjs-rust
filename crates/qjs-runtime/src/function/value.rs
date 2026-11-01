@@ -1,5 +1,7 @@
 //! Function identity, captured execution state and explicit lazy descriptor hooks.
 //! All materialized public keys share NamedStore; private names stay separate.
+//! Fresh functions install their prototype before publication; existing ones
+//! retain extensibility and cycle checks on every prototype mutation.
 use std::{
     cell::{Cell, RefCell},
     collections::HashMap,
@@ -430,6 +432,23 @@ impl Function {
     }
 
     pub(crate) fn new_user_compiled(compiled: CompiledUserFunction) -> Self {
+        Self::new_user_compiled_inner(compiled, None)
+    }
+
+    /// Sets the internal prototype before the fresh function is published.
+    /// An unpublished function cannot occur in the existing parent chain.
+    pub(crate) fn new_user_compiled_with_prototype(
+        compiled: CompiledUserFunction,
+        prototype: Option<Prototype>,
+    ) -> Self {
+        crate::diagnostics::count!(class_constructor_links);
+        Self::new_user_compiled_inner(compiled, Some(prototype))
+    }
+
+    fn new_user_compiled_inner(
+        compiled: CompiledUserFunction,
+        prototype: Option<Option<Prototype>>,
+    ) -> Self {
         let CompiledUserFunction {
             name,
             has_name_binding,
@@ -537,7 +556,10 @@ impl Function {
                 .auxiliary
                 .with_cold_mut(|cold| cold.lexical_call = Some(owner));
         }
-        function.initialize_named();
+        match prototype {
+            Some(prototype) => function.initialize_named_with_prototype(prototype),
+            None => function.initialize_named(),
+        }
         function.define_length_property();
         function.define_name_property();
         // Class constructors receive their `prototype` wiring from the class

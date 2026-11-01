@@ -121,7 +121,27 @@ impl Vm<'_, '_> {
             &constructor.lexical_captures,
             name.zip(class_name_upvalue.as_ref()),
         );
-        let constructor_function = Function::new_user_compiled(CompiledUserFunction {
+        // Static-side inheritance: a subclass constructor inherits the parent
+        // constructor's static members through its [[Prototype]], which is the
+        // parent constructor itself. Storing the function directly gives
+        // `Object.getPrototypeOf(Sub) === Super` reference identity and lets
+        // inherited static methods and static `super.x` resolve live (rather
+        // than against a definition-time snapshot).
+        let constructor_parent_slot = match &heritage {
+            Some(ClassHeritage::Parent(heritage_parent)) => match &heritage_parent.constructor {
+                Value::Function(parent) => Some(crate::Prototype::Function(parent.clone())),
+                Value::Object(parent) => Some(crate::Prototype::Object(parent.clone())),
+                _ => None,
+            },
+            Some(ClassHeritage::Null) => {
+                function_prototype_value(&self.context()).and_then(|value| match value {
+                    Value::Object(parent) => Some(crate::Prototype::Object(parent)),
+                    _ => None,
+                })
+            }
+            None => None,
+        };
+        let constructor = CompiledUserFunction {
             name: constructor.name.clone(),
             has_name_binding: false,
             params: std::rc::Rc::new(constructor.params.clone()),
@@ -143,30 +163,11 @@ impl Vm<'_, '_> {
             super_constructor: super_constructor.clone(),
             lexical_scope: self.closure_scope_cursor(&constructor.bytecode),
             upvalues: constructor_upvalues,
-        });
-        // Static-side inheritance: a subclass constructor inherits the parent
-        // constructor's static members through its [[Prototype]], which is the
-        // parent constructor itself. Storing the function directly gives
-        // `Object.getPrototypeOf(Sub) === Super` reference identity and lets
-        // inherited static methods and static `super.x` resolve live (rather
-        // than against a definition-time snapshot).
-        let constructor_parent_slot = match &heritage {
-            Some(ClassHeritage::Parent(heritage_parent)) => match &heritage_parent.constructor {
-                Value::Function(parent) => Some(crate::Prototype::Function(parent.clone())),
-                Value::Object(parent) => Some(crate::Prototype::Object(parent.clone())),
-                _ => None,
-            },
-            Some(ClassHeritage::Null) => {
-                function_prototype_value(&self.context()).and_then(|value| match value {
-                    Value::Object(parent) => Some(crate::Prototype::Object(parent)),
-                    _ => None,
-                })
-            }
-            None => None,
         };
-        if let Some(parent_slot) = constructor_parent_slot {
-            let _ = constructor_function.set_internal_prototype_slot(Some(parent_slot));
-        }
+        let constructor_function = match constructor_parent_slot {
+            Some(parent) => Function::new_user_compiled_with_prototype(constructor, Some(parent)),
+            None => Function::new_user_compiled(constructor),
+        };
 
         let prototype = ObjectRef::with_prototype_slot(
             HashMap::new(),

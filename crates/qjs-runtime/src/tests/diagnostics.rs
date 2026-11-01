@@ -560,3 +560,32 @@ fn named_operands_link_once_per_body_and_domain() {
     assert_eq!(many.property_atoms_created, few.property_atoms_created);
     assert!(many.dispatched_named_property_ops >= 3 * 3000);
 }
+
+#[test]
+fn fresh_class_chain_links_are_linear_and_existing_cycles_still_checked() {
+    let (_, baseline) = counted("0;");
+    for count in [32, 64, 128] {
+        let (value, counts) = counted(&format!(
+            "var Base = class {{}}; var Top = Base; \
+             for (var i = 0; i < {count}; i++) Top = class extends Top {{}}; \
+             Object.getPrototypeOf(Top) !== Base;"
+        ));
+        assert_eq!(value, Value::Boolean(true));
+        assert_eq!(counts.class_constructor_links, count);
+        assert_eq!(
+            counts.prototype_cycle_visits,
+            baseline.prototype_cycle_visits
+        );
+        eprintln!(
+            "class links N={count}: links={}, cycle visits=0",
+            counts.class_constructor_links
+        );
+    }
+    let (value, counts) = counted(
+        "class Base {} class Mid extends Base {} class Top extends Mid {} \
+         var caught = false; try { Object.setPrototypeOf(Base, Top); } \
+         catch (e) { caught = e instanceof TypeError; } caught;",
+    );
+    assert_eq!(value, Value::Boolean(true));
+    assert!(counts.prototype_cycle_visits >= baseline.prototype_cycle_visits + 3);
+}

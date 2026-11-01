@@ -998,3 +998,13 @@ fn class_methods_capture_live_outer_lexical_cell() {
         Ok(Value::Number(1.0))
     );
 }
+
+#[test]
+fn fresh_class_constructor_inherits_live_static_properties_and_rejects_later_cycles() {
+    assert_eq!(
+        eval(include_str!(
+            "../../../../tests/fixtures/compare-qjs/class-constructor-fresh-prototype.js"
+        )),
+        Ok(Value::String("7:true:true:true".into()))
+    );
+}

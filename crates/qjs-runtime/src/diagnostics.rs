@@ -49,6 +49,10 @@ macro_rules! declare_counters {
 }
 
 declare_counters! {
+    /// Fresh class constructor internal-prototype edges installed at creation.
+    class_constructor_links,
+    /// Nodes visited by ordinary existing-object prototype cycle checks.
+    prototype_cycle_visits,
     property_array_seed_headers,
     property_array_seed_releases,
     property_array_cold_stores,
