@@ -34,7 +34,7 @@ pub(super) fn guarded_math_unary_hits() -> usize {
     GUARDED_MATH_UNARY_HITS.with(Cell::get)
 }
 
-impl Vm<'_, '_> {
+impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
     pub(super) fn require_callable(&self) -> Result<(), RuntimeError> {
         let callee = self.stack.last().ok_or_else(stack_underflow)?;
         if matches!(callee, Value::Function(_))

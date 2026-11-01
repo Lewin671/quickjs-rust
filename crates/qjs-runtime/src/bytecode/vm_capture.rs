@@ -5,7 +5,7 @@ use crate::function::BindingCell;
 use super::ir::Bytecode;
 use super::vm::Vm;
 
-impl Vm<'_, '_> {
+impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
     pub(super) fn captured_upvalues_for_function(
         &mut self,
         function_bytecode: &Bytecode,

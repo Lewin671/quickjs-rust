@@ -61,7 +61,10 @@ impl OwnDataOwner {
         }
     }
 
-    fn resolve(&self, vm: &Vm<'_, '_>) -> Option<ObjectRef> {
+    fn resolve<'a, F: crate::bytecode::vm::VmFrame<'a>>(
+        &self,
+        vm: &Vm<'a, '_, F>,
+    ) -> Option<ObjectRef> {
         let value = match self {
             Self::DirectThis => vm.indexed_receiver()?.clone(),
             Self::Local(slot) => vm.local_slot_value(*slot)?,
@@ -86,21 +89,30 @@ pub(super) struct OwnDataSource {
 }
 
 impl OwnDataSource {
-    fn resolve_value(&self, vm: &Vm<'_, '_>) -> Option<Value> {
+    fn resolve_value<'a, F: crate::bytecode::vm::VmFrame<'a>>(
+        &self,
+        vm: &Vm<'a, '_, F>,
+    ) -> Option<Value> {
         match self.owner.resolve(vm)?.own_data_property_read(&self.key) {
             OwnDataPropertyRead::Data(value) => Some(value),
             OwnDataPropertyRead::Missing | OwnDataPropertyRead::NeedsSlowPath => None,
         }
     }
 
-    pub(super) fn resolve_number(&self, vm: &Vm<'_, '_>) -> Option<f64> {
+    pub(super) fn resolve_number<'a, F: crate::bytecode::vm::VmFrame<'a>>(
+        &self,
+        vm: &Vm<'a, '_, F>,
+    ) -> Option<f64> {
         match self.resolve_value(vm)? {
             Value::Number(value) => Some(value),
             _ => None,
         }
     }
 
-    fn resolve_array(&self, vm: &Vm<'_, '_>) -> Option<ArrayRef> {
+    fn resolve_array<'a, F: crate::bytecode::vm::VmFrame<'a>>(
+        &self,
+        vm: &Vm<'a, '_, F>,
+    ) -> Option<ArrayRef> {
         match self.resolve_value(vm)? {
             Value::Array(array) => Some(array),
             _ => None,
@@ -122,7 +134,10 @@ impl ArraySource {
         }
     }
 
-    pub(super) fn resolve(&self, vm: &Vm<'_, '_>) -> Option<ArrayRef> {
+    pub(super) fn resolve<'a, F: crate::bytecode::vm::VmFrame<'a>>(
+        &self,
+        vm: &Vm<'a, '_, F>,
+    ) -> Option<ArrayRef> {
         match self {
             Self::Local(slot) => match vm.locals.get(*slot) {
                 Some(Some(Value::Array(array))) => Some(array.clone()),
@@ -133,7 +148,9 @@ impl ArraySource {
     }
 }
 
-pub(super) fn native_math_round_is_current(vm: &Vm<'_, '_>) -> bool {
+pub(super) fn native_math_round_is_current<'a, F: crate::bytecode::vm::VmFrame<'a>>(
+    vm: &Vm<'a, '_, F>,
+) -> bool {
     let Some(Value::Object(math)) = vm.env.get("Math") else {
         return false;
     };

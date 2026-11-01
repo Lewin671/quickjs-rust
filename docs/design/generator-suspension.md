@@ -28,17 +28,15 @@ never freed.
 
 ## What a suspended frame owns
 
-`GeneratorSnapshot` owns the `Rc<Bytecode>`, `ip`, operand stack, `locals`,
-`local_upvalues`, received `upvalues`, owned ActivationContext/creation and lexical owner,
-retained scope instances/holders,
-selected binding references, partial class-definition regions/private overlays,
-active own `with_stack`, function-name cells in leases, the try stack, disposable scopes,
-the pending
-throw/return/jump of an in-flight `finally`, and the suspension kind. Resume
-borrows RuntimeServices, builds a `Vm` over the held bytecode, restores state, and recomputes
-the derived slot masks (`refresh_authoritative_slots`).
+`SuspendedActivation` retains the same boxed `FrameState` allocated before
+its prologue. That record owns code, PC, operands/locals, cells, Context, scope
+instances, selected references, partial classes/private overlays, with-stack,
+try/disposal stacks and pending completion. The continuation adds only its
+suspension kind. Resume reattaches RuntimeServices and resets segment declines
+and wide handback; it neither reconstructs fields nor copies Bytecode. Ordinary
+VM records are values; storage selection is static, without an enum test per op.
 
-1. **Cell identity survives.** The snapshot holds the same `BindingCell` cells
+1. **Cell identity survives.** The record holds the same `BindingCell` cells
    as the closures and declaring frames. Suspend and resume copy no binding
    value, run no refresh or write-back, and do not consult the resuming
    caller's environment ([env-model-rewrite.md](env-model-rewrite.md)). Tests:
@@ -47,14 +45,14 @@ the derived slot masks (`refresh_authoritative_slots`).
 2. **Try state survives.** Test:
    `frame_cold_state.rs::a_generator_carries_its_try_state_across_suspension`.
 3. **Class keys suspend the enclosing frame.** Computed keys are ordinary IR,
-   including private-name keys. The snapshot moves each partial class and its
+   including private-name keys. The record moves each partial class and its
    lexical cell/private environment; no key function call is reconstructed.
    Abrupt handlers truncate regions to their saved class depth. Tests:
    `class_keys.rs::private_key_yield_resumes_the_enclosing_generator`,
    `::private_key_await_resumes_the_enclosing_async_function`.
 4. **Nothing scalar-replaced crosses a suspension.** Virtual-object lowering
    treats a suspension point as an escape (`EscapeReason::Suspension`,
-   `bytecode/virtual_object.rs`), so a snapshot carries no virtual state.
+   `bytecode/virtual_object.rs`), so a record carries no virtual state.
 
 ## Start
 
@@ -86,7 +84,7 @@ if `draining` is set (`async_generators.rs::overlapping_next_calls_are_fifo`).
   (`return_value`): each enclosing `finally` runs, and with none the
   generator completes with `v` at once.
 - A `finally` may override the injected completion. A suspension inside it
-  keeps the pending completion in the snapshot. The state becomes
+  keeps the pending completion in the record. The state becomes
   `Completed` only when the body returns or an error leaves it, and an error
   always completes the generator (`finish`).
 - Before the body starts, `return(v)` completes with `v` and `throw(v)`

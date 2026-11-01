@@ -412,7 +412,10 @@ impl DenseNumericPredicateScanPlan {
             || (self.false_path_start..=self.backedge).contains(&ip)
     }
 
-    pub(super) fn try_run(&self, vm: &mut Vm<'_, '_>) -> PredicateScanRun {
+    pub(super) fn try_run<'a, F: crate::bytecode::vm::VmFrame<'a>>(
+        &self,
+        vm: &mut Vm<'a, '_, F>,
+    ) -> PredicateScanRun {
         #[cfg(test)]
         PLAN_ATTEMPTS.set(PLAN_ATTEMPTS.get() + 1);
         if vm.direct_eval_with_stack
@@ -681,14 +684,21 @@ fn apply_binary(operation: BinaryOp, left: f64, right: f64) -> Option<ScanValue>
     })
 }
 
-fn local_number(vm: &Vm<'_, '_>, slot: usize) -> Option<f64> {
+fn local_number<'a, F: crate::bytecode::vm::VmFrame<'a>>(
+    vm: &Vm<'a, '_, F>,
+    slot: usize,
+) -> Option<f64> {
     match vm.local_slot_value(slot)? {
         Value::Number(value) => Some(value),
         _ => None,
     }
 }
 
-fn set_local_number(vm: &mut Vm<'_, '_>, slot: usize, value: f64) {
+fn set_local_number<'a, F: crate::bytecode::vm::VmFrame<'a>>(
+    vm: &mut Vm<'a, '_, F>,
+    slot: usize,
+    value: f64,
+) {
     vm.locals[slot] = Some(Value::Number(value));
 }
 

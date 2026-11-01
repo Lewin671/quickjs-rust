@@ -24,7 +24,7 @@ use crate::{
 };
 use std::rc::Rc;
 
-impl Vm<'_, '_> {
+impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
     /// Runs one opcode the dispatch loop routed here.
     ///
     /// `Ok(None)` continues the activation; `Ok(Some(exit))` is the exit the

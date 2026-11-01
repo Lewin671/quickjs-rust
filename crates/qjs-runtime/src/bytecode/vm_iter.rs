@@ -33,7 +33,7 @@ pub(super) enum DelegateStep {
     Continue,
 }
 
-impl Vm<'_, '_> {
+impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
     pub(super) fn get_iterator(&mut self) -> Result<(), RuntimeError> {
         let value = self.pop()?;
         let mut env = self.context();

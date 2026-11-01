@@ -4,7 +4,7 @@
 use super::{ir::Op, util::typeof_value, vm::Vm};
 use crate::{RuntimeError, Value, binding::ResolvedReference, object::boxed_primitive};
 
-impl Vm<'_, '_> {
+impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
     /// Executes a `with`-related opcode: scope push/pop and the with-aware
     /// identifier load/store/typeof. Centralizing the stack interaction here
     /// keeps the main bytecode loop terse.

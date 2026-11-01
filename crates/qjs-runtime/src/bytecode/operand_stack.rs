@@ -88,11 +88,6 @@ impl OperandStack {
     pub(super) fn take(&mut self) -> Vec<Value> {
         std::mem::take(&mut self.values)
     }
-
-    pub(super) fn replace(&mut self, values: Vec<Value>) {
-        let previous = std::mem::replace(&mut self.values, values);
-        self.recycler.recycle(previous);
-    }
 }
 
 impl Deref for OperandStack {

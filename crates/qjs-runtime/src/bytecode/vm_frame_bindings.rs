@@ -11,7 +11,7 @@ use super::{
 };
 use crate::{Value, function::BindingCell};
 
-impl Vm<'_, '_> {
+impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
     pub(super) fn indexed_receiver(&self) -> Option<&Value> {
         self.indexed_call
             .then(|| self.env.initialized_receiver())

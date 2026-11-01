@@ -13,7 +13,7 @@ use crate::{RuntimeError, Value, operations};
 
 use super::{ir::Op, vm::Vm};
 
-impl Vm<'_, '_> {
+impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
     /// Drops only engine-internal mirrors before a compound string assignment.
     /// The following store bytecode restores the binding immediately, with an
     /// optional preceding `Dup` when the assignment value remains observable.
@@ -74,7 +74,7 @@ impl Vm<'_, '_> {
         if expected.is_unique() || self.bytecode.dead_completion_slots.is_empty() {
             return;
         }
-        let frame = &mut self.current;
+        let frame = &mut *self.current;
         for slot in frame.bytecode.dead_completion_slots.iter().copied() {
             if let Some(Some(local)) = frame.locals.get_mut(slot)
                 && matches!(&*local, Value::String(current) if crate::JsString::ptr_eq(current, expected))

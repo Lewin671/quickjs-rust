@@ -60,6 +60,7 @@ mod compiler_references;
 mod compiler_try;
 mod compiler_values;
 mod enumerate_keys_cache;
+mod frame_owner;
 mod frame_program;
 mod frame_stack;
 mod ir;
@@ -468,7 +469,7 @@ pub(crate) fn eval_prelude_script(
 /// Evaluates a module body against the shared graph realm seeded with the
 /// module's canonical cells. See [`vm_module::eval_module_body`].
 pub(crate) fn eval_module_body(
-    bytecode: &Bytecode,
+    bytecode: &std::rc::Rc<Bytecode>,
     realm: &ModuleRealm,
     host: Option<crate::module::ModuleHostRef>,
     module_bindings: ModuleBindings,

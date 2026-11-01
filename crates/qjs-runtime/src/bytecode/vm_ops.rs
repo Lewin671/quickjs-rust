@@ -13,7 +13,7 @@ use crate::{
 use super::vm_props::{enumerable_keys, fast_number_binary, fast_number_unary};
 use super::{enumerate_keys_cache::EnumerateKeysCache, vm::Vm};
 
-impl Vm<'_, '_> {
+impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
     pub(super) fn eval_binary(&mut self, op: BinaryOp) -> Result<Value, RuntimeError> {
         let right = self.pop()?;
         let left = self.pop()?;

@@ -79,7 +79,10 @@ impl SpecialPlan {
     }
 
     #[inline(never)]
-    fn try_run(&self, vm: &mut Vm<'_, '_>) -> NumericMutationLoopRun {
+    fn try_run<'a, F: crate::bytecode::vm::VmFrame<'a>>(
+        &self,
+        vm: &mut Vm<'a, '_, F>,
+    ) -> NumericMutationLoopRun {
         match self {
             Self::PredicateScan(plan) => match plan.try_run(vm) {
                 PredicateScanRun::Handled => NumericMutationLoopRun::Handled,
@@ -196,7 +199,10 @@ impl NumericMutationLoopPlan {
         })
     }
 
-    fn try_run(&self, vm: &mut Vm<'_, '_>) -> NumericMutationLoopRun {
+    fn try_run<'a, F: crate::bytecode::vm::VmFrame<'a>>(
+        &self,
+        vm: &mut Vm<'a, '_, F>,
+    ) -> NumericMutationLoopRun {
         match &self.kind {
             NumericMutationLoopKind::Dense(plan) => match plan.try_run(vm) {
                 DenseNumericMutationLoopRun::Handled => NumericMutationLoopRun::Handled,
@@ -217,8 +223,8 @@ enum NumericMutationLoopRun {
     SwitchToDense(Rc<DenseNumericMutationLoopPlan>),
 }
 
-pub(super) fn try_run_numeric_mutation_loop(
-    vm: &mut Vm<'_, '_>,
+pub(super) fn try_run_numeric_mutation_loop<'a, F: crate::bytecode::vm::VmFrame<'a>>(
+    vm: &mut Vm<'a, '_, F>,
     plans: super::vm_loop_dispatch::LoopPlanView<'_>,
     header: usize,
     backedge: usize,

@@ -439,25 +439,36 @@ impl<'a> FrameState<'a> {
     }
 }
 
-pub(super) struct Vm<'a, 's> {
+pub(super) use super::frame_owner::{InlineFrame, VmFrame};
+
+pub(super) struct Vm<'a, 's, F: VmFrame<'a> = InlineFrame<'a>> {
     pub(super) runtime: &'s mut crate::context::RuntimeServices,
-    pub(super) current: FrameState<'a>,
+    pub(super) current: F,
+    pub(super) frame_lifetime: std::marker::PhantomData<&'a ()>,
     /// Frames waiting for the one above them to finish. Empty until ordinary
     /// calls are routed onto this VM; the driver in `frame_stack` is what
     /// makes a non-empty stack meaningful.
-    pub(super) callers: Vec<super::frame_stack::SuspendedFrame<'a>>,
+    pub(super) callers: Vec<super::frame_stack::SuspendedFrame<F>>,
     /// A frame a handler asked to enter, waiting for the driver to install it
     /// once the current activation's program view has been dropped.
-    pub(super) pending_frame_entry: Option<(FrameState<'a>, super::frame_stack::FrameContinuation)>,
+    pub(super) pending_frame_entry: Option<(F, super::frame_stack::FrameContinuation)>,
 }
 
-impl<'a, 's> Vm<'a, 's> {
-    pub(super) fn into_frame(self) -> FrameState<'a> {
+impl<'a, 's, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, 's, F> {
+    /// Segment decisions are not properties of a reusable semantic record.
+    pub(super) fn reset_segment(&mut self) {
+        self.declined_typed_loop_programs = 0;
+        if let Some(cold) = self.cold.as_deref_mut() {
+            cold.wide_handback = None;
+        }
+    }
+
+    pub(super) fn into_frame(self) -> F {
         self.current
     }
 }
 
-impl<'a, 's> Deref for Vm<'a, 's> {
+impl<'a, 's, F: VmFrame<'a>> Deref for Vm<'a, 's, F> {
     type Target = FrameState<'a>;
 
     fn deref(&self) -> &Self::Target {
@@ -465,13 +476,13 @@ impl<'a, 's> Deref for Vm<'a, 's> {
     }
 }
 
-impl DerefMut for Vm<'_, '_> {
+impl<'a, F: VmFrame<'a>> DerefMut for Vm<'a, '_, F> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.current
     }
 }
 
-impl<'a, 's> Vm<'a, 's> {
+impl<'a, 's, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, 's, F> {
     pub(super) fn coerce_property_key(
         &mut self,
         value: Value,
@@ -1091,7 +1102,7 @@ impl<'a, 's> Vm<'a, 's> {
                 self.direct_eval_with_stack && self.bytecode.local_is_from_env(slot);
             if self.slot_is_authoritative(slot) && !direct_eval_lookup {
                 let cached = {
-                    let frame = &mut self.current;
+                    let frame = &mut *self.current;
                     match frame.locals.get(slot).and_then(Option::as_ref) {
                         Some(object) => {
                             if let Some(value) = object.unconditional_named_hook(name.as_str()) {

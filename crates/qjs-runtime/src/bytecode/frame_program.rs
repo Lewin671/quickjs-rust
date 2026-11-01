@@ -181,4 +181,13 @@ mod tests {
         assert_eq!(Rc::strong_count(&owner), 3);
         assert!(std::ptr::eq(&*handle, &*clone));
     }
+    #[test]
+    fn repeated_borrowed_eval_entries_keep_the_original_compilation_owner() {
+        let owner = Rc::new(empty_bytecode());
+        for _ in 0..3 {
+            let (mut runtime, activation) = crate::context::HostRoot::script().into_parts();
+            let vm = crate::bytecode::vm::Vm::new_with_globals(&owner, &mut runtime, activation);
+            assert!(std::ptr::eq(&*vm.bytecode, owner.as_ref()));
+        }
+    }
 }

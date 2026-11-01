@@ -35,7 +35,7 @@ pub(super) struct TypedLoopSloppyGlobalWrite {
     property_slot: Option<(usize, crate::value::layout::LayoutVersion)>,
 }
 
-impl Vm<'_, '_> {
+impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
     /// Realm `globalThis` object handle. `crate::context::ActivationContext::global_this` already
     /// resolves this from a plain `Option<Value>` field set once at realm
     /// construction (see `RealmState::new`), so this is just the `Value` ->

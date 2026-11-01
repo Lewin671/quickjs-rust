@@ -20,7 +20,7 @@
 
 use crate::RuntimeError;
 
-use super::vm::{FrameState, Vm};
+use super::vm::Vm;
 use super::vm_result::Completion;
 
 /// How one activation ended.
@@ -52,12 +52,12 @@ pub(super) enum FrameContinuation {
 }
 
 /// A caller waiting for the frame above it to finish.
-pub(super) struct SuspendedFrame<'a> {
-    frame: FrameState<'a>,
+pub(super) struct SuspendedFrame<F> {
+    frame: F,
     continuation: FrameContinuation,
 }
 
-impl<'a, 's> Vm<'a, 's> {
+impl<'a, 's, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, 's, F> {
     /// Suspends the current frame and installs `frame` above it.
     ///
     /// The caller's program view must already have been dropped: replacing the
@@ -65,7 +65,7 @@ impl<'a, 's> Vm<'a, 's> {
     /// dispatch loop reading code that no longer belongs to the frame it is
     /// executing.
     #[allow(dead_code)]
-    pub(super) fn push_frame(&mut self, frame: FrameState<'a>, continuation: FrameContinuation) {
+    pub(super) fn push_frame(&mut self, frame: F, continuation: FrameContinuation) {
         let caller = std::mem::replace(&mut self.current, frame);
         self.callers.push(SuspendedFrame {
             frame: caller,
@@ -103,7 +103,7 @@ impl<'a, 's> Vm<'a, 's> {
     /// Restores `caller` and delivers the completion of the frame above it.
     fn resume_caller(
         &mut self,
-        caller: SuspendedFrame<'a>,
+        caller: SuspendedFrame<F>,
         completion: Completion,
     ) -> Result<(), RuntimeError> {
         let Completion::Return(value) = completion else {
@@ -136,7 +136,7 @@ impl<'a, 's> Vm<'a, 's> {
     /// propagates outward when it does not.
     fn resume_caller_with_error(
         &mut self,
-        caller: SuspendedFrame<'a>,
+        caller: SuspendedFrame<F>,
         error: RuntimeError,
     ) -> Result<(), RuntimeError> {
         self.current = caller.frame;

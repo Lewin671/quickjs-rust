@@ -18,7 +18,7 @@ use super::util::stack_underflow;
 use super::vm::Vm;
 use super::vm_class::function_name_from_property_key;
 
-impl Vm<'_, '_> {
+impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
     pub(super) fn new_array(&mut self, elements: &[ArrayElementKind]) -> Result<(), RuntimeError> {
         let value_count = elements
             .iter()

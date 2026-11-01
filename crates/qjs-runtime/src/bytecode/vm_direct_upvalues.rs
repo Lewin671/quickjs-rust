@@ -8,7 +8,7 @@ use crate::function::BindingCell;
 
 use super::{ir::Bytecode, vm::Vm};
 
-impl Vm<'_, '_> {
+impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
     pub(super) fn initial_direct_local_upvalues(
         bytecode: &Bytecode,
         upvalues: &[BindingCell],

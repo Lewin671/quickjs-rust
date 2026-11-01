@@ -24,7 +24,7 @@ use super::ir::NamedPropertyCache;
 use super::vm_set::property_set_uses_setter;
 use std::rc::Rc;
 
-impl Vm<'_, '_> {
+impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
     /// Stores a statically named property, reusing the paired read cache only
     /// after it has proved an ordinary own data-property slot.
     pub(super) fn set_named_prop(

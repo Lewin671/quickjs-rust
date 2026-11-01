@@ -7,7 +7,7 @@ use super::{
 };
 use crate::{RuntimeError, Value, binding::ResolvedReference};
 
-impl Vm<'_, '_> {
+impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
     pub(super) fn save_reference(
         &mut self,
         bank: usize,
@@ -33,7 +33,7 @@ impl Vm<'_, '_> {
         if self.active_reference_count == 0 {
             return;
         }
-        let frame = &mut self.current;
+        let frame = &mut *self.current;
         let cold = frame.cold.as_mut().expect("live reference bank");
         cold.active_reference_lifetimes.retain(|index| {
             let life = &plan.lifetimes[*index];

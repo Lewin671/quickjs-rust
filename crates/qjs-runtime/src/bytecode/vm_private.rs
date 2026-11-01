@@ -11,7 +11,7 @@ use super::ir::{ClassMethodDef, ClassMethodKind, ClassPrivateElementDef};
 use super::vm::Vm;
 use super::vm_class::class_method_function_name_with_base;
 
-impl Vm<'_, '_> {
+impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
     /// Installs the private elements of a class. Methods and accessors become
     /// shared function values registered in the private environment; instances
     /// are branded with them at construction. Private fields register an

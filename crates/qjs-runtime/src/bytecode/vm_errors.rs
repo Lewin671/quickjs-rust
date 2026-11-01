@@ -2,7 +2,7 @@ use crate::{RuntimeError, Value};
 
 use super::vm::Vm;
 
-impl Vm<'_, '_> {
+impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
     pub(super) fn handle_call_result(
         &mut self,
         result: Result<Value, RuntimeError>,

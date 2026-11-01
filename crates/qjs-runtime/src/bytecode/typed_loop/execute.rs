@@ -775,8 +775,11 @@ fn seed_registers<F: LoopFrame>(
         // The sink's register starts from the binding's value; a fallback
         // slot whose copy canonical routing cleared seeded it `undefined`.
         if let Some(&(register, _)) = program.local_slots.iter().find(|(_, s)| s == slot) {
-            registers[register as usize] =
-                Typed::from_value(super::super::vm::Vm::sloppy_global_entry_value(&write))?;
+            registers[register as usize] = Typed::from_value(super::super::vm::Vm::<
+                super::super::vm::InlineFrame<'_>,
+            >::sloppy_global_entry_value(
+                &write
+            ))?;
         }
         sloppy_global_writes.push(write);
     }

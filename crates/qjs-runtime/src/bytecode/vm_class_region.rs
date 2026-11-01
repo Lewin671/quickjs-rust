@@ -35,7 +35,7 @@ enum PendingStaticItem {
     Block(usize),
 }
 
-impl Vm<'_, '_> {
+impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
     pub(super) fn execution_is_strict(&self) -> bool {
         self.env.execution_state().1
     }

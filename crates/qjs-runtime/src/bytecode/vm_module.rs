@@ -24,7 +24,7 @@ use super::{ModuleBindings, ModuleEvaluation};
 /// drained so a prelude that schedules microtasks settles before module
 /// evaluation.
 pub(super) fn eval_prelude_script(bytecode: &Bytecode, realm: &Realm) -> Result<(), RuntimeError> {
-    Vm::initialize_script_global_bindings(bytecode, realm)?;
+    Vm::<super::vm::InlineFrame<'_>>::initialize_script_global_bindings(bytecode, realm)?;
     realm.refresh_dynamic_function_realm_global();
     let env = crate::context::ActivationContext::new(
         crate::context::CreationContext::root(realm.clone()),
@@ -68,14 +68,14 @@ pub(super) fn new_module_realm() -> Realm {
 /// in the module frame and shared module cells, so they do not become
 /// `globalThis` properties.
 pub(super) fn eval_module_body(
-    bytecode: &Bytecode,
+    bytecode: &Rc<Bytecode>,
     realm: &Realm,
     host: Option<crate::module::ModuleHostRef>,
     module_bindings: ModuleBindings,
     drain: bool,
 ) -> Result<ModuleEvaluation, RuntimeError> {
     if bytecode.is_global_scope() {
-        Vm::initialize_script_global_bindings(bytecode, realm)?;
+        Vm::<super::vm::InlineFrame<'_>>::initialize_script_global_bindings(bytecode, realm)?;
     }
     realm.refresh_dynamic_function_realm_global();
     let mut env = crate::context::ActivationContext::new(
@@ -157,7 +157,7 @@ pub(super) fn eval_module_function_hoists(
 /// Suspended frames and module namespaces retain the same canonical cells.
 ///
 fn eval_async_module_body(
-    bytecode: &Bytecode,
+    bytecode: &Rc<Bytecode>,
     mut env: crate::context::ActivationContext,
     module_bindings: ModuleBindings,
     drain: bool,
@@ -172,7 +172,7 @@ fn eval_async_module_body(
     let context = ObjectRef::new(HashMap::new(), env.realm().atoms());
     *context.generator_state().borrow_mut() =
         Some(GeneratorState::SuspendedStart(Box::new(GeneratorStart {
-            bytecode: Rc::new(bytecode.clone()),
+            bytecode: bytecode.clone(),
             env,
             upvalues: Vec::new(),
             with_stack: Vec::new(),

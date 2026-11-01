@@ -185,7 +185,7 @@ pub(in crate::bytecode) fn resume_direct_call_bytecode(
     resumed
 }
 
-fn run(vm: &mut Vm<'_, '_>) -> Resumed {
+fn run<'a, F: crate::bytecode::vm::VmFrame<'a>>(vm: &mut Vm<'a, '_, F>) -> Resumed {
     match vm.run_completion() {
         Ok(Completion::Return(value)) => Resumed::Finished(Ok(value)),
         Ok(_) => match vm
@@ -203,7 +203,10 @@ fn run(vm: &mut Vm<'_, '_>) -> Resumed {
     }
 }
 
-fn hand_back(vm: &mut Vm<'_, '_>, registers: WideRegisters<'_>) {
+fn hand_back<'a, F: crate::bytecode::vm::VmFrame<'a>>(
+    vm: &mut Vm<'a, '_, F>,
+    registers: WideRegisters<'_>,
+) {
     for (slot, register) in registers.locals.iter_mut().enumerate() {
         if !is_own(registers.own_locals, slot) {
             continue;
@@ -229,7 +232,7 @@ fn is_own(own_locals: u128, slot: usize) -> bool {
     slot < u128::BITS as usize && own_locals & (1_u128 << slot) != 0
 }
 
-impl Vm<'_, '_> {
+impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
     /// After an ordinary backward jump from `backedge` that no accelerator
     /// claimed: whether this frame hands the loop back to the wide tier.
     /// It does when it was resumed at a probed backedge, is the only frame on

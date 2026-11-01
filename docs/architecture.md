@@ -151,8 +151,8 @@ canonical realm/module cells retain identity. Init/Assign/Read check typed state
 object-cache invalidation is distinct from lexical TDZ. No name/value snapshot. See
 [design/env-model-rewrite.md](design/env-model-rewrite.md).
 
-**Suspended frames.** A generator or async body owns its whole frame while
-suspended. See [design/generator-suspension.md](design/generator-suspension.md).
+**Suspended frames.** A generator/async/TLA body keeps the same box from
+its prologue through suspension/resume; ordinary VM frames remain unboxed. See [design/generator-suspension.md](design/generator-suspension.md).
 
 ### Object representation
 

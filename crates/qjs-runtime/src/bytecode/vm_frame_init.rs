@@ -277,7 +277,7 @@ impl<'a, 's> Vm<'a, 's> {
             });
         let mut vm = Self {
             runtime,
-            current: FrameState {
+            current: super::vm::InlineFrame(FrameState {
                 slow_flags: 0,
                 reference_hooks: !handle.binding_plan.references.can_skip(&env),
                 active_reference_count: 0,
@@ -307,7 +307,8 @@ impl<'a, 's> Vm<'a, 's> {
                 cold,
                 direct_eval_with_stack: false,
                 persist_global_lexicals: true,
-            },
+            }),
+            frame_lifetime: std::marker::PhantomData,
             callers: Vec::new(),
             pending_frame_entry: None,
         };
@@ -390,12 +391,21 @@ mod tests {
         let env = empty_env();
 
         let (local_upvalues, realm_binding_slots) =
-            Vm::initial_direct_local_upvalues(&bytecode, &[], 0, &env);
+            Vm::<crate::bytecode::vm::InlineFrame<'_>>::initial_direct_local_upvalues(
+                &bytecode,
+                &[],
+                0,
+                &env,
+            );
 
         assert!(local_upvalues.is_empty());
         assert_eq!(realm_binding_slots, Some(0));
         assert_eq!(
-            Vm::initial_authoritative_slots(&bytecode, &local_upvalues, &env),
+            Vm::<crate::bytecode::vm::InlineFrame<'_>>::initial_authoritative_slots(
+                &bytecode,
+                &local_upvalues,
+                &env
+            ),
             1
         );
     }
@@ -407,7 +417,12 @@ mod tests {
         let captured = BindingCell::new(Value::Number(42.0));
 
         let (local_upvalues, realm_binding_slots) =
-            Vm::initial_direct_local_upvalues(&bytecode, std::slice::from_ref(&captured), 0, &env);
+            Vm::<crate::bytecode::vm::InlineFrame<'_>>::initial_direct_local_upvalues(
+                &bytecode,
+                std::slice::from_ref(&captured),
+                0,
+                &env,
+            );
 
         assert_eq!(local_upvalues.len(), 1);
         assert_eq!(realm_binding_slots, Some(0));
@@ -432,7 +447,12 @@ mod tests {
         let captured = env.realm_binding_cell("captured").unwrap();
 
         let (local_upvalues, realm_binding_slots) =
-            Vm::initial_direct_local_upvalues(&bytecode, std::slice::from_ref(&captured), 1, &env);
+            Vm::<crate::bytecode::vm::InlineFrame<'_>>::initial_direct_local_upvalues(
+                &bytecode,
+                std::slice::from_ref(&captured),
+                1,
+                &env,
+            );
 
         assert_eq!(realm_binding_slots, Some(1));
         assert!(
@@ -460,7 +480,7 @@ mod tests {
             .expect("function should receive captured cell");
         let activation = empty_env();
         let mut runtime = crate::context::RuntimeServices::for_realm(activation.realm());
-        let mut vm = Vm::new_with_globals_upvalues_with_stack_and_direct_call_slots(
+        let mut vm = Vm::<crate::bytecode::vm::InlineFrame<'_>>::new_with_globals_upvalues_with_stack_and_direct_call_slots(
             bytecode,
             &mut runtime,
             activation,
@@ -501,7 +521,12 @@ mod tests {
         );
 
         let (local_upvalues, realm_binding_slots) =
-            Vm::initial_direct_local_upvalues(&bytecode, &[], 0, &env);
+            Vm::<crate::bytecode::vm::InlineFrame<'_>>::initial_direct_local_upvalues(
+                &bytecode,
+                &[],
+                0,
+                &env,
+            );
 
         assert_eq!(local_upvalues.len(), 1);
         assert_eq!(realm_binding_slots, Some(0));
@@ -523,13 +548,23 @@ mod tests {
         parameter.parameter = true;
         for own in [local("name", false), parameter] {
             let bytecode = Bytecode::new(Vec::new(), vec![own], Vec::new());
-            let (cells, _) = Vm::initial_direct_local_upvalues(&bytecode, &[], 0, &env);
+            let (cells, _) =
+                Vm::<crate::bytecode::vm::InlineFrame<'_>>::initial_direct_local_upvalues(
+                    &bytecode,
+                    &[],
+                    0,
+                    &env,
+                );
             assert!(cells[0].is_none(), "own binding cannot become an import");
         }
         let bytecode = Bytecode::new(Vec::new(), vec![local("name", true)], Vec::new());
         let captured = BindingCell::new(Value::Number(42.0));
-        let (cells, _) =
-            Vm::initial_direct_local_upvalues(&bytecode, std::slice::from_ref(&captured), 0, &env);
+        let (cells, _) = Vm::<crate::bytecode::vm::InlineFrame<'_>>::initial_direct_local_upvalues(
+            &bytecode,
+            std::slice::from_ref(&captured),
+            0,
+            &env,
+        );
         assert!(cells[0].as_ref().unwrap().ptr_eq(&captured));
     }
 
@@ -548,8 +583,12 @@ mod tests {
                 .all(|name| !name.starts_with("\0\0"))
         );
         let (mut vm_services, vm_activation) = crate::context::HostRoot::script().into_parts();
-        let vm = Vm::new(&bytecode, &mut vm_services, vm_activation)
-            .expect("top-level VM should initialize");
+        let vm = Vm::<crate::bytecode::vm::InlineFrame<'_>>::new(
+            &bytecode,
+            &mut vm_services,
+            vm_activation,
+        )
+        .expect("top-level VM should initialize");
         for (slot, local) in bytecode.locals.iter().enumerate() {
             if !local.compiler_temporary {
                 continue;

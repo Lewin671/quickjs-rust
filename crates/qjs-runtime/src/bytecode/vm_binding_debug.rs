@@ -4,7 +4,7 @@
 use super::vm::Vm;
 use crate::binding::{BindingKind, ScopeId};
 
-impl Vm<'_, '_> {
+impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
     #[inline]
     pub(super) fn force_binding_exposure(&mut self, id: ScopeId) {
         if !self.runtime.binding_debug.forcing() {

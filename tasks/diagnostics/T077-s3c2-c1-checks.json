@@ -1,0 +1,47 @@
+{
+  "source": "C1 source in this commit",
+  "parent": "3fe3943c",
+  "runtime": 2732,
+  "combined_all": 2732,
+  "curated_test262": 5174,
+  "focused_test262": 65,
+  "ng_scripts_per_mode": 322,
+  "checks": {
+    "test4": {
+      "log_sha256": "30c5589a163d6a75eb563a75a5a12c2e57dab6a174014e9c9382d3bdc8de8d39",
+      "exit": 0
+    },
+    "combined": {
+      "log_sha256": "497b101382d676a1775bb78c7d8356e622a6224bed544e4b26af8ac55ac62a68",
+      "exit": 0
+    },
+    "clippy": {
+      "log_sha256": "18249b49b4904a5eaf43433208b7770e05ce5b46ea1001b310230139aa1fa860",
+      "exit": 0
+    },
+    "fast": {
+      "log_sha256": "5b39fac1dbf94778916ae5612d40ad51dbffe5893624842ec7f7b5576a8cb9e6",
+      "exit": 0
+    },
+    "full": {
+      "log_sha256": "e2cd8e7ffbae6402497a1c29527ed5a6de7c56f4b241999bd4f0168948ccca42",
+      "exit": 0
+    },
+    "x86": {
+      "log_sha256": "e40d403665ddf32b6f60fa2fcc66430983f6ac0b731495ce53e39820975aa961",
+      "exit": 0
+    },
+    "ng-default": {
+      "log_sha256": "e7b32773d0fc6dc0cf6d344e3ca7716aa44cd4fff475b996f6b3d8acfb15afac",
+      "exit": 0
+    },
+    "ng-off": {
+      "log_sha256": "e7b32773d0fc6dc0cf6d344e3ca7716aa44cd4fff475b996f6b3d8acfb15afac",
+      "exit": 0
+    },
+    "ng-verify": {
+      "log_sha256": "e7b32773d0fc6dc0cf6d344e3ca7716aa44cd4fff475b996f6b3d8acfb15afac",
+      "exit": 0
+    }
+  }
+}
