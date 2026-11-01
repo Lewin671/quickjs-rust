@@ -292,7 +292,15 @@ impl RealmState {
     }
 
     pub(crate) fn remove_value(&self, name: &str) -> Option<Value> {
-        self.bindings.remove(name)
+        // Removed object routes may still be retained by closures or suspended
+        // frames. Invalidate at this common boundary, including descriptor and
+        // property deletion paths that do not call Context::remove_realm.
+        let previous = self.bindings.get(name);
+        if let Some(cell) = self.bindings.cell(name) {
+            cell.invalidate_object_route();
+        }
+        self.bindings.remove(name);
+        previous
     }
 
     pub(crate) fn entry_or_insert_value(&self, name: String, value: Value) {

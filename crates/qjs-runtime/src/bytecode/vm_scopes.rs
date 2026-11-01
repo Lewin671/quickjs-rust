@@ -277,6 +277,12 @@ impl Vm<'_, '_> {
                     .is_some_and(|meta| meta.name == name)
             })?;
         let cell = self.local_upvalue_cell(slot)?.clone();
+        // Object-record cells are cache routes, not lexical declarations.
+        // Delete/accessor redefinition invalidates them; current global
+        // selection must then decide presence and run Get, including on resume.
+        if cell.object_route_is_invalidated() {
+            return None;
+        }
         let access = if self
             .env
             .module_import_cell(name)

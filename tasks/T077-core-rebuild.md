@@ -1,11 +1,11 @@
 # T077: In-place core rebuild
 
-- Status: active; ordered round-3 repairs committed through `f6f5b66e`, fuzz tool `e7a6c0e4`. Initial 6,000-program sweep completed; extra binding repairs/triage precede final qualification.
+- Status: active; ordered round-3 repairs through `92e52fd8` plus retained-global invalidation repair. Initial 6,000-program sweep is triaged in progress; corrected-generator rerun precedes final qualification.
 - Implementation: through `a6de336d`: typed Context/bindings, single call-owner authority across wide/VM routes, checked capture-mask bounds and effect-aware numeric DCE. Main's generic hostname fix is integrated via `55f5d1d6`; its S2 layouts/ICs and allocation-free cycle walkers remain. CallEnv, snapshots/apply-back and caller-env equality entry remain deleted. [Progress](diagnostics/T077-s3b-progress.md).
 - Verified at: `a6de336d`: fast gate 2,670 runtime/65 curated, 302 NG scripts and four modules in default/off/verify, focused owner/effect/mask tests and main-only R2 overlay proof pass. Complete public sweep: 86 cases, 258 case-modes, 351/351 invocations pass. [Round-2 handoff](diagnostics/T077-s3b-round2-final/README.md). Full/exact requalification deliberately not started per [feedback](diagnostics/T077-s3b-lead-feedback-2.md); older exact receipts are historical.
 - Evidence: [Seeded triage](diagnostics/T077-s3b-round3-fuzz/README.md), [Round-3 binding repairs](diagnostics/T077-s3b-round3-bindings.md), [helper effects](diagnostics/T077-s3b-round3-p1/README.md), [pre-existing repairs](diagnostics/T077-s3b-round3-preexisting.md), [S3b progress](diagnostics/T077-s3b-progress.md), [S3b brief](proposals/T077-s3b-brief.md), [target](../docs/design/core-rebuild.md).
 - Unresolved: seeded differential-fuzz triage, fresh full/exact/counter/depth/public qualification and S3b payoff/acceptance. Accepted predecessor regressions retain S3e/S4 ownership; class-construction complexity and native-stack policy retain their existing owners.
-- Next action: finish the [round-3 feedback](diagnostics/T077-s3b-lead-feedback-3.md) in order, add/run seeded fuzzing, then one final qualification. Lead owns formal/held-out/RSS and acceptance. Never push to origin or merge into main.
+- Next action: fix receiver-generator counter collisions and rerun 2,000 seeds per profile; finish differential triage, then one final qualification under [round-3 feedback](diagnostics/T077-s3b-lead-feedback-3.md). Lead owns formal/held-out/RSS and acceptance. Never push to origin or merge into main.
 
 ## Authority and scope
 

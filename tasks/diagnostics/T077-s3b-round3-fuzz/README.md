@@ -33,3 +33,23 @@ A minimal destructuring-catch initialization failure must still run finally:
 `try{try{throw undefined}catch([x]){}finally{log.push('finally')}}catch(e){...}`.
 Rust and Node run finally; pinned NG skips it. The raw generated programs keep
 these differences; output normalization does not remove them.
+
+## Retained global routes
+
+The final seeded reductions exposed a candidate regression after global deletion:
+a self-named closure or resumed async body could read an old ObjectStorage cell.
+The first incomplete repair skipped invalidated positional captures, but async
+still returned `ok:undefined` instead of ReferenceError. Property deletion and
+accessor replacement called Realm::remove_value without invalidating retained
+cells. Invalidation now belongs to that common removal boundary; lexical cells
+keep their independent declaration policy. Invalidated static captures defer to
+the current global record instead of masquerading as declarative bindings.
+
+Focused runtime coverage includes absence, data recreation, accessor replacement
+and async resumption. The [comparison matrix](capture-matrix.json) matches NG and
+verified main `3cc12c6f` in default/off/verify: script `ReferenceError:7:9`, module
+`ReferenceError`, all exits zero. The [base input proof](base-source.json) checks
+596 build inputs against the named revision archive. Candidate release and
+optimized assertion/overflow-enabled verifier are hash-pinned in the matrix.
+Fast gate passes 2,695 runtime tests and 65 selected Test262 cases. This repair
+precedes a fresh corrected 2,000-seed-per-profile run and final qualification.

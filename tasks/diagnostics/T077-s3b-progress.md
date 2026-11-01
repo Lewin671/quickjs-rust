@@ -1100,3 +1100,15 @@ verifier keeps IC checks, debug assertions and overflow checks enabled; no
 deadline/case/output is waived. No held-out program or timing is run. Full/exact
 requalification is deliberately deferred until remaining lead review findings,
 then one requalification; earlier receipts are source-bound history.
+
+
+## Round-3 retained-global repair
+
+The [seeded triage record](T077-s3b-round3-fuzz/README.md) records the final
+candidate-only stale-global bug and its incomplete-first-patch discriminator.
+Realm removal now invalidates retained ObjectStorage cells on every deletion or
+accessor-replacement route; static captures fall through to current global
+selection. Default/off/verify match NG and main `3cc12c6f` on both permanent
+script/module regressions. Focused runtime and staged gate pass 2,695 runtime
+and 65 selected Test262 cases. Corrected receiver generation, fresh seeded
+triage and final qualification remain; historical receipts are not current.

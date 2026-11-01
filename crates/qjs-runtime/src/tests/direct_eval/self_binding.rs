@@ -79,3 +79,35 @@ fn self_scope_keeps_positional_free_bindings_ahead_of_global_homonyms() {
         }
     }
 }
+
+#[test]
+fn invalidated_global_capture_resolves_the_current_object_record() {
+    assert_eq!(
+        eval("y=1;var f=function nf(){nf;return y;};delete y;var r;try{f();}catch(e){r=e.name;}r;"),
+        Ok(Value::String("ReferenceError".into()))
+    );
+    assert_eq!(
+        eval(
+            "y=1;var f=function nf(){nf;return y;};delete y;y=3;var a=f();delete y;Object.defineProperty(globalThis,'y',{configurable:true,get(){return 7;}});a+':'+f();"
+        ),
+        Ok(Value::String("3:7".into()))
+    );
+    for (mutation, expected) in [
+        ("clean();", "ReferenceError"),
+        ("clean();y=9;", "ok:9"),
+        (
+            "Object.defineProperty(globalThis,'y',{configurable:true,get(){return 7;}});",
+            "ok:7",
+        ),
+    ] {
+        let source = format!(
+            "y=undefined;var clean=()=>eval('delete y');var p=(async function(){{await 0;return y=c?y:1;}})().then(v=>'ok:'+v,e=>e.name);c=1;{mutation}p;"
+        );
+        let value = eval(&source).unwrap();
+        assert_eq!(
+            crate::promise::promise_debug_state_result(&value),
+            Some(("fulfilled".into(), Value::String(expected.into()))),
+            "{source}"
+        );
+    }
+}
