@@ -48,21 +48,60 @@ impl ThisBinding {
 pub(crate) struct CallOwner {
     pub(crate) this: ThisBinding,
     pub(crate) new_target: Option<Value>,
+    pub(crate) kind: OwnerKind,
+    /// Method/class state, absent for ordinary calls so their owner stays
+    /// small to build, move and drop.
+    pub(crate) class: Option<Box<ClassOwner>>,
+}
+
+/// The method home object, the class heritage and the derived constructor an
+/// owner carries only when one of them exists.
+#[derive(Debug, Default)]
+pub(crate) struct ClassOwner {
     pub(crate) home: Option<Value>,
     pub(crate) super_constructor: Option<Value>,
     pub(crate) active_constructor: Option<Value>,
-    pub(crate) kind: OwnerKind,
 }
+
 impl CallOwner {
     pub(crate) fn root(this: Value, kind: OwnerKind) -> Self {
         Self {
             this: ThisBinding::Initialized(this),
             new_target: None,
-            home: None,
-            super_constructor: None,
-            active_constructor: None,
             kind,
+            class: None,
         }
+    }
+
+    /// Records class state, allocating it only when some part exists.
+    pub(crate) fn set_class_state(
+        &mut self,
+        home: Option<Value>,
+        super_constructor: Option<Value>,
+        active_constructor: Option<Value>,
+    ) {
+        self.class = (home.is_some()
+            || super_constructor.is_some()
+            || active_constructor.is_some())
+        .then(|| {
+            Box::new(ClassOwner {
+                home,
+                super_constructor,
+                active_constructor,
+            })
+        });
+    }
+
+    pub(crate) fn home(&self) -> Option<&Value> {
+        self.class.as_ref()?.home.as_ref()
+    }
+
+    pub(crate) fn super_constructor(&self) -> Option<&Value> {
+        self.class.as_ref()?.super_constructor.as_ref()
+    }
+
+    pub(crate) fn active_constructor(&self) -> Option<&Value> {
+        self.class.as_ref()?.active_constructor.as_ref()
     }
 }
 

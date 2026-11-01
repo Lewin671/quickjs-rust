@@ -153,7 +153,6 @@ struct CompactFrame {
     callee: Value,
     upvalue_owner: Option<Function>,
     upvalue_slots: u128,
-    activation: crate::context::ActivationContext,
     /// First register of this frame's window in the shared register stack.
     base: usize,
     /// Width of the window.
@@ -173,6 +172,8 @@ struct FrameStorage {
     /// initialization beyond a parameter copy.
     registers: Vec<Value>,
     frames: Vec<CompactFrame>,
+    /// Suspended caller activations, one per frame, and released ones above.
+    activations: super::activation_stack::ActivationStack,
 }
 
 thread_local! {
@@ -256,7 +257,6 @@ struct InlineCallee {
     upvalue_owner: Option<Function>,
     upvalue_slots: u128,
     register_count: usize,
-    activation: crate::context::ActivationContext,
 }
 
 /// Proves a callee may run on the caller's own loop, in the caller's window.
@@ -277,13 +277,14 @@ fn inline_callee(callee: &Value) -> Option<InlineCallee> {
     {
         return None;
     }
-    let activation = crate::function::enter_indexed_activation(function);
+    // This tier has no reference checkpoints; its fresh indexed activation
+    // is built only once the call is entered (`entry::push_callee_frame`).
     if !function
         .bytecode
         .as_ref()?
         .binding_plan
         .references
-        .can_skip(&activation)
+        .skips_indexed_entry()
     {
         return None;
     }
@@ -298,7 +299,6 @@ fn inline_callee(callee: &Value) -> Option<InlineCallee> {
         (Some(function.clone()), slots)
     };
     Some(InlineCallee {
-        activation,
         register_count: (facts >> FACTS_REGISTER_SHIFT) as usize,
         upvalue_owner,
         upvalue_slots,
@@ -379,20 +379,18 @@ fn run(
     // body that calls out to native code that calls back into this tier finds
     // an empty storage and builds its own, instead of meeting a live borrow.
     let mut storage = FRAME_STORAGE.with(|cell| cell.take());
-    let mut env = crate::context::Context {
-        runtime,
-        activation,
-        native: None,
-    };
     let result = run_frames(
         bytecode,
-        &mut env,
+        runtime,
+        activation,
         entry,
         parameter_slots,
         arguments,
         &mut storage,
     );
     storage.frames.clear();
+    // No callee activation outlives its run except as a released one.
+    storage.activations.finish(runtime, result.is_ok());
     if storage.registers.len() > MAX_POOLED_REGISTERS {
         storage.registers.truncate(MAX_POOLED_REGISTERS);
         storage.registers.shrink_to_fit();
@@ -403,13 +401,17 @@ fn run(
 
 /// The frame-stack driver.
 ///
-/// Exactly one activation is "current", and its fields are loop locals. A call
+/// Exactly one frame is "current", and its fields are loop locals. A call
 /// pushes the current one and overwrites them; a return pops. `run_ops` is
 /// re-entered per frame switch, so the executor itself never learns that more
-/// than one activation exists and keeps its zero-based register window.
+/// than one frame exists and keeps its zero-based register window. The root
+/// body runs in `root_activation`, every inline callee in its own slot of
+/// `activations`; `env` borrows the current one and is rebuilt only when the
+/// depth changes.
 fn run_frames(
     root_bytecode: &Bytecode,
-    env: &mut crate::context::Context<'_>,
+    runtime: &mut crate::context::RuntimeServices,
+    root_activation: &mut crate::context::ActivationContext,
     entry: CompactEntry<'_>,
     parameter_slots: &[usize],
     arguments: &[Value],
@@ -417,7 +419,9 @@ fn run_frames(
 ) -> Result<Value, RuntimeError> {
     let registers = &mut storage.registers;
     let frames = &mut storage.frames;
+    let activations = &mut storage.activations;
     debug_assert!(frames.is_empty(), "a root activation starts its own stack");
+    debug_assert!(activations.is_empty(), "no activation outlives its run");
 
     // `Value::Undefined` marks the root, whose bytecode the caller owns.
     let mut current_callee = Value::Undefined;
@@ -426,6 +430,31 @@ fn run_frames(
     let mut current_base = 0_usize;
     let mut current_len = entry.program.register_count;
     let mut pc = 0_usize;
+    // The services and the current frame's activation. Entry and return
+    // need the stack itself, so they end this borrow and rebind it.
+    let mut env = crate::context::Context {
+        runtime: &mut *runtime,
+        activation: &mut *root_activation,
+        native: None,
+    };
+    macro_rules! rebind_env {
+        () => {
+            env = crate::context::Context {
+                runtime: &mut *runtime,
+                activation: activations.current(&mut *root_activation, frames.len()),
+                native: None,
+            }
+        };
+    }
+    // Terminal error: attribute it to the current frame, then release
+    // every window. The root activation is never displaced.
+    macro_rules! fail {
+        ($error:expr) => {{
+            let error = crate::error::capture_error_origin($error, &env);
+            unwind(registers, frames, current_base + current_len);
+            return Err(error);
+        }};
+    }
 
     reserve_registers(registers, current_len);
     // Locals live in the low registers. Everything starts `undefined`, which
@@ -464,7 +493,7 @@ fn run_frames(
             };
             let mut activation = CompactActivation {
                 bytecode,
-                env,
+                env: &mut env,
                 upvalue_owner: &current_owner,
                 upvalue_slots: current_slots,
             };
@@ -573,10 +602,7 @@ fn run_frames(
         };
         let action = match outcome {
             Ok(action) => action,
-            Err(error) => {
-                unwind(registers, frames, current_base + current_len);
-                return Err(crate::error::capture_error_origin(error, env));
-            }
+            Err(error) => fail!(error),
         };
         match action {
             Action::Return(value) => {
@@ -584,7 +610,8 @@ fn run_frames(
                 let Some(caller) = frames.pop() else {
                     return Ok(value);
                 };
-                *env.activation = caller.activation;
+                activations.release(frames.len());
+                rebind_env!();
                 current_callee = caller.callee;
                 current_owner = caller.upvalue_owner;
                 current_slots = caller.upvalue_slots;
@@ -606,34 +633,36 @@ fn run_frames(
                 let argument_index = callee_index + 1;
                 let argument_count = argc as usize;
 
-                match entry::try_enter_call(
-                    &mut callee,
-                    env,
-                    registers,
-                    frames,
-                    &mut current_callee,
-                    &mut current_owner,
-                    &mut current_slots,
-                    &mut current_base,
-                    &mut current_len,
-                    &mut pc,
-                    argument_index,
-                    argument_count,
-                    dst,
-                    resume_pc,
-                ) {
-                    Ok(true) => continue,
-                    Ok(false) => {}
-                    Err(error) => {
-                        unwind(registers, frames, current_base + current_len);
-                        return Err(crate::error::capture_error_origin(error, env));
+                if let Some(inline) = inline_callee(&callee) {
+                    let entered = entry::enter_call(
+                        inline,
+                        &mut callee,
+                        runtime,
+                        registers,
+                        frames,
+                        activations,
+                        &mut current_callee,
+                        &mut current_owner,
+                        &mut current_slots,
+                        &mut current_base,
+                        &mut current_len,
+                        &mut pc,
+                        argument_index,
+                        argument_count,
+                        dst,
+                        resume_pc,
+                    );
+                    rebind_env!();
+                    match entered {
+                        Ok(()) => continue,
+                        Err(error) => fail!(error),
                     }
                 }
 
                 let outcome = {
                     let mut activation = CompactActivation {
                         bytecode: running_bytecode(&current_callee, root_bytecode),
-                        env,
+                        env: &mut env,
                         upvalue_owner: &current_owner,
                         upvalue_slots: current_slots,
                     };
@@ -645,10 +674,7 @@ fn run_frames(
                         execute::store(&mut registers[current_base + dst as usize], value);
                         pc = resume_pc;
                     }
-                    Err(error) => {
-                        unwind(registers, frames, current_base + current_len);
-                        return Err(crate::error::capture_error_origin(error, env));
-                    }
+                    Err(error) => fail!(error),
                 }
             }
         }
@@ -713,7 +739,7 @@ pub(in crate::bytecode) fn try_run_standalone(
         trace_reference_decline(bytecode, "reference sites need selection");
         return None;
     }
-    if let Some(value) = run_numeric_plan(bytecode, slots, env) {
+    if let Some(value) = run_numeric_plan(bytecode, slots) {
         return Some(Ok(value));
     }
     // Borrow the actual prepared callee in place; do not move a second
@@ -746,11 +772,7 @@ pub(in crate::bytecode) fn trace_reference_decline(bytecode: &Bytecode, reason: 
 /// Runs an admitted body's numeric plan (`numeric_plan`), when it has one
 /// and every argument is a number; `None` leaves the call to the tier.
 #[inline(never)]
-fn run_numeric_plan(
-    bytecode: &Bytecode,
-    slots: &DirectCallSlots<'_>,
-    entry: &crate::context::ActivationContext,
-) -> Option<Value> {
+fn run_numeric_plan(bytecode: &Bytecode, slots: &DirectCallSlots<'_>) -> Option<Value> {
     let plan = super::numeric_plan::plan_for(bytecode)?;
     let mut numbers = [0.0; super::compile::MAX_CALL_ARITY];
     if slots.arguments.len() > numbers.len() {
@@ -767,7 +789,6 @@ fn run_numeric_plan(
         bytecode,
         slots.upvalues.as_slice(),
         &numbers[..slots.arguments.len()],
-        entry,
     )
 }
 

@@ -338,7 +338,6 @@ fn compute_fixed_inline_facts(callee: &Value, function: &Function, bytecode: &By
 
 /// One suspended wide activation.
 struct WideFrame {
-    activation: crate::context::ActivationContext,
     callee: Value,
     base: usize,
     len: usize,
@@ -353,6 +352,8 @@ struct WideFrame {
 struct FrameStorage {
     registers: Vec<Value>,
     frames: Vec<WideFrame>,
+    /// Suspended caller activations, one per frame, and released ones above.
+    activations: crate::bytecode::compact_fn::activation_stack::ActivationStack,
 }
 
 thread_local! {
@@ -429,11 +430,7 @@ fn clear_window(window: &mut [Value]) {
 /// Runs `callee`'s numeric plan on `arguments` when every one is a number;
 /// `None` leaves the call to this driver.
 #[inline(never)]
-fn try_numeric_call(
-    callee: &Value,
-    arguments: &[Value],
-    entry: &crate::context::ActivationContext,
-) -> Option<Value> {
+fn try_numeric_call(callee: &Value, arguments: &[Value]) -> Option<Value> {
     let Value::Function(function) = callee else {
         return None;
     };
@@ -454,13 +451,12 @@ fn try_numeric_call(
         bytecode,
         &function.upvalues,
         &numbers[..arguments.len()],
-        entry,
     )
 }
 
-/// What the driver needs to enter an admitted callee in its own window.
+/// What the driver needs to enter an admitted callee in its own window. The
+/// callee's activation is built only once a numeric plan has not answered.
 struct InlineCallee {
-    activation: crate::context::ActivationContext,
     register_count: usize,
     requires_this: bool,
     is_strict: bool,
@@ -492,7 +488,6 @@ fn inline_entry(callee: &Value) -> Option<(InlineCallee, bool)> {
     }
     Some((
         InlineCallee {
-            activation: crate::function::enter_indexed_activation(function),
             register_count: (facts >> FACTS_REGISTER_SHIFT) as usize,
             requires_this: facts & FACTS_REQUIRES_THIS != 0,
             is_strict: facts & FACTS_STRICT != 0,
@@ -518,22 +513,51 @@ fn inline_constructor(
         return None;
     }
     let (inline, class) = inline_entry(callee)?;
-    let receiver = function.wide_instance_receiver(inline.activation.realm().atoms())?;
+    let receiver = function.wide_instance_receiver(function.creation_context().realm.atoms())?;
     Some((inline, receiver, class))
 }
 
-/// Enters `new callee(...)` as a frame of this driver when
-/// `inline_constructor` admits it, returning `Ok(None)`; otherwise hands the
-/// callee back for the general construct path. Out of line, so the driver
-/// loop's own code is the same whether or not a body constructs.
+/// Admits `new callee(...)` as a frame of this driver (`inline_constructor`),
+/// running a base class's instance field initializers in the caller's
+/// context; `Ok(None)` hands the callee back for the general construct path.
+/// Out of line, so the driver loop's own code is the same whether or not a
+/// body constructs.
+#[inline(never)]
+fn admit_constructor(
+    callee: &Value,
+    env: &mut crate::context::Context<'_>,
+    depth: usize,
+) -> Result<Option<(InlineCallee, crate::ObjectRef)>, RuntimeError> {
+    let Some((inline, receiver, class)) = inline_constructor(callee, env) else {
+        return Ok(None);
+    };
+    if depth >= MAX_FRAMES {
+        return Err(call_stack_exhausted());
+    }
+    // A base class installs its instance fields before its body runs.
+    if class && let Value::Function(function) = callee {
+        crate::function::initialize_direct_instance_fields(
+            &function.instance_elements(),
+            &receiver,
+            env,
+        )?;
+    }
+    Ok(Some((inline, receiver)))
+}
+
+/// Enters an admitted constructor (`admit_constructor`) as a frame of this
+/// driver, with its fresh receiver as `this`.
 #[inline(never)]
 #[allow(clippy::too_many_arguments)]
-fn enter_constructor(
+fn push_constructor_frame(
     callee: Value,
+    inline: InlineCallee,
+    receiver: crate::ObjectRef,
     root_bytecode: &Bytecode,
-    env: &mut crate::context::Context<'_>,
+    runtime: &mut crate::context::RuntimeServices,
     registers: &mut Vec<Value>,
     frames: &mut Vec<WideFrame>,
+    activations: &mut crate::bytecode::compact_fn::activation_stack::ActivationStack,
     current_callee: &mut Value,
     current_base: &mut usize,
     current_len: &mut usize,
@@ -541,21 +565,7 @@ fn enter_constructor(
     argc: u8,
     dst: u16,
     resume_pc: usize,
-) -> Result<Option<Value>, RuntimeError> {
-    let Some((mut inline, receiver, class)) = inline_constructor(&callee, env) else {
-        return Ok(Some(callee));
-    };
-    if frames.len() >= MAX_FRAMES {
-        return Err(call_stack_exhausted());
-    }
-    // A base class installs its instance fields before its body runs.
-    if class && let Value::Function(function) = &callee {
-        crate::function::initialize_direct_instance_fields(
-            &function.instance_elements(),
-            &receiver,
-            env,
-        )?;
-    }
+) {
     crate::diagnostics::count!(ordinary_call_attempts);
     crate::diagnostics::count!(compact_direct_calls);
     let callee_base = *current_base + *current_len;
@@ -586,12 +596,11 @@ fn enter_constructor(
     };
     crate::function::bind_indexed_call_owner(
         function,
-        &mut inline.activation,
-        Value::Object(receiver.clone()),
+        activations.callee_slot(frames.len(), function, runtime),
+        Value::Object(receiver),
         Some(callee.clone()),
     );
     frames.push(WideFrame {
-        activation: std::mem::replace(env.activation, inline.activation),
         callee: std::mem::replace(current_callee, callee),
         base: std::mem::replace(current_base, callee_base),
         len: std::mem::replace(current_len, callee_len),
@@ -599,7 +608,6 @@ fn enter_constructor(
         dst,
         constructs: true,
     });
-    Ok(None)
 }
 
 /// A constructor's result: the returned value when it is an object, else
@@ -649,14 +657,10 @@ fn run(
 ) -> Result<Value, RuntimeError> {
     crate::diagnostics::count!(compact_standalone_activations);
     let mut storage = FRAME_STORAGE.with(|cell| cell.take());
-    let mut env = crate::context::Context {
-        runtime,
-        activation,
-        native: None,
-    };
     let result = run_frames(
         bytecode,
-        &mut env,
+        runtime,
+        activation,
         entry,
         parameter_slots,
         arguments,
@@ -664,6 +668,8 @@ fn run(
         &mut storage,
     );
     storage.frames.clear();
+    // No callee activation outlives its run except as a released one.
+    storage.activations.finish(runtime, result.is_ok());
     if storage.registers.len() > MAX_POOLED_REGISTERS {
         storage.registers.truncate(MAX_POOLED_REGISTERS);
         storage.registers.shrink_to_fit();
@@ -672,8 +678,10 @@ fn run(
     result
 }
 
-/// The frame-stack driver. Exactly one activation is "current", and its
-/// fields are loop locals; a call pushes it and a return pops. Inlined into
+/// The frame-stack driver. Exactly one frame is "current", and its fields are
+/// loop locals; a call pushes it and a return pops. The root body runs in
+/// `root_activation`, every inline callee in its own slot of `activations`;
+/// `env` borrows the current one and is rebuilt only when the depth changes. Inlined into
 /// `run`, as it always was before exits enlarged it: the split changed the
 /// dispatch loop's register allocation (docs/performance-knowledge.md,
 /// "Codegen").
@@ -681,7 +689,8 @@ fn run(
 #[allow(clippy::too_many_arguments)]
 fn run_frames(
     root_bytecode: &Bytecode,
-    env: &mut crate::context::Context<'_>,
+    runtime: &mut crate::context::RuntimeServices,
+    root_activation: &mut crate::context::ActivationContext,
     entry: WideEntry<'_>,
     parameter_slots: &[usize],
     arguments: &[Value],
@@ -690,7 +699,9 @@ fn run_frames(
 ) -> Result<Value, RuntimeError> {
     let registers = &mut storage.registers;
     let frames = &mut storage.frames;
+    let activations = &mut storage.activations;
     debug_assert!(frames.is_empty(), "a root activation starts its own stack");
+    debug_assert!(activations.is_empty(), "no activation outlives its run");
 
     let mut current_callee = Value::Undefined;
     // The root body's upvalue owner; a callee entered on this driver owns
@@ -700,6 +711,31 @@ fn run_frames(
     let mut current_base = 0_usize;
     let mut current_len = entry.program.register_count;
     let mut pc = 0_usize;
+    // The services and the current frame's activation. Entry and return
+    // need the stack itself, so they end this borrow and rebind it.
+    let mut env = crate::context::Context {
+        runtime: &mut *runtime,
+        activation: &mut *root_activation,
+        native: None,
+    };
+    macro_rules! rebind_env {
+        () => {
+            env = crate::context::Context {
+                runtime: &mut *runtime,
+                activation: activations.current(&mut *root_activation, frames.len()),
+                native: None,
+            }
+        };
+    }
+    // Terminal error: attribute it to the current frame, then release
+    // every window. The root activation is never displaced.
+    macro_rules! fail {
+        ($error:expr) => {{
+            let error = crate::error::capture_error_origin($error, &env);
+            unwind(registers, frames, current_base + current_len);
+            return Err(error);
+        }};
+    }
 
     reserve_registers(registers, current_len);
     for (index, &slot) in parameter_slots.iter().enumerate() {
@@ -729,7 +765,7 @@ fn run_frames(
             };
             let mut activation = WideActivation {
                 bytecode,
-                env,
+                env: &mut env,
                 upvalue_owner,
                 upvalue_slots,
             };
@@ -761,16 +797,14 @@ fn run_frames(
                         let Some(cell) = activation.upvalue_cell(slot as usize) else {
                             break Err(execute::uninitialized_local());
                         };
-                        let value = if !cell.is_initialized() {
-                            match activation.uninitialized_upvalue(slot as usize) {
+                        // One state borrow; a dead-zone cell takes the
+                        // interpreter's diagnostic.
+                        let value = match cell.value_if_initialized() {
+                            Some(value) => value,
+                            None => match activation.uninitialized_upvalue(slot as usize) {
                                 Ok(value) => value,
                                 Err(error) => break Err(error),
-                            }
-                        } else {
-                            match cell.read() {
-                                Ok(value) => value,
-                                Err(error) => break Err(error),
-                            }
+                            },
                         };
                         execute::store(&mut window[dst as usize], value);
                     }
@@ -1193,24 +1227,18 @@ fn run_frames(
                     depth,
                     pc,
                     &mut registers[current_base..current_base + current_len],
-                    env,
+                    &mut env,
                 ) {
                     ExitOutcome::Continue { pc: resume } => {
                         pc = resume;
                         continue;
                     }
                     ExitOutcome::Finished(Ok(value)) => Action::Return(value),
-                    ExitOutcome::Finished(Err(error)) => {
-                        unwind(registers, frames, current_base + current_len);
-                        return Err(crate::error::capture_error_origin(error, env));
-                    }
+                    ExitOutcome::Finished(Err(error)) => fail!(error),
                 }
             }
             Ok(action) => action,
-            Err(error) => {
-                unwind(registers, frames, current_base + current_len);
-                return Err(crate::error::capture_error_origin(error, env));
-            }
+            Err(error) => fail!(error),
         };
         if let Action::New {
             dst,
@@ -1223,47 +1251,46 @@ fn run_frames(
             let callee = std::mem::replace(&mut registers[callee_index], Value::Undefined);
             // An admitted ordinary constructor runs on this driver like a
             // call, with a fresh receiver as `this`.
-            let callee = match enter_constructor(
-                callee,
-                root_bytecode,
-                env,
-                registers,
-                frames,
-                &mut current_callee,
-                &mut current_base,
-                &mut current_len,
-                callee_index + 1,
-                argc,
-                dst,
-                resume_pc,
-            ) {
-                Ok(None) => {
+            match admit_constructor(&callee, &mut env, frames.len()) {
+                Ok(Some((inline, receiver))) => {
+                    push_constructor_frame(
+                        callee,
+                        inline,
+                        receiver,
+                        root_bytecode,
+                        runtime,
+                        registers,
+                        frames,
+                        activations,
+                        &mut current_callee,
+                        &mut current_base,
+                        &mut current_len,
+                        callee_index + 1,
+                        argc,
+                        dst,
+                        resume_pc,
+                    );
+                    rebind_env!();
                     pc = 0;
                     continue;
                 }
-                Ok(Some(callee)) => callee,
-                Err(error) => {
-                    unwind(registers, frames, current_base + current_len);
-                    return Err(crate::error::capture_error_origin(error, env));
-                }
-            };
+                Ok(None) => {}
+                Err(error) => fail!(error),
+            }
             let arguments = &registers[callee_index + 1..callee_index + 1 + argc as usize];
-            match construct_from_activation(env, callee, arguments) {
+            match construct_from_activation(&mut env, callee, arguments) {
                 Ok(value) => {
                     execute::store(&mut registers[current_base + dst as usize], value);
                     pc = resume_pc;
                     continue;
                 }
-                Err(error) => {
-                    unwind(registers, frames, current_base + current_len);
-                    return Err(crate::error::capture_error_origin(error, env));
-                }
+                Err(error) => fail!(error),
             }
         }
         let (dst, base, argc, resume_pc, resolved) = match action {
             Action::Return(value) => {
                 clear_window(&mut registers[current_base..current_base + current_len]);
-                let Some(caller) = frames.pop() else {
+                let Some(caller) = frames.last() else {
                     return Ok(value);
                 };
                 let value = if caller.constructs {
@@ -1271,7 +1298,9 @@ fn run_frames(
                 } else {
                     value
                 };
-                *env.activation = caller.activation;
+                let caller = frames.pop().expect("a returning callee has a caller");
+                activations.release(frames.len());
+                rebind_env!();
                 current_callee = caller.callee;
                 current_base = caller.base;
                 current_len = caller.len;
@@ -1309,27 +1338,29 @@ fn run_frames(
         let argument_index = callee_index + 1;
         let argument_count = argc as usize;
 
-        match entry::try_enter_call(
-            &mut callee,
-            &mut receiver,
-            root_bytecode,
-            env,
-            registers,
-            frames,
-            &mut current_callee,
-            &mut current_base,
-            &mut current_len,
-            &mut pc,
-            argument_index,
-            argument_count,
-            dst,
-            resume_pc,
-        ) {
-            Ok(true) => continue,
-            Ok(false) => {}
-            Err(error) => {
-                unwind(registers, frames, current_base + current_len);
-                return Err(crate::error::capture_error_origin(error, env));
+        if let Some(inline) = inline_callee(&callee) {
+            let entered = entry::enter_call(
+                inline,
+                &mut callee,
+                &mut receiver,
+                root_bytecode,
+                runtime,
+                registers,
+                frames,
+                activations,
+                &mut current_callee,
+                &mut current_base,
+                &mut current_len,
+                &mut pc,
+                argument_index,
+                argument_count,
+                dst,
+                resume_pc,
+            );
+            rebind_env!();
+            match entered {
+                Ok(()) => continue,
+                Err(error) => fail!(error),
             }
         }
 
@@ -1344,7 +1375,7 @@ fn run_frames(
             };
             let mut activation = WideActivation {
                 bytecode,
-                env,
+                env: &mut env,
                 upvalue_owner,
                 upvalue_slots,
             };
@@ -1361,10 +1392,7 @@ fn run_frames(
                 execute::store(&mut registers[current_base + dst as usize], value);
                 pc = resume_pc;
             }
-            Err(error) => {
-                unwind(registers, frames, current_base + current_len);
-                return Err(crate::error::capture_error_origin(error, env));
-            }
+            Err(error) => fail!(error),
         }
     }
 }

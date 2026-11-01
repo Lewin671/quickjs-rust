@@ -314,6 +314,15 @@ impl FunctionAuxiliaryState {
     }
 }
 
+/// See `Function::call_owner_inputs`.
+pub(crate) enum CallOwnerInputs {
+    Lexical(Rc<crate::context::CallOwner>),
+    Root {
+        home: Option<Value>,
+        super_constructor: Option<Value>,
+    },
+}
+
 impl FunctionColdState {
     fn new(home_object: Option<Value>, super_constructor: Option<Value>) -> Self {
         Self {
@@ -977,6 +986,84 @@ impl Function {
     pub(crate) fn lexical_call(&self) -> Option<Rc<crate::context::CallOwner>> {
         self.auxiliary
             .with_cold(|cold| cold.and_then(|cold| cold.lexical_call.clone()))
+    }
+
+    /// Makes a released root owner's class state what an indexed entry of
+    /// this function binds (`call_owner_inputs`, compared under one borrow):
+    /// its home object and super constructor, reusing the owner's class
+    /// record. False, changing nothing, when the entry needs a retained
+    /// lexical owner instead.
+    #[inline]
+    pub(crate) fn rebind_class_state(
+        &self,
+        class: &mut Option<Box<crate::context::ClassOwner>>,
+    ) -> bool {
+        // An ordinary function without cold state binds none.
+        if class.is_none() && self.auxiliary.with_cold(|cold| cold.is_none()) {
+            return true;
+        }
+        self.rebind_method_class_state(class)
+    }
+
+    #[inline(never)]
+    fn rebind_method_class_state(
+        &self,
+        class: &mut Option<Box<crate::context::ClassOwner>>,
+    ) -> bool {
+        fn same(left: Option<&Value>, right: Option<&Value>) -> bool {
+            match (left, right) {
+                (None, None) => true,
+                (Some(left), Some(right)) => left.same_value(right),
+                _ => false,
+            }
+        }
+        self.auxiliary.with_cold(|cold| {
+            let (home, super_constructor) = match cold {
+                None => (None, None),
+                Some(cold) if cold.lexical_call.is_none() => {
+                    (cold.home_object.as_ref(), cold.super_constructor.as_ref())
+                }
+                Some(_) => return false,
+            };
+            match class {
+                None if home.is_none() && super_constructor.is_none() => {}
+                Some(_) if home.is_none() && super_constructor.is_none() => *class = None,
+                Some(state)
+                    if same(home, state.home.as_ref())
+                        && same(super_constructor, state.super_constructor.as_ref()) => {}
+                Some(state) => {
+                    state.home = home.cloned();
+                    state.super_constructor = super_constructor.cloned();
+                }
+                None => {
+                    *class = Some(Box::new(crate::context::ClassOwner {
+                        home: home.cloned(),
+                        super_constructor: super_constructor.cloned(),
+                        active_constructor: None,
+                    }))
+                }
+            }
+            true
+        })
+    }
+
+    /// The call-owner inputs an indexed entry needs, under one borrow: a
+    /// retained lexical owner, else the home object and super constructor.
+    /// A function without cold state answers without cloning anything.
+    pub(crate) fn call_owner_inputs(&self) -> CallOwnerInputs {
+        self.auxiliary.with_cold(|cold| match cold {
+            None => CallOwnerInputs::Root {
+                home: None,
+                super_constructor: None,
+            },
+            Some(cold) => match &cold.lexical_call {
+                Some(owner) => CallOwnerInputs::Lexical(owner.clone()),
+                None => CallOwnerInputs::Root {
+                    home: cold.home_object.clone(),
+                    super_constructor: cold.super_constructor.clone(),
+                },
+            },
+        })
     }
 
     #[cfg(test)]

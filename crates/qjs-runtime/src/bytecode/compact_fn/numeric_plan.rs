@@ -221,7 +221,6 @@ struct Body {
 
 #[derive(Clone, Copy)]
 struct Frame {
-    variable: crate::binding::VariableEnvIdentity,
     body: u16,
     pc: u32,
     base: usize,
@@ -251,13 +250,12 @@ pub(in crate::bytecode) fn run(
     root_bytecode: &Bytecode,
     cells: &[BindingCell],
     args: &[f64],
-    entry: &crate::context::ActivationContext,
 ) -> Option<Value> {
     let (result, entered) = if plan.leaf {
         (run_leaf(plan, args)?, 0)
     } else {
         let mut scratch = SCRATCH.with(|slot| slot.take());
-        let result = run_with(plan, root_bytecode, cells, args, entry, &mut scratch);
+        let result = run_with(plan, root_bytecode, cells, args, &mut scratch);
         scratch.registers.clear();
         scratch.frames.clear();
         scratch.bodies.clear();
@@ -304,7 +302,6 @@ fn run_with(
     root_bytecode: &Bytecode,
     cells: &[BindingCell],
     args: &[f64],
-    entry: &crate::context::ActivationContext,
     scratch: &mut Scratch,
 ) -> Option<(f64, u64)> {
     let Scratch {
@@ -331,7 +328,6 @@ fn run_with(
     for (&register, &argument) in plan.parameters.iter().zip(args) {
         *registers.get_mut(usize::from(register))? = argument;
     }
-    let mut variable = entry.variable;
     #[cfg(feature = "perf-counters")]
     let mut entered = 0_u64;
     #[cfg(not(feature = "perf-counters"))]
@@ -340,7 +336,6 @@ fn run_with(
     let mut pc = 0_usize;
     let mut base = 0_usize;
     loop {
-        debug_assert_ne!(variable.activation, 0);
         // One pass of this loop per frame switch: the running body's
         // operations are borrowed for the whole inner loop.
         let current = Rc::clone(&bodies.get(body)?.plan);
@@ -381,17 +376,11 @@ fn run_with(
                     let value = *registers.get(base + usize::from(args) + index)?;
                     *registers.get_mut(callee_base + usize::from(parameter))? = value;
                 }
-                let callee_creation = bodies.get(callee)?.function.as_ref()?.creation_context();
-                let next_variable = crate::binding::VariableEnvIdentity {
-                    activation: callee_creation.realm.atoms().next_variable_identity(),
-                    boundary: crate::binding::ScopeId(0),
-                };
                 #[cfg(feature = "perf-counters")]
                 {
                     entered += 1;
                 }
                 frames.push(Frame {
-                    variable: std::mem::replace(&mut variable, next_variable),
                     body: u16::try_from(body).ok()?,
                     pc: u32::try_from(pc).ok()?,
                     base,
@@ -405,7 +394,6 @@ fn run_with(
                 let Some(frame) = frames.pop() else {
                     return Some((returned, entered));
                 };
-                variable = frame.variable;
                 body = usize::from(frame.body);
                 pc = frame.pc as usize;
                 base = frame.base;

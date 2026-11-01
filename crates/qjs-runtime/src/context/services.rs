@@ -1,5 +1,7 @@
 //! Services at the existing communicating-realm/atom boundary. Registry entries
-//! are weak metadata; they neither retain realms nor copy global values.
+//! are weak metadata; they neither retain realms nor copy global values. The
+//! released-activation pool holds only creation handles of ordinary calls
+//! that returned, bounded and dropped with the services.
 use super::{Realm, realm::RealmState};
 use crate::{ObjectRef, property::atom::AtomDomain};
 use std::{
@@ -77,6 +79,9 @@ pub(crate) struct RuntimeServices {
     pub(crate) binding_debug: crate::binding::BindingDebug,
     #[cfg(feature = "agents")]
     pub(crate) agent: Option<crate::agent::AgentContextRef>,
+    /// Released callback activations (`ActivationContext::release_for_reuse`)
+    /// a later indexed entry rebinds instead of rebuilding.
+    pub(crate) released_activations: Vec<super::ActivationContext>,
 }
 impl RuntimeServices {
     pub(crate) fn for_realm(realm: &Realm) -> Self {
@@ -87,6 +92,7 @@ impl RuntimeServices {
             binding_debug: crate::binding::BindingDebug::capture(),
             #[cfg(feature = "agents")]
             agent: None,
+            released_activations: Vec::new(),
         }
     }
     /// Explicit retention for the host EvalOutcome Clone API. Internal calls
@@ -98,6 +104,7 @@ impl RuntimeServices {
             binding_debug: self.binding_debug,
             #[cfg(feature = "agents")]
             agent: self.agent.clone(),
+            released_activations: Vec::new(),
         }
     }
 }

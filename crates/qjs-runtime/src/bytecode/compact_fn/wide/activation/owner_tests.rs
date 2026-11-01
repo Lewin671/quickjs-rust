@@ -7,9 +7,9 @@ fn assert_owner_survives_exit(construct: bool, source: &str) {
         panic!("function")
     };
     let bytecode = function.bytecode.as_ref().unwrap().clone();
-    let mut root = crate::context::HostRoot::new(function.creation_realm().clone());
-    let mut env = root.context();
-    let caller_this = env.caller().this_value().unwrap();
+    let (mut runtime, mut root_activation) =
+        crate::context::HostRoot::new(function.creation_realm().clone()).into_parts();
+    let caller_this = root_activation.this_value().unwrap();
     let receiver = Value::Object(crate::ObjectRef::new(
         std::collections::HashMap::new(),
         function.creation_realm().atoms(),
@@ -17,56 +17,86 @@ fn assert_owner_survives_exit(construct: bool, source: &str) {
     let mut supplied = Some(receiver.clone());
     let mut registers = Vec::new();
     let mut frames = Vec::new();
+    let mut activations = crate::bytecode::compact_fn::activation_stack::ActivationStack::default();
     let mut current = Value::Undefined;
     let (mut base, mut len, mut pc) = (0, 0, 0);
     if construct {
-        assert!(
-            enter_constructor(
-                callee.clone(),
-                &bytecode,
-                &mut env,
-                &mut registers,
-                &mut frames,
-                &mut current,
-                &mut base,
-                &mut len,
-                0,
-                0,
-                0,
-                0,
-            )
-            .unwrap()
-            .is_none()
+        let (inline, instance) = admit_constructor(
+            &callee,
+            &mut crate::context::Context {
+                runtime: &mut runtime,
+                activation: &mut root_activation,
+                native: None,
+            },
+            frames.len(),
+        )
+        .unwrap()
+        .expect("admitted constructor");
+        push_constructor_frame(
+            callee.clone(),
+            inline,
+            instance,
+            &bytecode,
+            &mut runtime,
+            &mut registers,
+            &mut frames,
+            &mut activations,
+            &mut current,
+            &mut base,
+            &mut len,
+            0,
+            0,
+            0,
+            0,
         );
         assert!(
-            env.caller()
+            activations
+                .current(&mut root_activation, frames.len())
                 .lexical_new_target()
                 .unwrap()
                 .same_value(&callee)
         );
     } else {
+        entry::enter_call(
+            inline_callee(&callee).expect("admitted callee"),
+            &mut callee,
+            &mut supplied,
+            &bytecode,
+            &mut runtime,
+            &mut registers,
+            &mut frames,
+            &mut activations,
+            &mut current,
+            &mut base,
+            &mut len,
+            &mut pc,
+            0,
+            0,
+            0,
+            0,
+        )
+        .unwrap();
+        let callee_activation = activations.current(&mut root_activation, frames.len());
+        assert!(callee_activation.lexical_new_target().is_none());
         assert!(
-            entry::try_enter_call(
-                &mut callee,
-                &mut supplied,
-                &bytecode,
-                &mut env,
-                &mut registers,
-                &mut frames,
-                &mut current,
-                &mut base,
-                &mut len,
-                &mut pc,
-                0,
-                0,
-                0,
-                0,
-            )
-            .unwrap()
+            callee_activation
+                .this_value()
+                .unwrap()
+                .same_value(&receiver)
         );
-        assert!(env.caller().lexical_new_target().is_none());
-        assert!(env.caller().this_value().unwrap().same_value(&receiver));
     }
+    // The callee runs in its own slot; the caller's activation stays put.
+    assert!(
+        root_activation
+            .this_value()
+            .unwrap()
+            .same_value(&caller_this)
+    );
+    let mut env = crate::context::Context {
+        runtime: &mut runtime,
+        activation: activations.current(&mut root_activation, frames.len()),
+        native: None,
+    };
     let actual_receiver = env.caller().this_value().unwrap();
     assert!(matches!(actual_receiver, Value::Object(_)));
     match (function.home_object(), env.caller().home_object()) {
@@ -74,19 +104,6 @@ fn assert_owner_survives_exit(construct: bool, source: &str) {
         (Some(expected), Some(actual)) => assert!(actual.same_value(&expected)),
         _ => panic!("home object must come from the callee"),
     }
-    assert!(
-        env.caller()
-            .this_value()
-            .unwrap()
-            .same_value(&actual_receiver)
-    );
-    assert!(
-        frames[0]
-            .activation
-            .this_value()
-            .unwrap()
-            .same_value(&caller_this)
-    );
     let ip = bytecode
         .code
         .iter()
@@ -259,9 +276,10 @@ fn inline_error_discards_its_activation_and_clears_pooled_frames() {
         },
     );
     assert!(result.unwrap_err().message.contains("TypeError"));
-    // Terminal unwind deliberately leaves the failed child owner in this
-    // disposable activation. The separately parked caller was never borrowed.
-    assert!(activation.this_value().unwrap().same_value(&obj));
+    // Terminal unwind never displaces the lent root activation; the failed
+    // child's owner went with its slot. The separately parked caller was
+    // never borrowed.
+    assert!(activation.this_value().unwrap().same_value(&receiver));
     assert!(parked.this_value().unwrap().same_value(&receiver));
     assert_eq!(parked.variable_identity(), parked_id);
     FRAME_STORAGE.with(|cell| {

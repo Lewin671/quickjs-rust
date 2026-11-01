@@ -361,12 +361,10 @@ pub(crate) fn call_direct_leaf_function(
         argument_values,
         &function.upvalues,
     ) {
-        let _identity = function.creation_realm().atoms().next_variable_identity();
         crate::diagnostics::count!(closed_form_leaf_evaluations);
         return Ok(value);
     }
     if let Some(value) = try_eval_this_property_leaf(bytecode, &this_value, argument_values) {
-        let _identity = function.creation_realm().atoms().next_variable_identity();
         crate::diagnostics::count!(closed_form_leaf_evaluations);
         return Ok(value);
     }
@@ -384,12 +382,15 @@ pub(crate) fn call_direct_leaf_function(
         None,
     );
     let direct_call_slots = direct_call_slots.expect("guarded direct leaf calls always seed slots");
-    eval_direct_call_bytecode(
+    let mut call_env = Some(call_env);
+    let result = eval_direct_call_bytecode(
         bytecode,
-        &mut Some(call_env),
+        &mut call_env,
         env.runtime,
         &mut Some(direct_call_slots),
-    )
+    );
+    recycle_callback_activation(env.runtime, call_env);
+    result
 }
 
 /// Constructs an ordinary bytecode function through the same slot-seeded
@@ -452,12 +453,14 @@ pub(crate) fn try_construct_direct_leaf_function(
         Some(callee.clone()),
     );
     let direct_call_slots = direct_call_slots.expect("guarded direct leaf calls always seed slots");
+    let mut call_env = Some(call_env);
     let result = eval_direct_call_bytecode(
         bytecode,
-        &mut Some(call_env),
+        &mut call_env,
         env.runtime,
         &mut Some(direct_call_slots),
     );
+    recycle_callback_activation(env.runtime, call_env);
     Some(match result {
         Ok(
             value @ (Value::Array(_)
@@ -584,7 +587,6 @@ pub(crate) fn call_direct_function_literal(
 ) -> Result<Value, RuntimeError> {
     crate::diagnostics::count!(ordinary_call_attempts);
     if let Some(value) = try_eval_numeric_leaf(bytecode, params, argument_values, &[]) {
-        let _identity = env.realm().atoms().next_variable_identity();
         crate::diagnostics::count!(closed_form_leaf_evaluations);
         return Ok(value);
     }
@@ -1159,7 +1161,7 @@ fn enter_indexed_function_activation<'a>(
     // Ordinary leaf calls and direct base class constructions both reach
     // this frame; the class-constructor TypeError is the caller's concern.
     debug_assert!(can_seed_slot_backed_call(function, bytecode));
-    let mut frame_env = enter_indexed_activation(function);
+    let mut frame_env = released_indexed_activation(env.runtime, function);
     let receiver = if bytecode.uses_lexical_this() {
         function_call_this(
             Some(this_value),
@@ -1231,18 +1233,22 @@ fn enter_function_activation<'a>(
         } else {
             crate::context::ThisBinding::Initialized(receiver)
         };
-        frame_env.set_call_owner(crate::context::CallOwner {
+        let mut owner = crate::context::CallOwner {
             this,
             new_target: if is_construct {
                 new_target.cloned()
             } else {
                 None
             },
-            home: function.home_object(),
-            super_constructor: function.super_constructor(),
-            active_constructor: derived.then(|| callee.clone()),
             kind: function.owner_kind,
-        });
+            class: None,
+        };
+        owner.set_class_state(
+            function.home_object(),
+            function.super_constructor(),
+            derived.then(|| callee.clone()),
+        );
+        frame_env.set_call_owner(owner);
     }
     let direct_call_slots = use_direct_call_slots.then(|| DirectCallSlots {
         parameter_slots: bytecode.parameter_slots(),
@@ -1404,24 +1410,94 @@ mod activation_tests;
 mod context_tests;
 
 pub(crate) fn enter_indexed_activation(function: &Function) -> crate::context::ActivationContext {
-    let mut activation = crate::context::ActivationContext::new(
+    let call = match function.call_owner_inputs() {
+        super::value::CallOwnerInputs::Lexical(owner) => {
+            crate::context::LexicalCallContext::Shared(owner)
+        }
+        super::value::CallOwnerInputs::Root {
+            home,
+            super_constructor,
+        } => {
+            let mut owner = crate::context::CallOwner::root(Value::Undefined, function.owner_kind);
+            owner.set_class_state(home, super_constructor, None);
+            crate::context::LexicalCallContext::Inline(owner)
+        }
+    };
+    crate::context::ActivationContext::for_call(
         selected_function_creation(function),
-        crate::context::ExecutionMode::Function,
-    );
-    activation.strict = function.is_strict;
-    if let Some(owner) = function.lexical_call() {
-        activation.inherit_call_owner(owner);
-    } else {
-        let mut owner = crate::context::CallOwner::root(Value::Undefined, function.owner_kind);
-        owner.home = function.home_object();
-        owner.super_constructor = function.super_constructor();
-        activation.set_call_owner(owner);
+        call,
+        function.is_strict,
+    )
+}
+
+/// Rebinds a released activation (`ActivationContext::release_for_reuse`) to
+/// an indexed entry of `function` when that entry would build the identical
+/// fresh activation: plain creation selection and no retained lexical owner;
+/// the class state is set to the function's. False leaves the activation
+/// untouched for the caller to replace with `enter_indexed_activation`.
+#[inline]
+pub(crate) fn reenter_indexed_activation(
+    activation: &mut crate::context::ActivationContext,
+    function: &Function,
+) -> bool {
+    !function.has_dynamic_function_realm_override.get()
+        && !function.has_dynamic_function_realm
+        && activation.reuse_for_call(
+            function.creation_context(),
+            function.owner_kind,
+            function.is_strict,
+            |class| function.rebind_class_state(class),
+        )
+}
+
+/// Released callback activations the services keep for later entries.
+const MAX_RELEASED_ACTIVATIONS: usize = 16;
+
+/// An indexed activation for `function`: the services' last released one
+/// rebound when it is exactly what a fresh entry would build, else a fresh one.
+#[inline]
+pub(crate) fn released_indexed_activation(
+    runtime: &mut crate::context::RuntimeServices,
+    function: &Function,
+) -> crate::context::ActivationContext {
+    if let Some(mut activation) = runtime.released_activations.pop()
+        && reenter_indexed_activation(&mut activation, function)
+    {
+        return activation;
     }
-    activation
+    enter_indexed_activation(function)
+}
+
+/// Returns a callback's activation to the services' pool when the tier only
+/// borrowed it and it holds only ordinary call state; anything it retained or
+/// exposed is dropped with it.
+#[inline]
+fn recycle_callback_activation(
+    runtime: &mut crate::context::RuntimeServices,
+    activation: Option<crate::context::ActivationContext>,
+) {
+    if let Some(mut activation) = activation
+        && activation.release_for_reuse()
+    {
+        keep_released_activation(runtime, activation);
+    }
+}
+
+/// Keeps an activation `release_for_reuse` accepted for a later entry,
+/// within the services' bound.
+#[inline]
+pub(crate) fn keep_released_activation(
+    runtime: &mut crate::context::RuntimeServices,
+    activation: crate::context::ActivationContext,
+) {
+    if runtime.released_activations.len() < MAX_RELEASED_ACTIVATIONS {
+        runtime.released_activations.push(activation);
+    }
 }
 
 /// Finalize an admitted indexed entry before executing its body. VM exits and
 /// effectful operations read this owner; positional inputs carry no receiver.
+#[inline]
 pub(crate) fn bind_indexed_call_owner(
     function: &Function,
     activation: &mut crate::context::ActivationContext,

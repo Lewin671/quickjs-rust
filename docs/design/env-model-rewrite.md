@@ -128,9 +128,10 @@ Tests: `context/call_owner.rs`, `function/call_activation_tests.rs`, `class_keys
 
 `context/creation.rs` owns shared realm, referrer, module routes, private
 context and explicit global selection. `context/activation.rs` owns logical
-variable identity, call owner, scope roots, mode and strictness. Related realms
-mint non-wrapping tokens in their existing AtomDomain boundary; scope exposure
-uses the activation token. Parameter/body entry changes only its scope boundary.
+variable identity (minted on first exposure), call owner, scope roots, mode and
+strictness; a returned unexposed one may be rebound to a later identical entry,
+never shared by live calls. Related realms mint non-wrapping tokens in their
+AtomDomain boundary. Parameter/body entry changes only its scope boundary.
 Module-root routing remains a scope fact while temporary class-key mode changes.
 Creation/module metadata contains cell routes, never settled lexical values.
 
@@ -145,13 +146,12 @@ materialized declarations; nonexposing admitted tiers retain their own storage.
 Class keys execute inline. A cold continuation owns the partial class/private
 context across yield/await; handlers restore regions and mode to their entry.
 Heritage validation precedes keys; each method installs before the next key.
-Static public/private fields and blocks run together in source order. The
-inner-name cell stays TDZ through keys and initializes before static fields;
-inferred display names create no inner binding.
+Static public/private fields and blocks run together in source order. The inner
+name stays TDZ through keys, initializes before static fields; inferred names bind none.
 
-Compact/wide/leaf tiers retain their static cell paths. A retained dynamic chain
-is not a caller-environment equality proof; current admission rejects shortcuts
-that could bypass live crossing names. T077 later retires these tiers separately.
+Compact/wide/leaf tiers retain their static cell paths; a retained dynamic chain
+is not a caller-environment equality proof, and admission rejects shortcuts that
+could bypass live crossing names. T077 later retires these tiers separately.
 
 ## Known limits
 

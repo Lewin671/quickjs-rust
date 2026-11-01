@@ -75,6 +75,15 @@ impl ReferencePlan {
         self.dynamic || !self.sites.is_empty() && !self.simple_context(env)
     }
 
+    /// `can_skip` for a fresh indexed function entry (no scope cursor or
+    /// global root), decided from the plan alone; conservative for a plan
+    /// with checked global sites, which such entries prove at run time.
+    pub(super) fn skips_indexed_entry(&self) -> bool {
+        !self.dynamic
+            && !self.has_checked
+            && (self.sites.is_empty() || !self.sloppy_eval || self.global_code)
+    }
+
     /// Whether the whole activation may run without any reference event.
     pub(super) fn can_skip(&self, env: &ActivationContext) -> bool {
         if self.needs_dynamic_resolution(env) {

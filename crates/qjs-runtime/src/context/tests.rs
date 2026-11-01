@@ -211,7 +211,7 @@ fn native_realm_target_and_parked_caller_are_distinct_borrows() {
     let mut owner = CallOwner::root(Value::Undefined, OwnerKind::Function);
     owner.new_target = Some(lexical.clone());
     root.activation.set_call_owner(owner);
-    let identity = root.activation.variable;
+    let identity = root.activation.variable_identity();
     let receiver = Value::Undefined;
     let info = crate::native::CallInfo {
         callee: &native,
@@ -226,7 +226,7 @@ fn native_realm_target_and_parked_caller_are_distinct_borrows() {
         assert!(Rc::ptr_eq(site.realm(), &native_realm));
         assert!(Rc::ptr_eq(site.caller().realm(), &caller_realm));
         assert!(site.new_target().unwrap().same_value(&target));
-        assert_eq!(site.caller().variable, identity);
+        assert_eq!(site.caller().variable_identity(), identity);
         assert_eq!(Rc::strong_count(&native_realm), realm_owners);
         assert_eq!(Rc::strong_count(native.creation_context()), creation_owners);
     }
@@ -419,7 +419,8 @@ fn wide_numeric_roots_count_their_own_entry_separately_from_retained_children() 
     let counts = crate::counters().unwrap();
     assert!(counts.numeric_plan_roots > 0);
     assert_eq!(counts.ordinary_call_attempts, 2);
-    assert_eq!(counts.typed_variable_identities, 3);
+    // Identities are minted on exposure; neither call exposes a scope.
+    assert_eq!(counts.typed_variable_identities, 0);
 }
 
 #[test]

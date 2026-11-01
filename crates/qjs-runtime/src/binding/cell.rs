@@ -198,13 +198,31 @@ impl BindingCell {
         Ok(())
     }
 
+    /// SetMutableBinding: the dead-zone check, then the write policy, then
+    /// the write, under one state borrow and one metadata lookup.
     pub(crate) fn assign(&self, value: Value, strict: bool) -> Result<(), RuntimeError> {
-        self.check_assignment(strict)?;
-        if self.metadata().strict_write == WritePolicy::IgnoreSloppy {
-            return Ok(());
+        let mut state = self.0.state.borrow_mut();
+        if !matches!(
+            *state,
+            BindingState::Initialized(_) | BindingState::LazyArguments(_)
+        ) {
+            drop(state);
+            return Err(self.tdz_error());
         }
-        *self.0.state.borrow_mut() = BindingState::Initialized(value);
-        Ok(())
+        match self.metadata().strict_write {
+            WritePolicy::Throw => {}
+            WritePolicy::IgnoreSloppy if strict => {}
+            WritePolicy::IgnoreSloppy => return Ok(()),
+            WritePolicy::Mutable => {
+                *state = BindingState::Initialized(value);
+                return Ok(());
+            }
+        }
+        drop(state);
+        Err(RuntimeError {
+            thrown: None,
+            message: "TypeError: assignment to constant variable".to_owned(),
+        })
     }
 
     fn tdz_error(&self) -> RuntimeError {

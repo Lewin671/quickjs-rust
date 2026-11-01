@@ -60,19 +60,19 @@ impl ActivationContext {
     }
 
     pub(crate) fn home_object(&self) -> Option<Value> {
-        self.call.owner().and_then(|owner| owner.home.clone())
+        self.call.owner().and_then(|owner| owner.home().cloned())
     }
 
     pub(crate) fn super_constructor(&self) -> Option<Value> {
         self.call
             .owner()
-            .and_then(|owner| owner.super_constructor.clone())
+            .and_then(|owner| owner.super_constructor().cloned())
     }
 
     pub(crate) fn active_constructor(&self) -> Option<Value> {
         self.call
             .owner()
-            .and_then(|owner| owner.active_constructor.clone())
+            .and_then(|owner| owner.active_constructor().cloned())
     }
 
     pub(crate) fn owner_kind(&self) -> Option<crate::context::OwnerKind> {
@@ -98,14 +98,6 @@ impl ActivationContext {
                 .dynamic_function_realm_global()
                 .map(Value::Object)
         })
-    }
-
-    pub(crate) fn select_variable_boundary(&mut self, scope: crate::binding::ScopeId) {
-        self.variable.boundary = scope;
-    }
-
-    pub(crate) fn variable_identity(&self) -> crate::binding::VariableEnvIdentity {
-        self.variable
     }
 
     pub(crate) fn execution_state(&self) -> (crate::context::ExecutionMode, bool) {
@@ -289,7 +281,7 @@ impl ActivationContext {
         self.mode = crate::context::ExecutionMode::Eval;
         self.scopes.module_root = false;
         if let Some(holder) = &cursor.variable.own_vars {
-            self.variable = holder.identity;
+            self.adopt_variable_identity(holder.identity);
         }
         self.scopes.entry = Some(cursor.head.clone());
         self.scopes.cursor = Some(cursor);

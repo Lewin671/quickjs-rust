@@ -1,16 +1,25 @@
 //! Inline entry owns callee preparation/move temporaries only until its window
 //! is installed. The driver retains none across recursive native re-entry.
+//! Returned ordinary activations are released and rebound to later calls of
+//! the same driver run instead of rebuilt (`compact_fn::activation_stack`).
 use super::*;
 
-#[inline(never)]
+/// The driver's inline-call fast path for an admitted callee
+/// (`inline_callee`): a numeric answer and the argument moves into the
+/// callee window run in the driver; the activation and frame record are
+/// built out of line (`push_callee_frame`) so the driver's own stack frame
+/// stays small across recursive native re-entry.
+#[inline(always)]
 #[allow(clippy::too_many_arguments)]
-pub(super) fn try_enter_call(
+pub(super) fn enter_call(
+    inline: InlineCallee,
     callee: &mut Value,
     receiver: &mut Option<Value>,
     root_bytecode: &Bytecode,
-    env: &mut crate::context::Context<'_>,
+    runtime: &mut crate::context::RuntimeServices,
     registers: &mut Vec<Value>,
     frames: &mut Vec<WideFrame>,
+    activations: &mut crate::bytecode::compact_fn::activation_stack::ActivationStack,
     current_callee: &mut Value,
     current_base: &mut usize,
     current_len: &mut usize,
@@ -19,15 +28,12 @@ pub(super) fn try_enter_call(
     argument_count: usize,
     dst: u16,
     resume_pc: usize,
-) -> Result<bool, RuntimeError> {
-    let Some(mut inline) = inline_callee(callee) else {
-        return Ok(false);
-    };
+) -> Result<(), RuntimeError> {
+    // A numeric answer needs no activation at all.
     if inline.numeric
         && let Some(value) = try_numeric_call(
             callee,
             &registers[argument_index..argument_index + argument_count],
-            &inline.activation,
         )
     {
         crate::diagnostics::count!(ordinary_call_attempts);
@@ -36,7 +42,7 @@ pub(super) fn try_enter_call(
         }
         execute::store(&mut registers[*current_base + dst as usize], value);
         *pc = resume_pc;
-        return Ok(true);
+        return Ok(());
     }
     if frames.len() >= MAX_FRAMES {
         return Err(call_stack_exhausted());
@@ -57,37 +63,6 @@ pub(super) fn try_enter_call(
             _ => release(value),
         }
     }
-    let callee_this = if inline.requires_this {
-        Some(match receiver.take() {
-            Some(this @ (Value::Array(_) | Value::Function(_))) => this,
-            Some(Value::Object(object)) if !crate::symbol::is_symbol_primitive(&object) => {
-                Value::Object(object)
-            }
-            receiver => crate::function::function_call_this(
-                receiver,
-                &crate::context::Context {
-                    runtime: env.runtime,
-                    activation: &mut inline.activation,
-                    native: None,
-                },
-                inline.is_strict,
-            ),
-        })
-    } else {
-        if let Some(receiver) = receiver.take() {
-            release(receiver);
-        }
-        None
-    };
-    let Value::Function(function) = callee else {
-        unreachable!("admitted indexed callee")
-    };
-    crate::function::bind_indexed_call_owner(
-        function,
-        &mut inline.activation,
-        callee_this.clone().unwrap_or(Value::Undefined),
-        None,
-    );
     if inline.has_lexical_slots
         && let Some(program) = super::super::program_for(running_bytecode(callee, root_bytecode))
     {
@@ -96,17 +71,76 @@ pub(super) fn try_enter_call(
             &mut registers[callee_base..callee_base + callee_len],
         );
     }
+    push_callee_frame(
+        callee,
+        receiver.take(),
+        inline.requires_this.then_some(inline.is_strict),
+        runtime,
+        frames,
+        activations,
+        current_callee,
+        *current_base,
+        *current_len,
+        resume_pc,
+        dst,
+    );
+    *current_base = callee_base;
+    *current_len = callee_len;
+    *pc = 0;
+    Ok(())
+}
+
+/// Binds the callee's activation -- its receiver coerced as the general call
+/// path does when the body reads `this` (`this_strict`) -- and suspends the
+/// caller in a frame record; the caller's activation stays where it is.
+#[inline(never)]
+#[allow(clippy::too_many_arguments)]
+fn push_callee_frame(
+    callee: &mut Value,
+    receiver: Option<Value>,
+    this_strict: Option<bool>,
+    runtime: &mut crate::context::RuntimeServices,
+    frames: &mut Vec<WideFrame>,
+    activations: &mut crate::bytecode::compact_fn::activation_stack::ActivationStack,
+    current_callee: &mut Value,
+    caller_base: usize,
+    caller_len: usize,
+    resume_pc: usize,
+    dst: u16,
+) {
+    let Value::Function(function) = &*callee else {
+        unreachable!("admitted indexed callee")
+    };
+    let depth = frames.len();
+    let activation = activations.callee_slot(depth, function, runtime);
+    let this = match (this_strict, receiver) {
+        (None, receiver) => {
+            if let Some(receiver) = receiver {
+                release(receiver);
+            }
+            Value::Undefined
+        }
+        (Some(_), Some(this @ (Value::Array(_) | Value::Function(_)))) => this,
+        (Some(_), Some(Value::Object(object))) if !crate::symbol::is_symbol_primitive(&object) => {
+            Value::Object(object)
+        }
+        (Some(strict), receiver) => crate::function::function_call_this(
+            receiver,
+            &crate::context::Context {
+                runtime,
+                activation: &mut *activation,
+                native: None,
+            },
+            strict,
+        ),
+    };
+    crate::function::bind_indexed_call_owner(function, activation, this, None);
     frames.push(WideFrame {
-        activation: std::mem::replace(env.activation, inline.activation),
         callee: std::mem::replace(current_callee, std::mem::replace(callee, Value::Undefined)),
-        base: *current_base,
-        len: *current_len,
+        base: caller_base,
+        len: caller_len,
         resume_pc,
         dst,
         constructs: false,
     });
-    *current_base = callee_base;
-    *current_len = callee_len;
-    *pc = 0;
-    Ok(true)
 }

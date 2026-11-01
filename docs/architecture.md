@@ -72,7 +72,8 @@ in order:
       combines own data properties of its receiver or arguments
       (`bytecode/vm_this_property_leaf.rs`);
    3. a callee-owned compact activation: numeric plan/compact, then wide
-      (`bytecode/compact_fn/activation.rs`); each frame retains creation/identity
+      (`bytecode/compact_fn/activation.rs`); each frame owns its activation
+      (a released one rebound when identical, `compact_fn/activation_stack.rs`)
       and borrows runtime services, without caller-context substitution;
    4. a slot-seeded frame (`eval_direct_call_bytecode`, `bytecode/vm.rs`).
       It first offers the body to the compact tiers standalone: the numeric

@@ -30,6 +30,7 @@ use qjs_ast::BinaryOp;
 use super::ir::Bytecode;
 
 mod activation;
+pub(in crate::bytecode) mod activation_stack;
 mod compile;
 mod creation_cache;
 mod execute;
