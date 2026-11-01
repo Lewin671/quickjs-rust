@@ -486,8 +486,8 @@ mod tests {
     }
 
     #[test]
-    fn direct_module_frame_keeps_import_cell_storage() {
-        let bytecode = Bytecode::new(Vec::new(), vec![local("imported", false)], Vec::new());
+    fn direct_import_capture_keeps_canonical_cell_storage() {
+        let bytecode = Bytecode::new(Vec::new(), vec![local("imported", true)], Vec::new());
         let mut env = empty_env();
         let exports = DynamicBindings::new();
         exports.insert("exported".to_owned(), Value::Number(7.0));
@@ -508,6 +508,26 @@ mod tests {
                 .zip(exports.cell("exported").as_ref())
                 .is_some_and(|(local, exported)| local.ptr_eq(exported))
         );
+    }
+
+    #[test]
+    fn direct_frame_import_homonyms_preserve_own_and_received_routes() {
+        let mut env = empty_env();
+        let exports = DynamicBindings::new();
+        exports.insert("exported".into(), Value::Number(7.0));
+        env.set_module_import("name".into(), exports, "exported".into());
+        let mut parameter = local("name", true);
+        parameter.parameter = true;
+        for own in [local("name", false), parameter] {
+            let bytecode = Bytecode::new(Vec::new(), vec![own], Vec::new());
+            let (cells, _) = Vm::initial_direct_local_upvalues(&bytecode, &[], 0, &env);
+            assert!(cells[0].is_none(), "own binding cannot become an import");
+        }
+        let bytecode = Bytecode::new(Vec::new(), vec![local("name", true)], Vec::new());
+        let captured = BindingCell::new(Value::Number(42.0));
+        let (cells, _) =
+            Vm::initial_direct_local_upvalues(&bytecode, std::slice::from_ref(&captured), 0, &env);
+        assert!(cells[0].as_ref().unwrap().ptr_eq(&captured));
     }
 
     #[test]

@@ -91,3 +91,24 @@ is deliberately unchanged. Focused tests cover for/while re-entry, escaped
 initialized closures, escaped still-TDZ cells, and finally reading the exiting
 instance. All eight scope-instantiation tests pass. Permanent NG fixture covers
 the minimal re-entry and retained closure variants.
+
+## Parameters shadowing module imports
+
+Parent `003682b6`. General local reads and parameter snapshot reads interpreted
+`from_env` as an import route, but own parameter/var slots also carry that flag.
+A numeric shortcut could read the argument correctly while concatenation/array
+construction instead selected an import homonym. Import fallback now requires
+an actual received-upvalue route; initialized own slots remain authoritative.
+Direct-frame setup also selected imports by name for every local, before its
+positional capture. It now considers imports only as a missing received route's
+fallback, after the actual positional cell. Both setup paths preserve nearer
+cells and import access policy. The expanded before test also exposed rest
+array replacement (value not callable); after both repairs it has fixed output. The old synthetic direct-module test
+incorrectly expected a Function-mode own local to adopt an import by name. It
+now models a received import route and retains its canonical identity assertion;
+an added low-level test proves own/parameter routes and a nearer positional
+capture cannot adopt an import homonym.
+
+Focused module test covers concatenation/array, rest, destructured and captured
+parameter homonyms, alongside unchanged unshadowed import values. The original
+module repro has a portable relative dependency and is a permanent .mjs fixture.

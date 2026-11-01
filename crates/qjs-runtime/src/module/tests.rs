@@ -1691,3 +1691,5 @@ fn namespace_reexports_are_imported_as_canonical_namespace_bindings() {
     .unwrap();
     assert_eq!(export(&namespace, "result"), Value::String("true:8".into()));
 }
+
+mod binding_scopes;

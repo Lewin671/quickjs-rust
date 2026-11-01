@@ -25,19 +25,11 @@ impl Vm<'_, '_> {
         }
         let _direct_eval_frame = bytecode.is_direct_eval_code();
         let mut next_received = 0;
-        let has_module_imports = env.has_module_imports();
         let mut realm_binding_slots = 0_u128;
         let mut local_upvalues = Vec::with_capacity(bytecode.locals.len());
         for (slot, local) in bytecode.locals.iter().enumerate() {
             if local.compiler_temporary {
                 local_upvalues.push(None);
-                continue;
-            }
-            if has_module_imports && let Some(upvalue) = env.module_import_cell(&local.name) {
-                if local.is_received_upvalue() {
-                    next_received += 1;
-                }
-                local_upvalues.push(Some(upvalue));
                 continue;
             }
             if local.sloppy_global_fallback {
@@ -49,7 +41,12 @@ impl Vm<'_, '_> {
                 continue;
             }
             if local.is_received_upvalue() {
-                let upvalue = upvalues.get(next_received).cloned();
+                // Positional captures select a declaration, not a name. A
+                // module import homonym cannot replace a nearer captured cell.
+                let upvalue = upvalues
+                    .get(next_received)
+                    .cloned()
+                    .or_else(|| env.module_import_cell(&local.name));
                 next_received += 1;
                 if slot < u128::BITS as usize
                     && received_realm_binding_slots & (1_u128 << slot) != 0

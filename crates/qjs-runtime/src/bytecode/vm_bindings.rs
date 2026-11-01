@@ -440,7 +440,7 @@ impl Vm<'_, '_> {
             return Ok(value);
         }
         if let Some(local) = self.bytecode.locals.get(slot)
-            && local.from_env
+            && local.is_received_upvalue()
             && let Some(value) = self.env.module_import_value(&local.name)
         {
             return value;
@@ -636,7 +636,7 @@ impl Vm<'_, '_> {
             return Ok(value);
         }
         if let Some(local) = self.bytecode.locals.get(slot)
-            && local.from_env
+            && local.is_received_upvalue()
             && let Some(value) = self.env.module_import_value(&local.name)
         {
             return value;
