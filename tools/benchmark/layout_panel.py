@@ -14,7 +14,7 @@ from pathlib import Path
 
 from . import screen
 from .case_health import mark_readiness, exit_status
-from .layout_identity import OFFSETS, digest, host_identity, write_json
+from .layout_identity import OFFSETS, digest, host_identity, write_json, same_node
 from .layout_policy import load_policy
 from .screen_recording import held_out_cases, measure
 
@@ -44,7 +44,8 @@ def measure_panel(base_path, candidate_path, output, pairs=5, held=False, natura
     host = host_identity()
     base, candidate = matrix(base_path), matrix(candidate_path)
     if (base['host'] != host or candidate['host'] != host
-            or base['host_node'] != platform.node() or candidate['host_node'] != platform.node()):
+            or not same_node(base['host_node'], platform.node())
+            or not same_node(candidate['host_node'], platform.node())):
         raise ValueError('layout build host/recipe differs from measurement host')
     binaries = [Path(v['path']) for m in (base, candidate) for v in m['variants']]
     if len(set(binaries)) != 12 or len({len(os.fsencode(p)) for p in binaries}) != 1:

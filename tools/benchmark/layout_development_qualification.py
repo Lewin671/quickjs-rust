@@ -11,7 +11,7 @@ import json
 from pathlib import Path
 
 from .development import MANIFEST_PATH, opportunity_ids
-from .layout_identity import digest, write_json
+from .layout_identity import digest, write_json, same_node
 from .layout_policy import analyze, load_policy, rows, selection_lanes
 from .layout_power import precision_record
 
@@ -123,7 +123,9 @@ def main():
     if any(seed[k] != v for k, v in rebuilt.items()):
         raise ValueError('development seed differs from frozen A2 estimators')
     attestation = json.loads(args.host_attestation.read_text())
-    if a2['host'] != parent['host'] or a2['host_node'] != parent['host_node'] or attestation['node'] != parent['host_node'] or attestation['host'] != parent['host']:
+    if (a2['host'] != parent['host'] or not same_node(a2['host_node'], parent['host_node'])
+            or not same_node(attestation['node'], parent['host_node'])
+            or attestation['host'] != parent['host']):
         raise ValueError('development qualification host mismatch')
     from .layout_qualification import replay_calibration, verify_formal_identity
     pilot = replay_calibration(args.portfolio, seed['calibration_binary_sha256'])

@@ -43,6 +43,32 @@ def fixture(folder):
 
 
 class EvidenceTests(unittest.TestCase):
+    def test_panel_and_matrices_accept_suffix_change_but_refuse_other_short_names(self):
+        with tempfile.TemporaryDirectory() as work:
+            folder = Path(work)
+            evidence, policy, _, _ = fixture(folder)
+            policy['host_node'] = 'iMac.local'
+            for field in ('host_node', 'base', 'candidate'):
+                if field == 'host_node':
+                    evidence[field] = 'IMAC.lan'
+                else:
+                    evidence[field]['host_node'] = 'iMac.lan'
+            path = folder / 'panel.json'
+            path.write_text(json.dumps(evidence))
+            before = digest(path)
+            self.assertEqual(replay(path, policy), evidence)
+            self.assertEqual(digest(path), before)
+            for field in ('host_node', 'base', 'candidate'):
+                with self.subTest(field=field):
+                    altered = copy.deepcopy(evidence)
+                    if field == 'host_node':
+                        altered[field] = 'mini.lan'
+                    else:
+                        altered[field]['host_node'] = 'mini.lan'
+                    path.write_text(json.dumps(altered))
+                    with self.assertRaisesRegex(ValueError, 'host|identity'):
+                        replay(path, policy)
+
     def test_raw_replay_and_engine_binding(self):
         with tempfile.TemporaryDirectory() as work:
             folder = Path(work)

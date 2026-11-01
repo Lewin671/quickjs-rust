@@ -203,6 +203,25 @@ class VerdictTests(unittest.TestCase):
 
 
 class QualificationTests(unittest.TestCase):
+    def test_live_policy_accepts_dns_suffix_change_but_requires_same_machine_and_recipe(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'policy.json'
+            data = {**policy(), 'host_node': 'iMac.local'}
+            path.write_text(json.dumps(data))
+            sha = digest(path)
+            with patch('tools.benchmark.layout_policy.host_identity', return_value=data['host']), \
+                 patch('tools.benchmark.layout_policy.platform.node', return_value='IMAC.lan'):
+                self.assertEqual(load_policy(path, sha), data)
+                self.assertEqual(digest(path), sha)
+            with patch('tools.benchmark.layout_policy.host_identity', return_value=data['host']), \
+                 patch('tools.benchmark.layout_policy.platform.node', return_value='mini.lan'):
+                with self.assertRaisesRegex(ValueError, 'recalibration'):
+                    load_policy(path, sha)
+            with patch('tools.benchmark.layout_policy.host_identity', return_value={'test': 'other'}), \
+                 patch('tools.benchmark.layout_policy.platform.node', return_value='iMac.lan'):
+                with self.assertRaisesRegex(ValueError, 'recalibration'):
+                    load_policy(path, sha)
+
     def test_exact_statistic_and_precision_deterministic(self):
         result = analyze({'a': [1.]*30, 'b': [1.21]*30}, draws=100)
         self.assertAlmostEqual(result['ratio'], 1.1)

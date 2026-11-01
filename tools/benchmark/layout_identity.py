@@ -1,4 +1,8 @@
-"""Host and recipe identity for host-bound layout noise policies."""
+"""Host and recipe identity for host-bound layout noise policies.
+
+Node comparisons use the case-insensitive short hostname. Recorded names stay
+raw, and every other host/recipe identity field is compared exactly.
+"""
 from __future__ import annotations
 
 import hashlib
@@ -12,6 +16,26 @@ from .build_cache_identity import effective_build_environment, cargo_configurati
 
 ROOT = Path(__file__).resolve().parents[2]
 OFFSETS = (0, 16, 64, 240, 512, 1008)
+
+
+def node_identity(node: str) -> str:
+    """Compare the short hostname, independent of DNS suffix and case."""
+    return node.partition('.')[0].casefold()
+
+
+def same_node(a: str | None, b: str | None) -> bool:
+    """Missing or empty node names cannot establish machine identity."""
+    return (isinstance(a, str) and isinstance(b, str)
+            and bool(node_identity(a)) and node_identity(a) == node_identity(b))
+
+
+def same_host(a, b) -> bool:
+    """Compare recorded host metadata with every non-node field exact."""
+    if not isinstance(a, dict) or not isinstance(b, dict) or ('node' not in a and 'node' not in b):
+        return a == b
+    return (same_node(a.get('node'), b.get('node'))
+            and {k: v for k, v in a.items() if k != 'node'}
+            == {k: v for k, v in b.items() if k != 'node'})
 
 
 def digest(path: Path) -> str:

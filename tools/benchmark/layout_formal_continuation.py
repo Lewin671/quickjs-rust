@@ -15,7 +15,7 @@ import datetime
 from pathlib import Path
 
 from .formal_case_context import context, prepare, schedule, validate_result, verify_assets, launch_preflight
-from .layout_identity import digest, host_identity, write_json
+from .layout_identity import digest, host_identity, write_json, same_node, same_host
 from .layout_policy import analyze
 from .layout_power import allocation, CAP
 from .process import ProcessResult, run_process
@@ -62,7 +62,7 @@ def replay(path, bundle, name, *, pilot=None, comparison='aa', precision_rule=No
         raise ValueError('formal continuation source binding mismatch')
     if value['artifact_type']!='quickjs-formal-case-continuation':
         raise ValueError('unsupported formal continuation')
-    if value['schema_version']!=1 or value['host_node']!=ctx['templates']['base']['host']['node']:
+    if value['schema_version']!=1 or not same_node(value['host_node'], ctx['templates']['base']['host']['node']):
         raise ValueError('formal continuation host mismatch')
     if pilot is None:pilot=extract(bundle,value['host_node'])[name]
     if value['previous']:
@@ -111,7 +111,7 @@ def collect(bundle, name, out, previous=None, precision_rule=None):
     comparison=comparison_kind(bundle)
     ctx=context(bundle,name);hashes=source_hashes(bundle,comparison)
     from .runner import _host_metadata
-    if _host_metadata()!=ctx['templates']['base']['host']:
+    if not same_host(_host_metadata(), ctx['templates']['base']['host']):
         raise ValueError('formal continuation runtime host changed')
     pilot=extract(bundle,node)[name]
     ratios=list(pilot)

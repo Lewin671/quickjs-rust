@@ -28,6 +28,7 @@ import tempfile
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from .layout_identity import same_node, same_host
 from .performance_schema import (
     _ROLES,
     PerformanceDecisionError,
@@ -184,7 +185,7 @@ def _development_entries(
     from .development import corpus_inventory
     if report.get("binary_sha256") != {role: engines[role]["binary_sha256"] for role in _ROLES}:
         raise PerformanceDecisionError("development: binary identities do not match summary")
-    if report.get("host") != host:
+    if not same_host(report.get("host"), host):
         raise PerformanceDecisionError("development: different measurement host")
     expected = corpus_inventory()
     suites = report.get("suites", [])
@@ -563,7 +564,7 @@ def validate_unit_against_queue(unit: dict[str, Any], unit_sha: str, queue: dict
         from .performance_evidence import ROOT, inventories
         contract = unit['layout_gate']
         policy = load_policy(ROOT / contract['policy_path'], contract['policy_sha256'], live=False)
-        if queue.get('host', {}).get('node') != policy['host_node']:
+        if not same_node(queue.get('host', {}).get('node'), policy['host_node']):
             raise PerformanceDecisionError('layout policy and opportunity queue hosts differ')
         expected = {f'{lane}/{case}' if lane in ('broad', 'sentinel') else f'external/{lane}/{case}'
                     for lane, cases in inventories().items() for case in cases}

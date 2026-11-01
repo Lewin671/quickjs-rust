@@ -6,6 +6,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from .layout_identity import same_host
 from .performance_schema import (
     PerformanceDecisionError, _object, _read_json, _revision, _sha256, _ratio, _integer,
 )
@@ -84,7 +85,7 @@ def validate_bundle(summary: dict, broad: dict, external: dict,
         raise PerformanceDecisionError("external: requires paired report schema 3; remeasure legacy evidence")
     if external.get("binary_sha256") != {role: engines[role]["binary_sha256"] for role in ROLES}:
         raise PerformanceDecisionError("external: binary identities do not match summary")
-    if external.get("host") != broad["run"].get("host"):
+    if not same_host(external.get("host"), broad["run"].get("host")):
         raise PerformanceDecisionError("external: different measurement host")
     expected = inventories()
     suites = external.get("suites", [])
@@ -97,7 +98,7 @@ def validate_bundle(summary: dict, broad: dict, external: dict,
             reasons.append(f"external/{suite['id']}: incomplete frozen case inventory")
     if sentinel is not None:
         reasons.extend(validate_internal(sentinel, engines, "sentinel"))
-        if sentinel["run"].get("host") != broad["run"].get("host"):
+        if not same_host(sentinel["run"].get("host"), broad["run"].get("host")):
             raise PerformanceDecisionError("sentinel: different measurement host")
     return reasons
 
