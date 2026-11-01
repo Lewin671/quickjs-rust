@@ -44,10 +44,15 @@ pub(super) fn evaluate(
         prepare_global_declarations(bytecode, env)?;
     }
     let holder = strict.then(|| {
-        Rc::new(VarHolder::new(VariableEnvIdentity {
-            activation: env.realm().next_variable_identity(),
-            boundary: ScopeId(0),
-        }))
+        // Eval code cannot suspend; its holder changes only before it runs.
+        Rc::new(VarHolder::new(
+            VariableEnvIdentity {
+                activation: env.realm().next_variable_identity(),
+                boundary: ScopeId(0),
+            },
+            env.realm().atoms().clone(),
+            false,
+        ))
     });
     let mut cells = Vec::new();
     for meta in bytecode.scope_declarations(ScopeId(0)) {

@@ -192,6 +192,11 @@ pub struct FunctionData {
     /// fixed once this function is created, so recomputing it — including an
     /// O(parameter count) scan — on every single call is pure waste.
     pub(crate) direct_leaf_call_eligible: Cell<Option<bool>>,
+    /// For a function that retains a lexical scope: the holder epoch (plus
+    /// one, shifted) at which `ScopeCursor::resolves_globally` was last
+    /// decided, and its answer in bit 0; 1 before the first proof. Zero when
+    /// an indexed entry needs no scope proof (`function::call`).
+    pub(crate) lexical_scope_proof: Cell<u64>,
     /// Memoized: whether `new` on this base class constructor may run on the
     /// direct-leaf frame with its instance fields installed by the fast field
     /// loop. Resolved on the first construction, after class definition has
@@ -467,6 +472,7 @@ impl Function {
         } else {
             lexical_scope
         };
+        let needs_scope_proof = lexical_scope.is_some();
         let realm = &creation.realm;
         let realm_upvalue_slots = bytecode
             .received_upvalue_slots()
@@ -492,6 +498,7 @@ impl Function {
             has_dynamic_function_realm,
             has_dynamic_function_realm_override: Cell::new(false),
             direct_leaf_call_eligible: Cell::new(None),
+            lexical_scope_proof: Cell::new(u64::from(needs_scope_proof)),
             direct_construct_eligible: Cell::new(None),
             wide_inline_facts: Cell::new(0),
             compact_inline_facts: Cell::new(0),
@@ -666,6 +673,7 @@ impl Function {
             },
             has_dynamic_function_realm_override: Cell::new(false),
             direct_leaf_call_eligible: Cell::new(None),
+            lexical_scope_proof: Cell::new(0),
             direct_construct_eligible: Cell::new(None),
             wide_inline_facts: Cell::new(0),
             compact_inline_facts: Cell::new(0),
@@ -723,6 +731,7 @@ impl Function {
             has_dynamic_function_realm: false,
             has_dynamic_function_realm_override: Cell::new(false),
             direct_leaf_call_eligible: Cell::new(None),
+            lexical_scope_proof: Cell::new(0),
             direct_construct_eligible: Cell::new(None),
             wide_inline_facts: Cell::new(0),
             compact_inline_facts: Cell::new(0),

@@ -213,6 +213,10 @@ declare_counters! {
     /// Backward edges never offered to an accelerator because a reference
     /// site in the region could not be elided at entry.
     reference_blocked_loop_edges,
+    /// Scope proofs that kept a closure over an extensible chain on the
+    /// general path: a holder or fixed cell binds one of its free names, a
+    /// with object or a suspendable holder is in the chain.
+    lexical_scope_entry_rejections,
     /// Activation admissions that need the VM's dynamic reference resolver
     /// (with/eval/parameter sites or a dynamic scope chain).
     reference_admission_dynamic,

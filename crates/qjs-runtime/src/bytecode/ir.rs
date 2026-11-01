@@ -793,6 +793,8 @@ pub struct Bytecode {
     cached_creates_capturing_closures: bool,
     cached_needs_arguments_object: bool,
     cached_contains_direct_eval: bool,
+    /// Whether this body contains a `yield`, `yield*` or `await`.
+    cached_can_suspend: bool,
     cached_contains_with: bool,
     cached_contains_super_operation: bool,
     cached_uses_lexical_this: bool,
@@ -902,6 +904,7 @@ impl Bytecode {
             cached_creates_capturing_closures: false,
             cached_needs_arguments_object: false,
             cached_contains_direct_eval: false,
+            cached_can_suspend: false,
             cached_contains_with: false,
             cached_contains_super_operation: false,
             cached_uses_lexical_this: false,
@@ -938,6 +941,10 @@ impl Bytecode {
                 Op::CallDirectEval { .. } | Op::CallDirectEvalSpread { .. }
             )
         });
+        bytecode.cached_can_suspend = bytecode
+            .code
+            .iter()
+            .any(|op| matches!(op, Op::Yield | Op::Await | Op::YieldDelegate { .. }));
         bytecode.cached_contains_with = bytecode
             .code
             .iter()
@@ -1369,6 +1376,11 @@ impl Bytecode {
 
     pub(crate) fn contains_direct_eval(&self) -> bool {
         self.cached_contains_direct_eval
+    }
+
+    /// Whether this body can suspend after its scopes exist.
+    pub(crate) fn can_suspend(&self) -> bool {
+        self.cached_can_suspend
     }
 
     pub(super) fn mark_direct_eval_code(&mut self) {

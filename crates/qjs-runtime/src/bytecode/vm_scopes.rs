@@ -529,10 +529,14 @@ impl Vm<'_, '_> {
             }
             instances.holders[id.0]
                 .get_or_insert_with(|| {
-                    Rc::new(VarHolder::new(VariableEnvIdentity {
-                        activation: instances.activation,
-                        boundary: id,
-                    }))
+                    Rc::new(VarHolder::new(
+                        VariableEnvIdentity {
+                            activation: instances.activation,
+                            boundary: id,
+                        },
+                        self.env.realm().atoms().clone(),
+                        self.bytecode.can_suspend(),
+                    ))
                 })
                 .clone()
         });

@@ -20,10 +20,14 @@ fn cursor(parent: Option<Rc<ScopeLease>>, activation: u64) -> ScopeCursor {
         parent,
         cells: Box::default(),
         object: None,
-        own_vars: Some(Rc::new(VarHolder::new(VariableEnvIdentity {
-            activation,
-            boundary: ScopeId(0),
-        }))),
+        own_vars: Some(Rc::new(VarHolder::new(
+            VariableEnvIdentity {
+                activation,
+                boundary: ScopeId(0),
+            },
+            crate::property::atom::AtomDomain::new(),
+            false,
+        ))),
     });
     ScopeCursor {
         head: root.clone(),

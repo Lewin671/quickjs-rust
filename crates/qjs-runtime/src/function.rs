@@ -41,7 +41,8 @@ pub(crate) use call::{
     call_direct_function_literal, call_direct_leaf_function, call_field_initializer, call_function,
     call_function_slice, construct_function, construct_function_slice, ensure_constructor,
     initialize_direct_instance_fields, initialize_instance_fields, is_direct_construct_class,
-    is_direct_leaf_function, try_construct_direct_leaf_function,
+    is_direct_leaf_function, is_direct_leaf_shape, lexical_scope_admits_entry,
+    try_construct_direct_leaf_function,
 };
 pub(crate) use intrinsic_construct::construct_intrinsic_directly;
 pub(crate) fn is_call_frame_binding(name: &str) -> bool {

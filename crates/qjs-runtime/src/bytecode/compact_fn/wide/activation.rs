@@ -282,7 +282,7 @@ fn compute_fixed_inline_facts(callee: &Value, function: &Function, bytecode: &By
     let shape_admitted = if class {
         crate::function::is_direct_construct_class(function)
     } else {
-        crate::function::is_direct_leaf_function(callee)
+        crate::function::is_direct_leaf_shape(callee)
     };
     if !shape_admitted
         || inherits_lexical_this
@@ -473,14 +473,19 @@ fn inline_callee(callee: &Value) -> Option<InlineCallee> {
 }
 
 /// `inline_callee` for any admitted body, with whether it is a class
-/// constructor, which only `new` may enter.
+/// constructor, which only `new` may enter. Inlined into the driver's call
+/// and construct sites, which it runs on every call.
+#[inline(always)]
 fn inline_entry(callee: &Value) -> Option<(InlineCallee, bool)> {
     let Value::Function(function) = callee else {
         return None;
     };
     let bytecode = function.bytecode.as_ref()?;
     let facts = fixed_inline_facts(callee, function, bytecode);
-    if facts & FACTS_ELIGIBLE == 0 || function.has_dynamic_function_realm_override.get() {
+    if facts & FACTS_ELIGIBLE == 0
+        || function.has_dynamic_function_realm_override.get()
+        || !crate::function::lexical_scope_admits_entry(function)
+    {
         return None;
     }
     if !super::program_for(bytecode)?.admit_activation() {

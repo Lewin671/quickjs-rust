@@ -341,7 +341,7 @@ fn compute_fixed_inline_facts(callee: &Value, function: &Function) -> u32 {
     let Some(bytecode) = function.bytecode.as_ref() else {
         return FACTS_KNOWN;
     };
-    if !crate::function::is_direct_leaf_function(callee)
+    if !crate::function::is_direct_leaf_shape(callee)
         || bytecode.uses_lexical_this()
         || function.has_dynamic_function_realm
         || function.has_module_imports()

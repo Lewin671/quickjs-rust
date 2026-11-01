@@ -195,6 +195,9 @@ pub(crate) struct IcPolicy {
 
 struct DomainState {
     next_variable: Cell<u64>,
+    /// Bumped whenever any extensible variable holder in the domain gains or
+    /// loses a binding (`binding::VarHolder`); scope proofs cache it.
+    holder_epoch: Cell<u64>,
     runtime_group: RefCell<Weak<crate::context::GroupState>>,
     ic_policy: IcPolicy,
     table: RefCell<AtomTable>,
@@ -220,6 +223,18 @@ impl AtomDomain {
         current
     }
 
+    /// The current extensible-holder structure epoch.
+    pub(crate) fn holder_epoch(&self) -> u64 {
+        self.0.holder_epoch.get()
+    }
+
+    pub(crate) fn bump_holder_epoch(&self) {
+        let Some(next) = self.0.holder_epoch.get().checked_add(1) else {
+            std::process::abort();
+        };
+        self.0.holder_epoch.set(next);
+    }
+
     pub(crate) fn new() -> Self {
         Self::with_limit(u32::MAX)
     }
@@ -232,6 +247,7 @@ impl AtomDomain {
     fn with_limit(limit: u32) -> Self {
         Self(Rc::new(DomainState {
             next_variable: Cell::new(1),
+            holder_epoch: Cell::new(0),
             runtime_group: RefCell::new(Weak::new()),
             ic_policy: IcPolicy {
                 enabled: std::env::var_os("QJS_DISABLE_IC").is_none(),

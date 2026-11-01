@@ -3,6 +3,8 @@
 //! Leases retain immutable descriptors and positional cells, never a frame or
 //! a slot pointer. An extensible variable holder owns only its declarations;
 //! walking parent leases keeps later parent additions visible without forks.
+//! Every holder add/delete bumps its domain's holder epoch, the key under
+//! which a closure's `resolves_globally` proof lets it enter without the chain.
 
 use super::{BindingCell, BindingMetaRef, ScopeDescriptor, ScopeId};
 use crate::{RuntimeError, Value, value::name_hash::NameMap};
@@ -38,20 +40,47 @@ impl std::ops::Deref for ScopeDescriptorRef {
     }
 }
 
-#[derive(Debug)]
 pub(crate) struct VarHolder {
     pub(crate) identity: VariableEnvIdentity,
     entries: RefCell<NameMap<String, BindingCell>>,
     structure: Cell<u64>,
+    /// Every structural change also bumps the domain's holder epoch.
+    domain: crate::property::atom::AtomDomain,
+    /// Whether the owning body can suspend (yield/await) after creating this
+    /// holder, so that its code may run, and declare, while a closure over
+    /// it is executing.
+    suspendable: bool,
+}
+
+impl std::fmt::Debug for VarHolder {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("VarHolder")
+            .field("identity", &self.identity)
+            .field("entries", &self.entries)
+            .field("structure", &self.structure)
+            .field("suspendable", &self.suspendable)
+            .finish()
+    }
 }
 
 impl VarHolder {
-    pub(crate) fn new(identity: VariableEnvIdentity) -> Self {
+    pub(crate) fn new(
+        identity: VariableEnvIdentity,
+        domain: crate::property::atom::AtomDomain,
+        suspendable: bool,
+    ) -> Self {
         Self {
             identity,
             entries: RefCell::default(),
             structure: Cell::new(0),
+            domain,
+            suspendable,
         }
+    }
+    /// Whether this holder binds any name `wanted` selects.
+    fn binds_any(&self, wanted: impl Fn(&str) -> bool) -> bool {
+        self.entries.borrow().keys().any(|name| wanted(name))
     }
     pub(crate) fn cell(&self, name: &str) -> Option<BindingCell> {
         self.entries.borrow().get(name).cloned()
@@ -98,6 +127,7 @@ impl VarHolder {
             std::process::abort();
         };
         self.structure.set(next);
+        self.domain.bump_holder_epoch();
     }
 }
 
@@ -182,6 +212,54 @@ impl ScopeCursor {
             current = scope.parent.as_deref();
         }
         false
+    }
+
+    /// Whether this chain, now and for as long as a call of a closure over it
+    /// runs, resolves the closure's free names (`free_names`, sorted) to the
+    /// global environment and its captured names (`captured`, sorted by name)
+    /// to exactly the cells it received: no with object, no fixed cell of a
+    /// free name, no fixed cell of a captured name other than the received
+    /// one, no holder binding either kind of name, and no holder whose owner
+    /// can suspend and declare mid-call. Holder changes bump the epoch of
+    /// their `domain`, which a cached proof keys on; a holder of another
+    /// domain fails the proof.
+    pub(crate) fn resolves_globally(
+        &self,
+        free_names: &[String],
+        captured: &[(&str, &BindingCell)],
+        domain: &crate::property::atom::AtomDomain,
+    ) -> bool {
+        let is_free = |name: &str| {
+            free_names
+                .binary_search_by(|free| free.as_str().cmp(name))
+                .is_ok()
+        };
+        let received = |name: &str| {
+            let start = captured.partition_point(|(captured, _)| *captured < name);
+            let end = captured.partition_point(|(captured, _)| *captured <= name);
+            &captured[start..end]
+        };
+        let mut current = Some(self.head.as_ref());
+        while let Some(scope) = current {
+            if scope.object.is_some()
+                || scope.cells.iter().any(|binding| {
+                    let name = binding.cell.metadata().name.as_str();
+                    is_free(name)
+                        || received(name)
+                            .iter()
+                            .any(|(_, cell)| !cell.ptr_eq(&binding.cell))
+                })
+                || scope.own_vars.as_ref().is_some_and(|holder| {
+                    holder.suspendable
+                        || !holder.domain.ptr_eq(domain)
+                        || holder.binds_any(|name| is_free(name) || !received(name).is_empty())
+                })
+            {
+                return false;
+            }
+            current = scope.parent.as_deref();
+        }
+        true
     }
 
     /// An expression's self name belongs outside its parameter environment.

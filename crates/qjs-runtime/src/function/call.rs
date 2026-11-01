@@ -3,6 +3,8 @@
 //! entries reborrow Context with a call site; they construct no activation.
 //! Constructor targets are explicit and never overwrite caller lexical state.
 //! Synchronous startup consumes borrowed inputs before a suspension is retained.
+//! A slot-backed entry of a closure over a retained chain requires that
+//! chain's per-holder-epoch proof (`lexical_scope_admits_entry`).
 
 use std::{collections::HashMap, rc::Rc};
 
@@ -417,7 +419,7 @@ pub(crate) fn try_construct_direct_leaf_function(
         return None;
     }
     let class_fields = if function.is_class_constructor {
-        if !is_direct_construct_class(function) {
+        if !is_direct_construct_class(function) || !lexical_scope_admits_entry(function) {
             return None;
         }
         Some(function.instance_elements())
@@ -615,6 +617,13 @@ pub(crate) fn call_direct_function_literal(
 }
 
 pub(crate) fn is_direct_leaf_function(callee: &Value) -> bool {
+    is_direct_leaf_shape(callee)
+        && matches!(callee, Value::Function(function) if lexical_scope_admits_entry(function))
+}
+
+/// The fixed part of `is_direct_leaf_function`: everything but the scope
+/// proof a closure over an extensible chain needs on each entry.
+pub(crate) fn is_direct_leaf_shape(callee: &Value) -> bool {
     let Value::Function(function) = callee else {
         return false;
     };
@@ -627,6 +636,68 @@ pub(crate) fn is_direct_leaf_function(callee: &Value) -> bool {
         .is_some_and(|bytecode| can_seed_direct_leaf_call(function, bytecode));
     function.direct_leaf_call_eligible.set(Some(eligible));
     eligible
+}
+
+/// Whether an indexed entry of `function` may run without its retained
+/// lexical scope: always for a function without one; otherwise only while
+/// every free name of its body resolves globally through that chain
+/// (`ScopeCursor::resolves_globally`), decided once per holder epoch.
+#[inline(always)]
+pub(crate) fn lexical_scope_admits_entry(function: &Function) -> bool {
+    let state = function.lexical_scope_proof.get();
+    state == 0 || lexical_scope_proof_holds(function, state)
+}
+
+/// The retained-scope half of `lexical_scope_admits_entry`, kept out of line
+/// so that the common no-scope check stays one load in every call path.
+#[inline(never)]
+fn lexical_scope_proof_holds(function: &Function, state: u64) -> bool {
+    let realm = function.creation_realm();
+    let epoch = realm.atoms().holder_epoch();
+    if state >> 1 == epoch + 1 {
+        return state & 1 != 0;
+    }
+    prove_lexical_scope(function, realm.atoms(), epoch)
+}
+
+#[cold]
+#[inline(never)]
+fn prove_lexical_scope(
+    function: &Function,
+    domain: &crate::property::atom::AtomDomain,
+    epoch: u64,
+) -> bool {
+    let proven = match (function.lexical_scope(), function.bytecode.as_ref()) {
+        (Some(cursor), Some(bytecode)) => {
+            // Live chain resolution precedes the received-cell fallback, so
+            // captured names must also resolve to exactly the received cells.
+            let slots = bytecode.received_upvalue_slots();
+            let mut captured = Vec::with_capacity(slots.len());
+            let mut named = true;
+            for (&slot, cell) in slots.iter().zip(&function.upvalues) {
+                match bytecode.binding_meta(slot) {
+                    Some(meta) => captured.push((meta.name.clone(), cell)),
+                    None => named = false,
+                }
+            }
+            captured.sort_by(|left, right| left.0.cmp(&right.0));
+            let captured: Vec<_> = captured
+                .iter()
+                .map(|(name, cell)| (name.as_str(), *cell))
+                .collect();
+            named
+                && slots.len() == function.upvalues.len()
+                && cursor.resolves_globally(bytecode.global_names(), &captured, domain)
+        }
+        _ => false,
+    };
+    if !proven {
+        crate::diagnostics::count!(lexical_scope_entry_rejections);
+    }
+    function
+        .lexical_scope_proof
+        .set(((epoch + 1) << 1) | u64::from(proven));
+    proven
 }
 
 fn class_constructor_call_error(function: &Function) -> RuntimeError {
@@ -1267,9 +1338,6 @@ fn enter_function_activation<'a>(
 }
 
 fn can_seed_direct_leaf_call(function: &Function, bytecode: &Bytecode) -> bool {
-    if function.lexical_scope().is_some() {
-        return false;
-    }
     // This predicate feeds the ordinary direct-call dispatcher, which must
     // retain the TypeError for `ClassConstructor()`. Base class constructors
     // can separately reuse these slots only after `enter_function_activation` has proved
@@ -1303,6 +1371,12 @@ fn can_seed_slot_backed_call(function: &Function, bytecode: &Bytecode) -> bool {
         && !bytecode.contains_with()
         && !bytecode.contains_super_operation()
         && !bytecode.creates_capturing_closures()
+        // A retained lexical scope is dropped for a slot-backed entry only
+        // when no part of the body can observe the chain itself: no eval or
+        // with in its tree (above) and no closure that would inherit the
+        // chain. Its free names are proven per entry
+        // (`lexical_scope_admits_entry`).
+        && (!bytecode.creates_closures() || function.lexical_scope().is_none())
 }
 
 /// A function owns its immutable creation metadata. An explicit host override

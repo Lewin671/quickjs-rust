@@ -71,14 +71,13 @@ at a VM, frame ID, recycled window or borrowed local. A function retains its
 optional lexical scope only for compiled name demand or mutable mappings.
 
 Only runtime-added declarations use a mutable name-to-cell holder. An ordinary
-activation exposes a fresh own holder at its selected variable boundary. Parent
-links remain live: adding an outer declaration after child entry is visible;
-creating an inner declaration never selects an outer homonym. Existing own
-static bindings reuse their cells and attributes. Eval-added bindings are
-separately owned and deletable. Delete reveals the parent on fresh lookup. Saved
-holder references recreate only their own binding (sloppy) or throw (strict).
-Structural epochs change for add/delete/remap, never for cell-value writes.
-Tests: `binding/scope_tests.rs`, `direct_eval/s3b_bindings.rs`.
+activation exposes a fresh own holder at its selected variable boundary. Parent links
+remain live: adding an outer declaration after child entry is visible; creating an inner
+declaration never selects an outer homonym. Existing own static bindings reuse their
+cells and attributes. Eval-added bindings are separately owned and deletable. Delete
+reveals the parent on fresh lookup. Saved holder references recreate only their own
+binding (sloppy) or throw (strict). Structural epochs change for add/delete/remap, never
+for cell-value writes. Tests: `binding/scope_tests.rs`, `direct_eval/s3b_bindings.rs`.
 
 The resolver walks descriptor/cells, own holder, with object and parent in lexical
 order. With uses HasProperty and unscopables, releasing every storage/cell borrow
@@ -125,34 +124,35 @@ this cannot change them. Fields/static blocks establish their own receiver and
 restrictions, arrows inherit them, and ordinary nested calls establish new owners.
 Tests: `context/call_owner.rs`, `function/call_activation_tests.rs`, `class_keys.rs`.
 
-`context/creation.rs` owns shared realm, referrer, module routes, private
-context and explicit global selection. `context/activation.rs` owns logical
-variable identity (minted on first exposure), call owner, scope roots, mode and
-strictness. **Reuse:** only a returned, never-exposed activation (unminted
-identity, inline owner, no scopes/holders/saved references) enters a pool
-bounded in count and bytes; no lease, cell, closure, arguments object,
-continuation, generator or eval holder can reference it, and an identical later
-entry rebinds it. Related realms mint non-wrapping tokens in their AtomDomain
-boundary. Parameter/body entry changes only its scope boundary. Module-root
-routing stays a scope fact; creation/module metadata holds cell routes only.
+`context/creation.rs` owns shared realm, referrer, module routes, private context and
+explicit global selection. `context/activation.rs` owns logical variable identity
+(minted on first exposure), call owner, scope roots, mode and strictness. **Reuse:**
+only a returned, never-exposed activation (unminted identity, inline owner, no
+scopes/holders/saved references) enters a pool bounded in count and bytes; no lease,
+cell, closure, arguments object, continuation, generator or eval holder can reference
+it, and an identical later entry rebinds it. Related realms mint non-wrapping tokens in
+their AtomDomain boundary. Parameter/body entry changes only its scope boundary.
+Module-root routing stays a scope fact; creation/module metadata holds cell routes only.
 
-`Context<'a>` borrows services/activation; it is never cloned or retained.
-NativeSite borrows call info, target and eval sources; callee realm is lazy.
-Vm/tiers own callee state; no caller-equality proof or empty-env factory remains.
-RuntimeGroup shares AtomDomain/weak realm registry; host/agent services stay
-canonical; Dynamic Function reuses its callee Realm/live globals. Debug services
-capture QJS_VERIFY_BINDINGS, QJS_FORCE_EVAL_EXPOSURE, QJS_POISON_RELEASED_SCOPES
-and QJS_POISON_RELEASED_ACTIVATIONS (pooled activations hold a checked poison)
-once; production ignores them. Forcing applies to materialized declarations;
-nonexposing admitted tiers keep their storage. Class keys execute inline; a cold
-continuation owns partial class/private context across yield/await, handlers
-restore regions and mode. Heritage validation precedes keys; each method installs
-before the next; static fields/blocks run in source order; the inner name stays
-TDZ through keys, initializes before static fields; inferred names bind none.
+`Context<'a>` borrows services/activation; it is never cloned or retained. NativeSite
+borrows call info, target and eval sources; callee realm is lazy. Vm/tiers own callee
+state; no caller-equality proof or empty-env factory remains. RuntimeGroup shares
+AtomDomain/weak realm registry; host/agent services stay canonical; Dynamic Function
+reuses its callee Realm/live globals. Debug services capture QJS_VERIFY_BINDINGS,
+QJS_FORCE_EVAL_EXPOSURE, QJS_POISON_RELEASED_SCOPES and QJS_POISON_RELEASED_ACTIVATIONS
+(pooled activations hold a checked poison) once; production ignores them. Forcing
+applies to materialized declarations; nonexposing admitted tiers keep their storage.
+Class keys execute inline; a cold continuation owns partial class/private context across
+yield/await, handlers restore regions and mode. Heritage validation precedes keys; each
+method installs before the next; static fields/blocks run in source order; the inner
+name stays TDZ through keys, initializes before static fields; inferred names bind none.
 
-Compact/wide/leaf tiers retain their static cell paths; a retained dynamic chain
-is not a caller-environment equality proof, and admission rejects shortcuts that
-could bypass live crossing names. T077 later retires these tiers separately.
+Compact/wide/leaf tiers keep static cell paths; retained chains prove nothing of callers.
+A slot-backed body that cannot observe its chain (no eval/with/closure creation) enters
+without it only while the chain resolves free names globally and captured names to their
+received cells: no with object, holder of a suspendable owner, holder binding either name
+kind, or other fixed cell of one. `function/call.rs` caches this per (function, holder
+epoch), which holder add/delete bumps. T077 retires these tiers later.
 
 ## Known limits
 
