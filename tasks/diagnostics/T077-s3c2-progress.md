@@ -50,4 +50,9 @@ process; the 45+3a+3w lifecycle estimate is not isolated from the remaining disp
 cost, and its expected net payoff is not demonstrated. Debug depth falls in six probes while release depth improves. Native
 debug disassembly shows wide driver's frame 15,408→19,952 bytes, numeric
 5,504→7,664, explaining the new native-stack pressure. Runtime work stopped at
-these misses. The single iMac run remains to be recorded; no C3–C5 work follows.
+these misses. C2 is committed at **cd020e8e**. The single iMac job
+**20261101T235231Z-t077-s3c2-c2** is complete: 430/430 valid, zero invalid/heavy,
+likely loss. Development instructions 0.987267 pass, external 1.000115 miss.
+All public wall geomeans improve; none waive the local/depth/instruction gates.
+The receipt owns full lane ratios and originals. No runtime changes or C3–C5
+followed the misses; stop for lead review.

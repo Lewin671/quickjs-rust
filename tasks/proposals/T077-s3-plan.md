@@ -5,7 +5,7 @@
 - Verified at: S3a review repair `03c8680c`, 2026-10-30; full check/257 NG fixtures, debug/release depth parity, twenty development counter runs, and all 42,672 configured exact Rust cases pass; zero gaps/not-run, fresh ledger line.
 - Evidence: [counts/reproduction](../diagnostics/T077-s3-counts.md), [Op map](T077-s3-op-map.md), [construction inventory](T077-s3-activation-inventory.md), [native/executor inventory](T077-s3-native-executors.md).
 - Unresolved: S3c is a payoff stage under S3b acceptance, superseding the neutral-S3c allowance below; its v2 checkpoint misses call instructions and debug depth. The new deficit against S3b is C2-owned; the older gap against 3cc12c6f remains S3d-owned.
-- Next action: complete the single requested iMac v2 checkpoint receipt and stop for lead review; C3–C5 remain unstarted.
+- Next action: lead reviews the completed rejected v2 checkpoint; owner stopped; C3–C5 remain unstarted.
 
 ## Recommendation and authority at every landing
 

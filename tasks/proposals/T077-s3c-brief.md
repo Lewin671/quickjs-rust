@@ -4,7 +4,7 @@
 - Implementation: contiguous indexed value/header stacks, lazy Context and stable suspendable boxes are present. See [v2 progress](../diagnostics/T077-s3c2-progress.md).
 - Evidence: [inventory](T077-s3c-inventory.md), [counting receipt](../diagnostics/T077-s3c-counting.md), [records](../diagnostics/T077-s3c-counts.json).
 - Authority: [S3 split](T077-s3-plan.md), [execution target](../../docs/design/core-rebuild-execution.md), [protected bindings](../../docs/design/env-model-rewrite.md), [S3b acceptance](../diagnostics/T077-s3b-acceptance.md). The acceptance receipt supersedes the split's neutral-S3c allowance.
-- Next action: record the single requested iMac v2 triage and stop; [checkpoint](../diagnostics/T077-s3c2-checkpoint/README.md) records local misses/attribution. No origin push or main merge.
+- Next action: lead reviews the completed rejected checkpoint; owner stopped; [checkpoint](../diagnostics/T077-s3c2-checkpoint/README.md) records local misses/attribution. No origin push or main merge.
 
 ## Decision
 

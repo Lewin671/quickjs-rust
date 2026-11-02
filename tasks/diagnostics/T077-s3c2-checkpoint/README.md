@@ -1,8 +1,7 @@
 # T077 S3c v2 C2 checkpoint
 
 Measurement base: `8322fc983da20800ce612ad148781aea30e28d08`. Branch:
-`agent/t077-s3c-v2/codex`, based on main `e60e7cfa`. Runtime source is the C2
-commit containing this receipt; `builds.json` seals its exact Rust/Cargo inputs
+`agent/t077-s3c-v2/codex`, based on main `e60e7cfa`. Runtime source is **cd020e8e**; `builds.json` seals its exact Rust/Cargo inputs
 and four candidate binaries. Pre-commit request HEADs name parent `a8ae898c`;
 their input hashes match this C2 source. No old-worktree files were modified.
 
@@ -125,7 +124,39 @@ Run `verify.py stress`, `verify.py compare`, the documented public sweep and
 `tools.binding_fuzz.run --count 500` for all four default profiles. Source/binary
 seals identify each build; poison/counters are never timed.
 
-The single requested iMac `t077-s3c2-c2` public86 run is recorded below when
-complete. Its collection completes the requested evidence, not a runtime retry.
+The single requested iMac run is complete below. Its collection completes
+the requested evidence, not a runtime retry.
 Lead review is needed before any debug-frame or remaining lifecycle/codegen
 repair. C3–C5 are blocked by the missed revised checkpoint.
+
+
+## iMac public86 result
+
+Job **20261101T235231Z-t077-s3c2-c2**, candidate **cd020e8e**, base **8322fc98**.
+Queue was idle and submission at UTC 23:52:31 was outside the blackout. The only
+ref transfer was to the runner. Natural layout, v5 workers-4, five pairs:
+**430/430 valid**, zero invalid/heavy samples, budget met (496.3 s command /
+557.1 s including quieting). Verdict **likely loss** is retained unchanged.
+
+| Lane | Wall C2/S3b | Instructions C2/S3b |
+| --- | ---: | ---: |
+| development | 0.950671 | 0.987266638 |
+| external | 0.997747 | 1.000115348 |
+| broad | 0.983280 | 0.985658749 |
+| sentinel | 0.982791 | 0.983177982 |
+| selection | 0.986911 | 0.993210611 |
+
+Development instructions pass <1.00. **External instructions 1.000115348 miss**;
+the small excess is not rounded into a pass. All public lane wall geomeans
+improve, but that does not replace this checkpoint's instruction/depth gates.
+[Summary](public86/summary.json), [original result](public86/triage.json), request,
+command, log and status preserve the run. These are exploratory triage ratios,
+not formal/held-out/RSS acceptance evidence. `release-assembly.json` also records
+the optimized arm64 wide driver: no directory or memcpy call sites; static
+inventory alone is not proof about every inline spill.
+
+The full requested checkpoint is complete and **rejected**: two call-slope
+misses, strict control misses, six debug-depth misses, and the external iMac
+instruction miss. The demonstrated debug cost is larger native driver frames;
+remaining call-instruction sub-costs are not fully isolated. Lead review is the
+next action. No runtime repair, retry, C3–C5, origin push or main merge followed.
