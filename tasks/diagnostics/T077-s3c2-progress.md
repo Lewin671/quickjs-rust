@@ -172,3 +172,11 @@ Its burndown record is appended unchanged at request commit1b67d62b. Production
 focused cached/IC-off each pass all six coerced-values cases; the complete
 production scans run with the same inputs, timeout and retry policy. Runtime
 source remains frozen at2aa117b7.
+
+## C5: complete production cached parity
+
+The [complete production cached scan](T077-s3c5-final/exact-cached/README.md)
+passes all42,672 configured cases over the exact53,572-path union, with zero
+failures/timeouts/omissions and no lost passes. Its burndown is recorded at
+request revisioncd51f188, runtime2aa117b7/orders476f1bea. The diagnostic records
+remain unchanged. Production IC-off and the final public86 remain required.

@@ -1,0 +1,29 @@
+{
+  "complete": true,
+  "unique_cases": 53572,
+  "mode": "cached",
+  "configured": 42672,
+  "rust_not_run": 0,
+  "rust": {
+    "pass": 42672,
+    "fail": 0,
+    "timeout": 0,
+    "skipped": 0
+  },
+  "ng": {
+    "pass": 42602,
+    "fail": 70,
+    "timeout": 0,
+    "skipped": 0
+  },
+  "comparison": {
+    "both_pass": 42602,
+    "quickjs_ng_pass_rust_nonpass": 0,
+    "quickjs_ng_pass_rust_not_run": 0,
+    "quickjs_ng_pass_rust_fail": 0,
+    "quickjs_ng_pass_rust_timeout": 0,
+    "rust_pass_quickjs_ng_nonpass": 70,
+    "both_nonpass": 0,
+    "both_fail_or_timeout": 0
+  }
+}
