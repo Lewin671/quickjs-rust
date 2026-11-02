@@ -180,3 +180,13 @@ passes all42,672 configured cases over the exact53,572-path union, with zero
 failures/timeouts/omissions and no lost passes. Its burndown is recorded at
 request revisioncd51f188, runtime2aa117b7/orders476f1bea. The diagnostic records
 remain unchanged. Production IC-off and the final public86 remain required.
+
+## C5: complete production IC-off parity and final source seal
+
+Production [IC-off](T077-s3c5-final/exact-off/README.md) also passes all42,672
+configured cases over the full53,572-path union, with zero failures/timeouts/
+omissions and no lost passes. Its burndown is recorded at8bff8431. Both failed
+diagnostic observations remain immutable. [The final seal](T077-s3c5-final/freeze.json)
+proves unchanged runtime2aa117b7/orders476f1bea through every owner check.
+Only the frozen final public86 remains before the owner reports and stops;
+formal/held-out/RSS and independent review belong to the lead.
