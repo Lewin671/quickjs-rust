@@ -1,0 +1,216 @@
+{
+  "count": 109,
+  "geomean": 0.9994103381171894,
+  "lanes": {
+    "development": 0.9995903264150894,
+    "external": 0.9990397960994881,
+    "broad": 0.9998806176622153,
+    "sentinel": 1.0001048177669074,
+    "repro": 0.9992820154425377,
+    "diagnostic": 1.0002372083827304
+  },
+  "worst": [
+    {
+      "id": "external/kraken-1.1/json-stringify-tinderbox",
+      "sha256": "7e04b909170413a294862d97810c12b1200e6f5ba9508020a0c348233ee255ed",
+      "args": [],
+      "stdout_sha256": "0581a6af0439f7a2ef5c87b620188cd3a9715e32e4c58478dff308d32f2848a8",
+      "instructions": {
+        "before": [
+          582529698,
+          582477017,
+          582853246
+        ],
+        "after": [
+          583047235,
+          582807781,
+          582408302
+        ]
+      },
+      "ratio": 1.0004773713700001
+    },
+    {
+      "id": "diagnostic/audio-fixed-clock",
+      "sha256": "99dd006d086553b907fd81e96c623bb0e4bdeeb61d2708602464085259d79c12",
+      "args": [],
+      "stdout_sha256": "0581a6af0439f7a2ef5c87b620188cd3a9715e32e4c58478dff308d32f2848a8",
+      "instructions": {
+        "before": [
+          11064207718,
+          11063948833,
+          11065053236
+        ],
+        "after": [
+          11062524989,
+          11069333126,
+          11069425027
+        ]
+      },
+      "ratio": 1.0004632422068198
+    },
+    {
+      "id": "external/kraken-1.1/json-parse-financial",
+      "sha256": "ea2f8d922325c593a8b30a896cdab50a207b0b6a050f0d3646c57dfcce6ee8a7",
+      "args": [],
+      "stdout_sha256": "0581a6af0439f7a2ef5c87b620188cd3a9715e32e4c58478dff308d32f2848a8",
+      "instructions": {
+        "before": [
+          358183072,
+          357827069,
+          357832381
+        ],
+        "after": [
+          357904837,
+          358375259,
+          357947595
+        ]
+      },
+      "ratio": 1.0003219775685979
+    },
+    {
+      "id": "sentinel/capturing_closure_call",
+      "sha256": "19b1060789fc96ae941c60ae35995c3b185de319acaf9ce53515bfdb824baf7a",
+      "args": [
+        "capturing_closure_call",
+        "100000"
+      ],
+      "stdout_sha256": "cf35400615e53e594512db569ac222f178257b82bafaf99ddac612708f84b9d1",
+      "instructions": {
+        "before": [
+          94324660,
+          94334874,
+          94329412
+        ],
+        "after": [
+          94367097,
+          94359133,
+          94332730
+        ]
+      },
+      "ratio": 1.0003150767016336
+    },
+    {
+      "id": "external/jetstream3-js-subset/cdjs",
+      "sha256": "8fdde63549dd457d375730cca98efc1be687c3fa32b84e5d63a9903b768fed47",
+      "args": [],
+      "stdout_sha256": "0581a6af0439f7a2ef5c87b620188cd3a9715e32e4c58478dff308d32f2848a8",
+      "instructions": {
+        "before": [
+          7277786244,
+          7276776432,
+          7276063556
+        ],
+        "after": [
+          7278412910,
+          7278574055,
+          7278871577
+        ]
+      },
+      "ratio": 1.0002470356230948
+    },
+    {
+      "id": "sentinel/polymorphic_call_site",
+      "sha256": "19b1060789fc96ae941c60ae35995c3b185de319acaf9ce53515bfdb824baf7a",
+      "args": [
+        "polymorphic_call_site",
+        "100000"
+      ],
+      "stdout_sha256": "1f0923f651c0cd88e336d4b146541b0007c61cd1836c4a6df777b106bb02647b",
+      "instructions": {
+        "before": [
+          87998650,
+          87998775,
+          88067485
+        ],
+        "after": [
+          88035667,
+          88012779,
+          88019830
+        ]
+      },
+      "ratio": 1.0002392646943097
+    },
+    {
+      "id": "broad/local_read",
+      "sha256": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
+      "args": [
+        "local_read",
+        "100000"
+      ],
+      "stdout_sha256": "fbed6547fd111b05b327c172c10000f9720894c1b02d9b18477bcc7a119c8a50",
+      "instructions": {
+        "before": [
+          52527226,
+          52531766,
+          52540347
+        ],
+        "after": [
+          52567787,
+          52517504,
+          52540299
+        ]
+      },
+      "ratio": 1.0001624350492995
+    },
+    {
+      "id": "external/kraken-1.1/imaging-desaturate",
+      "sha256": "11afc7e65e2d6b51b65bc7f14fa51d14f89cdfc30c2b3f0f87750e0fc12b9e1d",
+      "args": [],
+      "stdout_sha256": "0581a6af0439f7a2ef5c87b620188cd3a9715e32e4c58478dff308d32f2848a8",
+      "instructions": {
+        "before": [
+          18811772580,
+          18807735109,
+          18820982897
+        ],
+        "after": [
+          18811534167,
+          18814137088,
+          18818590797
+        ]
+      },
+      "ratio": 1.0001256929930418
+    },
+    {
+      "id": "repro/partial-local",
+      "sha256": "672b9bfa54a5f0d46a1c63f97d1599a250b27bd02391d540657bdd7c6a7c4591",
+      "args": [],
+      "stdout_sha256": "770c2d18aa4ec3159f46da461ef452972949942ff4f6a9771044485faa146398",
+      "instructions": {
+        "before": [
+          118197329,
+          118194186,
+          118204799
+        ],
+        "after": [
+          118209721,
+          118193292,
+          118217448
+        ]
+      },
+      "ratio": 1.000104841624636
+    },
+    {
+      "id": "sentinel/heterogeneous_property_read",
+      "sha256": "19b1060789fc96ae941c60ae35995c3b185de319acaf9ce53515bfdb824baf7a",
+      "args": [
+        "heterogeneous_property_read",
+        "100000"
+      ],
+      "stdout_sha256": "c2723bc1038e1332a2eac9cf8f510b57913733538e5e1e2db3c8ed766fc61b77",
+      "instructions": {
+        "before": [
+          114259844,
+          114260816,
+          114259888
+        ],
+        "after": [
+          114271284,
+          114274047,
+          114260816
+        ]
+      },
+      "ratio": 1.000099737538689
+    }
+  ]
+}

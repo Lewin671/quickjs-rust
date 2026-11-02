@@ -1,0 +1,54 @@
+[
+  {
+    "file": "tasks/diagnostics/T077-s3c-r4/s3c-findings/pre-duplicate-params.js",
+    "sha256": "a96d8462e41b525fc7a8b2f7ce56c89d8a3fec0e3a4fe80e8f5b3d9b10c07c95",
+    "results": {
+      "base": {
+        "exit": 0,
+        "stdout": "A: 28|9|1,2|3,2 29|9|1,2|3,2\nB: undefined 2 1, 0,1\nC: 1;3;5;7;9;11;13;15;17;19;21;23;25;27;29;31;33;35;37;39;\nD: 19/3 20/3\nUndefined\n",
+        "stderr": ""
+      },
+      "before": {
+        "exit": 0,
+        "stdout": "A: 28|9|1,2|3,2 29|9|1,2|3,2\nB: undefined 2 1, 0,1\nC: 1;3;5;7;9;11;13;15;17;19;21;23;25;27;29;31;33;35;37;39;\nD: 19/3 20/3\nUndefined\n",
+        "stderr": ""
+      },
+      "after": {
+        "exit": 0,
+        "stdout": "A: 28|9|1,2|3,2 29|9|1,2|3,2\nB: undefined 2 1, 0,1\nC: 1;3;5;7;9;11;13;15;17;19;21;23;25;27;29;31;33;35;37;39;\nD: 19/3 20/3\nUndefined\n",
+        "stderr": ""
+      },
+      "ng": {
+        "exit": 0,
+        "stdout": "A: undefined|9|,2|3,2 undefined|9|,2|3,2\nB: undefined 2 , 0,1\nC: U1;U2;U3;U4;U5;U6;U7;U8;U9;U10;U11;U12;U13;U14;U15;U16;U17;U18;U19;U20;\nD: NaN/3 NaN/3\n",
+        "stderr": ""
+      }
+    }
+  },
+  {
+    "file": "tasks/diagnostics/T077-s3c-r4/s3c-findings/pre-nested-finally-continue.js",
+    "sha256": "30942ed9475161b6a4ad6235b44e0a48ef886559d8bae745b8c908a3e94fa85a",
+    "results": {
+      "base": {
+        "exit": 0,
+        "stdout": "a0,b0,a1\nUndefined\n",
+        "stderr": ""
+      },
+      "before": {
+        "exit": 0,
+        "stdout": "a0,b0,a1\nUndefined\n",
+        "stderr": ""
+      },
+      "after": {
+        "exit": 0,
+        "stdout": "a0,b0,a1\nUndefined\n",
+        "stderr": ""
+      },
+      "ng": {
+        "exit": 0,
+        "stdout": "a0,b0,a1,b1\n",
+        "stderr": ""
+      }
+    }
+  }
+]

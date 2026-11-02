@@ -1,0 +1,9 @@
+{
+  "prior_rank_preserved": true,
+  "dropped": [
+    {
+      "old": "__RNvMNtNtCsttesAA0p2N_11qjs_runtime8bytecode11frame_stackNtNtB4_2vm2Vm14run_completionB6_",
+      "live_definitions": 0
+    }
+  ]
+}

@@ -209,3 +209,21 @@ The actual x86 binary equals the qualified order-job binary4779454e....
 All owner correctness/structural gates and both complete production scans pass;
 S3c performance acceptance remains open. Owner STOP for lead quiet-host evidence,
 formal/held-out/RSS and independent review. No origin push or main merge.
+
+
+## Round4: restore general-VM recursive native depth
+
+Lead round4 identifies an omitted direct-leaf general-VM fallback depth gate.
+Runtime repair **400a14de** outlines dormant multi-frame moves from the hot
+completion driver and adds a debug pc_scopes checkpoint assertion. Entry
+admission, operations, ownership fields and stack policy are unchanged.
+The permanent matrix now defaults to all14 paths and rejects lost depth or
+inventory drift against S3b in both profiles. All14 pass; the source-pinned
+[round4 receipt](T077-s3c-r4/README.md) owns native prologues, numbers and logs.
+Fast/full5,174, NGnine modes, stress/poison, public351 and fuzz500/profile all
+pass. Canonical109 instruction aggregate0.999866 vs predecessor; tiny positive
+lane/case ratios stay visible. No complete exact rescan for this layout-only
+repair; no runtime change follows the frozen source. Pre-existing finally,
+duplicate-parameter and native-overflow bugs are reproduced and deferred.
+ARM symbol refresh passes strict audit; x86 fresh profile/order is queued as
+20261102T102424Z-t077-s3c-r4-order. Lead owns formal/held-out/RSS acceptance.
