@@ -57,3 +57,17 @@ repeated using exits; two NG fixtures. Review run.py passes all three original
 with/using reproducers in debug, combined stress and combined-off (nine runs),
 including growth reporting 100,000 disposals before return. No RSS/timing
 measurement was used to establish the repair.
+
+## Unlabeled break targets
+
+Root cause: an unlabeled break selected the last loop-stack entry even when
+that entry represented a label-only block. Loop contexts now explicitly record
+whether they accept unlabeled breaks: iterations/switch do; label-only blocks
+do not. Explicit labeled break and continue retain their existing lookup.
+A runtime test/NG fixture covers while/for/switch, intervening finally, nested
+labels, and SyntaxError when no iteration/switch can receive the break.
+
+The initial label test incorrectly expected the Rust parser diagnostic string
+to contain the JS error class name. The focused test and first commit gate
+rejected that assertion (2,768 other tests passed). It now checks the structured
+parse rejection directly; the JS routing assertion already passed.

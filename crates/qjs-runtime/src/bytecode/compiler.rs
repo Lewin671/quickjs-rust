@@ -119,6 +119,7 @@ pub(super) struct TryResultEntry {
 pub(super) struct LoopContext {
     result_slot: usize,
     allows_continue: bool,
+    allows_unlabeled_break: bool,
     labels: Vec<String>,
     breaks: Vec<usize>,
     continues: Vec<usize>,
@@ -787,16 +788,18 @@ impl Compiler {
         self.loop_stack.push(LoopContext {
             result_slot,
             allows_continue: true,
+            allows_unlabeled_break: true,
             labels,
             ..LoopContext::default()
         });
     }
 
-    pub(super) fn push_breakable(&mut self, result_slot: usize) {
+    pub(super) fn push_breakable(&mut self, result_slot: usize, allows_unlabeled_break: bool) {
         let labels = self.take_pending_labels();
         self.loop_stack.push(LoopContext {
             result_slot,
             allows_continue: false,
+            allows_unlabeled_break,
             labels,
             ..LoopContext::default()
         });
@@ -858,7 +861,10 @@ impl Compiler {
                 .loop_stack
                 .iter()
                 .rposition(|context| context.labels.iter().any(|item| item == label)),
-            None => self.loop_stack.len().checked_sub(1),
+            None => self
+                .loop_stack
+                .iter()
+                .rposition(|context| context.allows_unlabeled_break),
         }
     }
 
@@ -1265,7 +1271,7 @@ impl Compiler {
         self.emit_load_undefined();
         self.emit(Op::StoreLocal(result_slot));
         self.push_label(label.to_owned());
-        self.push_breakable(result_slot);
+        self.push_breakable(result_slot, false);
         self.compile_stmt(body)?;
         self.emit(Op::StoreLocal(result_slot));
         let context = self.pop_loop();

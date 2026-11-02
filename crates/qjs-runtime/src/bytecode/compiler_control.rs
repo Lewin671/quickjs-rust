@@ -492,7 +492,7 @@ impl Compiler {
 
         let no_match_jump = self.emit(Op::Jump(usize::MAX));
         let blocked = switch_annex_b_blocked_names(cases, self.strict);
-        self.push_breakable(result_slot);
+        self.push_breakable(result_slot, true);
         let mut case_starts = Vec::with_capacity(cases.len());
         self.with_annex_b_blocked_function_names(&blocked, |compiler| {
             for case in cases {

@@ -1,3 +1,4 @@
+mod abrupt_statement_completions;
 mod arrays;
 mod async_functions;
 mod async_generators;
