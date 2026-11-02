@@ -11,3 +11,9 @@ is partial and is never a ledger record. The [exact collector](exact.py) uses
 the existing harness's unfiltered unlimited shards and checks their complete
 unique path union before parity is claimed. Final formal, held-out, RSS and
 independent review remain lead-owned. No final S3c acceptance is claimed.
+
+The [assertion-enabled cached scan](exact-diagnostic-cached/README.md) completed
+with three timeouts and remains in burndown as measured. Complete qualifying
+scans use the canonical production build; all six focused cases pass under
+both cache policies, including the [release IC-off check](release-ic-off-probe/README.md).
+The full stress/verification matrix remains separately qualified.
