@@ -165,3 +165,10 @@ all six focused cases at the same 20-second budget. Complete production scans
 will establish cached/IC-off parity; the release IC-disable switch is active
 independently of assertions. No runtime change, exclusion or result substitution.
 The diagnostic IC-off scan remains in flight and will be recorded if complete.
+
+The [assertion-enabled IC-off scan](T077-s3c5-final/exact-diagnostic-off/README.md)
+is also complete: 53,572 paths, 42,669 passes/3 matching timeouts, zero failures.
+Its burndown record is appended unchanged at request commit1b67d62b. Production
+focused cached/IC-off each pass all six coerced-values cases; the complete
+production scans run with the same inputs, timeout and retry policy. Runtime
+source remains frozen at2aa117b7.
