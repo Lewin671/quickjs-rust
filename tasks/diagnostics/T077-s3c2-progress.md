@@ -190,3 +190,22 @@ diagnostic observations remain immutable. [The final seal](T077-s3c5-final/freez
 proves unchanged runtime2aa117b7/orders476f1bea through every owner check.
 Only the frozen final public86 remains before the owner reports and stops;
 formal/held-out/RSS and independent review belong to the lead.
+
+## C5 final collection: unhealthy, owner STOP
+
+Frozen candidate **e37d6871**, runtime **2aa117b7**/orders**476f1bea**. The
+[final public86 receipt](T077-s3c5-final/public86/README.md) preserves job
+**20261102T092436Z-t077-s3c2-final**, exit1, raw verdict unclear: all four
+workers exceed the20% invalid-pair cap. No healthy final aggregate/ratio is
+available. The reported background intruders are retained without overriding
+health. No further runtime tuning or measurement follows this collection.
+
+A prior setup-only attempt exits98 before any benchmark, due solely to the
+known order artifact left in the persistent runner. Under its exclusive lock,
+the exact single path/hash was verified and restored, then the same frozen
+candidate was submitted for the one actual collection. Both attempts are kept.
+The actual x86 binary equals the qualified order-job binary4779454e....
+
+All owner correctness/structural gates and both complete production scans pass;
+S3c performance acceptance remains open. Owner STOP for lead quiet-host evidence,
+formal/held-out/RSS and independent review. No origin push or main merge.

@@ -24,6 +24,14 @@ coverage passes at the same timeout; no failed row is substituted or erased.
 Debug stress/poison/verification is qualified separately. These are explicit
 build distinctions, not a new exclusion or correctness waiver.
 
-The one frozen `t077-s3c2-final` public86 is next. No runtime tuning follows
-it. Formal, held-out, RSS acceptance and independent review remain lead-owned;
-this receipt does not declare S3c finally accepted.
+The [frozen final public86](public86/README.md), actual collection job
+**20261102T092436Z-t077-s3c2-final**, exits **DISTURBED**: all four workers
+exceed the 20% invalid-pair cap. Raw verdict is **unclear**, with no healthy
+final case/lane aggregates. The setup-only exit98 attempt is recorded separately.
+No final performance ratio or acceptance is claimed, and no collection/tuning
+retry follows the actual measurement. Runtime remains byte-identical to the seal.
+
+**Owner STOP for lead review**, as decision3 requires after the final job.
+Healthy performance, formal/held-out/RSS acceptance and independent review
+remain with the lead. No origin push or main merge. Owner correctness is
+qualified; S3c is not declared finally accepted.

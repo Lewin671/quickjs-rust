@@ -1,0 +1,159 @@
+STAGE build_quieting: 0.030 s
+STAGE build_base: 1.054 s
+   Compiling qjs-unicode v0.1.0 (/private/var/folders/kg/mznmn9cd7_9f7rzcc0q9lcj00000gn/T/qjs-triage-q39tsxt8/source/crates/qjs-unicode)
+   Compiling qjs-ast v0.1.0 (/private/var/folders/kg/mznmn9cd7_9f7rzcc0q9lcj00000gn/T/qjs-triage-q39tsxt8/source/crates/qjs-ast)
+   Compiling qjs-cli v0.1.0 (/private/var/folders/kg/mznmn9cd7_9f7rzcc0q9lcj00000gn/T/qjs-triage-q39tsxt8/source/crates/qjs-cli)
+   Compiling qjs-lexer v0.1.0 (/private/var/folders/kg/mznmn9cd7_9f7rzcc0q9lcj00000gn/T/qjs-triage-q39tsxt8/source/crates/qjs-lexer)
+   Compiling qjs-parser v0.1.0 (/private/var/folders/kg/mznmn9cd7_9f7rzcc0q9lcj00000gn/T/qjs-triage-q39tsxt8/source/crates/qjs-parser)
+   Compiling qjs-runtime v0.1.0 (/private/var/folders/kg/mznmn9cd7_9f7rzcc0q9lcj00000gn/T/qjs-triage-q39tsxt8/source/crates/qjs-runtime)
+warning: method `identity` is never used
+   --> crates/qjs-runtime/src/bytecode/named_property_cache.rs:105:8
+    |
+104 | impl Resolution {
+    | --------------- method in this implementation
+105 |     fn identity(&self) -> Option<(u8, usize)> {
+    |        ^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: field `reserved` is never read
+  --> crates/qjs-runtime/src/value/layout/mod.rs:95:5
+   |
+90 | pub(crate) struct ShapeEntry {
+   |                   ---------- field in this struct
+...
+95 |     reserved: u16,
+   |     ^^^^^^^^
+   |
+   = note: `ShapeEntry` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: method `verify_position` is never used
+   --> crates/qjs-runtime/src/value/layout/storage.rs:175:19
+    |
+137 | impl Layout {
+    | ----------- method in this implementation
+...
+175 |     pub(super) fn verify_position(&self, key: KeyId) -> Option<usize> {
+    |                   ^^^^^^^^^^^^^^^
+
+warning: method `is_empty` is never used
+  --> crates/qjs-runtime/src/value/layout/transitions.rs:37:19
+   |
+15 | impl Transitions {
+   | ---------------- method in this implementation
+...
+37 |     pub(super) fn is_empty(&self) -> bool {
+   |                   ^^^^^^^^
+
+warning: methods `transitions_empty` and `next_order` are never used
+  --> crates/qjs-runtime/src/value/layout/links.rs:47:19
+   |
+13 | impl Layout {
+   | ----------- methods in this implementation
+...
+47 |     pub(super) fn transitions_empty(&self) -> bool {
+   |                   ^^^^^^^^^^^^^^^^^
+...
+52 |     pub(super) fn next_order(&self) -> u32 {
+   |                   ^^^^^^^^^^
+
+warning: method `identity` is never used
+  --> crates/qjs-runtime/src/value/named.rs:34:19
+   |
+24 | impl WeakTarget {
+   | --------------- method in this implementation
+...
+34 |     pub(crate) fn identity(&self) -> (u8, usize) {
+   |                   ^^^^^^^^
+
+warning: `qjs-runtime` (lib) generated 6 warnings
+    Finished `release` profile [optimized] target(s) in 1m 17s
+STAGE build_candidate: 78.493 s
+STAGE prepare_workloads: 0.373 s
+STAGE settle_and_launch: 1.289 s
+COLLECT 0 0 broad/array_allocation
+COLLECT 1 0 broad/array_dynamic_read
+COLLECT 2 0 broad/array_index_of
+COLLECT 3 0 broad/array_read
+COLLECT 1 0 broad/branch_arithmetic
+COLLECT 3 0 broad/captured_write
+COLLECT 0 0 broad/array_write
+COLLECT 2 0 broad/captured_read
+COLLECT 3 0 broad/function_call_reordered
+COLLECT 1 0 broad/dynamic_method_call
+COLLECT 0 0 broad/closure_allocation_call
+COLLECT 2 0 broad/empty_loop
+COLLECT 1 0 broad/global_read
+COLLECT 3 0 broad/many_locals_call
+COLLECT 0 0 broad/function_call_two_args
+COLLECT 2 0 broad/local_read
+COLLECT 1 0 broad/method_call
+COLLECT 3 0 broad/plain_function_call
+COLLECT 0 0 broad/math_abs
+COLLECT 2 0 broad/object_allocation
+COLLECT 1 0 broad/property_read
+COLLECT 0 0 broad/property_dynamic_read
+COLLECT 3 0 broad/string_slice
+COLLECT 2 0 broad/property_write
+COLLECT 1 0 development/big.js/arith
+COLLECT 0 0 broad/top_level_function_call
+COLLECT 3 0 development/graphlib/paths
+COLLECT 2 0 development/diff/compare
+COLLECT 0 0 development/immutable/persistent
+COLLECT 3 0 development/matter-js/simulate
+COLLECT 1 0 development/js-yaml/document
+COLLECT 0 0 development/meriyah/parse
+COLLECT 3 0 external/jetstream3-js-subset/cdjs
+COLLECT 2 0 development/lodash/transform
+COLLECT 1 0 development/moment/dates
+COLLECT 3 0 external/jetstream3-js-subset/stanford-crypto-aes
+COLLECT 0 0 external/jetstream3-js-subset/gaussian-blur
+COLLECT 2 0 development/papaparse/csv
+COLLECT 3 0 external/kraken-1.1/audio-fft
+COLLECT 0 0 external/kraken-1.1/ai-astar
+COLLECT 3 0 external/kraken-1.1/imaging-gaussian-blur
+COLLECT 2 0 external/jetstream3-js-subset/raytrace-public-class-fields
+COLLECT 2 0 external/kraken-1.1/audio-dft
+COLLECT 0 0 external/kraken-1.1/audio-oscillator
+COLLECT 2 0 external/kraken-1.1/imaging-desaturate
+COLLECT 0 0 external/kraken-1.1/json-parse-financial
+COLLECT 1 0 external/jetstream3-js-subset/hash-map
+COLLECT 0 0 external/kraken-1.1/stanford-crypto-pbkdf2
+COLLECT 2 0 external/kraken-1.1/stanford-crypto-aes
+COLLECT 1 0 external/kraken-1.1/audio-beat-detection
+COLLECT 0 0 external/sunspider-1.0/3d-raytrace
+COLLECT 2 0 external/sunspider-1.0/3d-cube
+COLLECT 1 0 external/kraken-1.1/imaging-darkroom
+COLLECT 0 0 external/sunspider-1.0/access-nsieve
+COLLECT 2 0 external/sunspider-1.0/access-fannkuch
+COLLECT 0 0 external/sunspider-1.0/bitops-nsieve-bits
+COLLECT 2 0 external/sunspider-1.0/bitops-bits-in-byte
+COLLECT 0 0 external/sunspider-1.0/crypto-sha1
+COLLECT 1 0 external/kraken-1.1/json-stringify-tinderbox
+COLLECT 3 0 external/kraken-1.1/stanford-crypto-ccm
+COLLECT 2 0 external/sunspider-1.0/crypto-aes
+compare: layout shard 0 failed: DISTURBED: invalid pairs exceed 20% cap
+compare: layout shard 1 failed: DISTURBED: invalid pairs exceed 20% cap
+compare: layout shard 2 failed: DISTURBED: invalid pairs exceed 20% cap
+compare: layout shard 3 failed: DISTURBED: invalid pairs exceed 20% cap
+STAGE collection: 309.520 s
+Triage: unclear (candidate/base; lower is faster).
+Diagnostic only: triage cannot promote anything, spend/reset a plan attempt, waive a required run, select an acceptance run to keep, or change an existing decision. Five-pair 95% bootstrap intervals are exploratory, unadjusted, and do not cover layout bias or unmeasured cases. Natural layout only; no formal precision or complete-portfolio claim.
+
+| case | wall ratio [95% exploratory interval] | instructions [95% exploratory interval] |
+| --- | ---: | ---: |
+Incomplete: DISTURBED: worker pair caps failed: DISTURBED: invalid pairs exceed 20% cap; DISTURBED: invalid pairs exceed 20% cap; DISTURBED: invalid pairs exceed 20% cap; DISTURBED: invalid pairs exceed 20% cap
+
+Stage seconds: {"build_base": 1.053805646020919, "build_candidate": 78.49278142210096, "build_quieting": 0.02997911791317165, "collection": 309.52026210399345, "command_total": 391.1282111010514, "end_to_end": 451.8842816352844, "prepare_workloads": 0.37338959192857146, "queue_quieting": 60.75935459136963, "settle_and_launch": 1.2890696628019214, "validate_and_freeze": 0.1601958719547838}
+Budget met (includes queue quieting, excludes waiting behind jobs): True
+
+Traceback (most recent call last):
+  File "<stdin>", line 9, in <module>
+  File "/Users/qingyingliu/.local/share/uv/python/cpython-3.13.16-macos-x86_64-none/lib/python3.13/subprocess.py", line 578, in run
+    raise CalledProcessError(retcode, process.args,
+                             output=stdout, stderr=stderr)
+subprocess.CalledProcessError: Command '['./scripts/quick-triage.sh', '--base', '8322fc98', '--candidate', 'e37d687107dffc5aa794b09fecbdf29958617b0d', '--target', 'broad/array_allocation', '--target', 'broad/array_dynamic_read', '--target', 'broad/array_index_of', '--target', 'broad/array_read', '--target', 'broad/array_write', '--target', 'broad/branch_arithmetic', '--target', 'broad/captured_read', '--target', 'broad/captured_write', '--target', 'broad/closure_allocation_call', '--target', 'broad/dynamic_method_call', '--target', 'broad/empty_loop', '--target', 'broad/function_call_reordered', '--target', 'broad/function_call_two_args', '--target', 'broad/global_read', '--target', 'broad/local_read', '--target', 'broad/many_locals_call', '--target', 'broad/math_abs', '--target', 'broad/method_call', '--target', 'broad/object_allocation', '--target', 'broad/plain_function_call', '--target', 'broad/property_dynamic_read', '--target', 'broad/property_read', '--target', 'broad/property_write', '--target', 'broad/string_slice', '--target', 'broad/top_level_function_call', '--target', 'development/big.js/arith', '--target', 'development/diff/compare', '--target', 'development/graphlib/paths', '--target', 'development/immutable/persistent', '--target', 'development/js-yaml/document', '--target', 'development/lodash/transform', '--target', 'development/matter-js/simulate', '--target', 'development/meriyah/parse', '--target', 'development/moment/dates', '--target', 'development/papaparse/csv', '--target', 'external/jetstream3-js-subset/cdjs', '--target', 'external/jetstream3-js-subset/gaussian-blur', '--target', 'external/jetstream3-js-subset/hash-map', '--target', 'external/jetstream3-js-subset/raytrace-public-class-fields', '--target', 'external/jetstream3-js-subset/stanford-crypto-aes', '--target', 'external/kraken-1.1/ai-astar', '--target', 'external/kraken-1.1/audio-beat-detection', '--target', 'external/kraken-1.1/audio-dft', '--target', 'external/kraken-1.1/audio-fft', '--target', 'external/kraken-1.1/audio-oscillator', '--target', 'external/kraken-1.1/imaging-darkroom', '--target', 'external/kraken-1.1/imaging-desaturate', '--target', 'external/kraken-1.1/imaging-gaussian-blur', '--target', 'external/kraken-1.1/json-parse-financial', '--target', 'external/kraken-1.1/json-stringify-tinderbox', '--target', 'external/kraken-1.1/stanford-crypto-aes', '--target', 'external/kraken-1.1/stanford-crypto-ccm', '--target', 'external/kraken-1.1/stanford-crypto-pbkdf2', '--target', 'external/kraken-1.1/stanford-crypto-sha256-iterative', '--target', 'external/sunspider-1.0/3d-cube', '--target', 'external/sunspider-1.0/3d-morph', '--target', 'external/sunspider-1.0/3d-raytrace', '--target', 'external/sunspider-1.0/access-binary-trees', '--target', 'external/sunspider-1.0/access-fannkuch', '--target', 'external/sunspider-1.0/access-nbody', '--target', 'external/sunspider-1.0/access-nsieve', '--target', 'external/sunspider-1.0/bitops-3bit-bits-in-byte', '--target', 'external/sunspider-1.0/bitops-bits-in-byte', '--target', 'external/sunspider-1.0/bitops-bitwise-and', '--target', 'external/sunspider-1.0/bitops-nsieve-bits', '--target', 'external/sunspider-1.0/controlflow-recursive', '--target', 'external/sunspider-1.0/crypto-aes', '--target', 'external/sunspider-1.0/crypto-md5', '--target', 'external/sunspider-1.0/crypto-sha1', '--target', 'external/sunspider-1.0/date-format-tofte', '--target', 'external/sunspider-1.0/date-format-xparb', '--target', 'external/sunspider-1.0/math-cordic', '--target', 'external/sunspider-1.0/math-partial-sums', '--target', 'external/sunspider-1.0/math-spectral-norm', '--target', 'external/sunspider-1.0/regexp-dna', '--target', 'external/sunspider-1.0/string-base64', '--target', 'external/sunspider-1.0/string-fasta', '--target', 'external/sunspider-1.0/string-tagcloud', '--target', 'external/sunspider-1.0/string-unpack-code', '--target', 'external/sunspider-1.0/string-validate-input', '--target', 'sentinel/capturing_closure_call', '--target', 'sentinel/heterogeneous_property_read', '--target', 'sentinel/polymorphic_call_site', '--target', 'sentinel/prototype_method_call', '--target', 'sentinel/recursive_call_tree', '--target', 'sentinel/string_key_map_churn', '--output', '/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261102T092436Z-t077-s3c2-final/out/triage']' returned non-zero exit status 2.
+warning: DISTURBED: other processes took two or more cores in 2 samples (see intruders.log); measure again:
+   2 searchpartyuseragent
+   1 XprotectService
+job 20261102T092436Z-t077-s3c2-final: exit 1 after 392 s

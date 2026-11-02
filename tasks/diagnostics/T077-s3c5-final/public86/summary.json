@@ -1,0 +1,45 @@
+{
+  "job": "20261102T092436Z-t077-s3c2-final",
+  "candidate": "e37d687107dffc5aa794b09fecbdf29958617b0d",
+  "base": "8322fc983da20800ce612ad148781aea30e28d08",
+  "status": "done 1",
+  "verdict": "unclear",
+  "error": "DISTURBED: worker pair caps failed: DISTURBED: invalid pairs exceed 20% cap; DISTURBED: invalid pairs exceed 20% cap; DISTURBED: invalid pairs exceed 20% cap; DISTURBED: invalid pairs exceed 20% cap",
+  "healthy": false,
+  "lane_aggregates_available": false,
+  "builds": {
+    "base": {
+      "cache_hit": true,
+      "cache_key": "4c20d0a2f737aaa532faf646d646f39ce08299c76eab6aee8283f14c105e8fc4",
+      "cache_spec_sha256": "eb97e1e25facf6ad38d83a0ee72a798bc5caf2458e23459c896d5ecb424ae29f",
+      "path": "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261102T092436Z-t077-s3c2-final/out/triage/base000/qjs",
+      "revision": "8322fc983da20800ce612ad148781aea30e28d08",
+      "sha256": "a02658e5e8a8d23f5da0197fcf29266d82da35f0ba511d09d4461c8c4a71b09d"
+    },
+    "candidate": {
+      "cache_hit": false,
+      "cache_key": "8f5e15ff266ad2f83fbb7504ccabdcc8670c18d1b788b23f7cc8169ef9bbe966",
+      "cache_spec_sha256": "9466d72aa17a184ba3349043a50371f17e7ccf8316ba6a9d5e9cfc126fc87be5",
+      "path": "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261102T092436Z-t077-s3c2-final/out/triage/cand000/qjs",
+      "revision": "e37d687107dffc5aa794b09fecbdf29958617b0d",
+      "sha256": "4779454e0943db30519e52e50ca30cc178b5136d2b7ec9f3cee5cae4ee7df90c"
+    }
+  },
+  "budget_met": true,
+  "stage_seconds": {
+    "build_base": 1.053805646020919,
+    "build_candidate": 78.49278142210096,
+    "build_quieting": 0.02997911791317165,
+    "collection": 309.52026210399345,
+    "command_total": 391.1282111010514,
+    "end_to_end": 451.8842816352844,
+    "prepare_workloads": 0.37338959192857146,
+    "queue_quieting": 60.75935459136963,
+    "settle_and_launch": 1.2890696628019214,
+    "validate_and_freeze": 0.1601958719547838
+  },
+  "runtime_frozen": true,
+  "additional_collection_after_this_job": false,
+  "intruder_warning": "other processes took two or more cores in 2 samples; searchpartyuseragent and XprotectService reported",
+  "request_sha256": "d1ce643ed0c3e62b30e75a9a9f5685b226974c273a195872f0c11a757137ff9f"
+}
