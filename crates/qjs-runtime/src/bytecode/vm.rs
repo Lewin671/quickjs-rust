@@ -543,7 +543,7 @@ impl<'a, 's, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, 's, F> {
         let mut pc = self.current.ip;
         'dispatch: loop {
             #[cfg(debug_assertions)]
-            self.verify_dispatch_interval::<SLOW>(authority_at_entry);
+            self.verify_dispatch_interval::<SLOW>(authority_at_entry, pc, code);
             let Some(op) = code.get(pc) else {
                 self.current.ip = pc;
                 return Err(RuntimeError {

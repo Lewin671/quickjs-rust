@@ -79,25 +79,45 @@ impl<'a, 's, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, 's, F> {
     /// this is exactly one activation, and the loop below runs once.
     pub(super) fn run_completion(&mut self) -> Result<Completion, RuntimeError> {
         loop {
-            match self.run_current_activation() {
+            let exit = self.run_current_activation();
+            match exit {
                 Ok(FrameExit::RefreshBindings) => continue,
-                Ok(FrameExit::EnterFrame) => {
-                    let (frame, continuation) = self
-                        .pending_frame_entry
-                        .take()
-                        .expect("an EnterFrame exit records the frame it wants entered");
-                    self.push_frame(frame, continuation);
+                Ok(FrameExit::Completed(completion)) if self.callers.is_empty() => {
+                    return Ok(completion);
                 }
-                Ok(FrameExit::Completed(completion)) => match self.callers.pop() {
-                    None => return Ok(completion),
-                    Some(caller) => self.resume_caller(caller, completion)?,
-                },
-                Err(error) => match self.callers.pop() {
-                    None => return Err(error),
-                    Some(caller) => self.resume_caller_with_error(caller, error)?,
-                },
+                Err(error) if self.callers.is_empty() => return Err(error),
+                exit => self.settle_stacked_exit(exit)?,
             }
         }
+    }
+
+    /// Keep dormant multi-frame moves out of the recursive single-frame driver.
+    /// In particular, taking a pending inline frame needs a full FrameState
+    /// temporary even though production never enters that branch.
+    #[inline(never)]
+    fn settle_stacked_exit(
+        &mut self,
+        exit: Result<FrameExit, RuntimeError>,
+    ) -> Result<(), RuntimeError> {
+        match exit {
+            Ok(FrameExit::RefreshBindings) => {}
+            Ok(FrameExit::EnterFrame) => {
+                let (frame, continuation) = self
+                    .pending_frame_entry
+                    .take()
+                    .expect("an EnterFrame exit records the frame it wants entered");
+                self.push_frame(frame, continuation);
+            }
+            Ok(FrameExit::Completed(completion)) => {
+                let caller = self.callers.pop().expect("stacked completion has a caller");
+                self.resume_caller(caller, completion)?;
+            }
+            Err(error) => {
+                let caller = self.callers.pop().expect("stacked error has a caller");
+                self.resume_caller_with_error(caller, error)?;
+            }
+        }
+        Ok(())
     }
 
     /// Restores `caller` and delivers the completion of the frame above it.

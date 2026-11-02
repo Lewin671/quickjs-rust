@@ -96,12 +96,56 @@ impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
     }
     #[cfg(debug_assertions)]
     #[inline(never)]
-    pub(super) fn verify_dispatch_interval<const SLOW: bool>(&self, authority_at_entry: u128) {
+    pub(super) fn verify_dispatch_interval<const SLOW: bool>(
+        &self,
+        authority_at_entry: u128,
+        pc: usize,
+        code: &[super::Op],
+    ) {
+        // A boundary has yet to install its target scope. Every ordinary op
+        // must already agree, including after jumps, handlers and resumption.
+        if SLOW
+            && !matches!(code.get(pc), Some(super::Op::BindingBoundary { .. }))
+            && let Some(active) = self.current.binding_scope
+            && let Some(expected) = self.current.bytecode.binding_plan.pc_scopes.get(pc)
+        {
+            debug_assert_eq!(active, *expected, "missing binding checkpoint at pc {pc}");
+        }
         debug_assert!(
             SLOW || (self.current.binding_scope.is_none()
                 && !self.current.reference_hooks
                 && self.current.authoritative_slots == authority_at_entry),
             "the fast dispatch loop outlived a slow-path change"
         );
+    }
+}
+
+#[cfg(all(test, debug_assertions))]
+mod tests {
+    use super::*;
+    #[cfg(debug_assertions)]
+    #[test]
+    #[should_panic(expected = "missing binding checkpoint")]
+    fn dispatch_verifier_rejects_a_scope_transfer_without_a_checkpoint() {
+        let script = qjs_parser::parse_script("let a=1; {let b=2; b;}").unwrap();
+        let bytecode = crate::bytecode::compile_script(&script).unwrap();
+        let (mut runtime, activation) = crate::context::HostRoot::script().into_parts();
+        let mut vm = Vm::new(&bytecode, &mut runtime, activation).unwrap();
+        let pc = bytecode
+            .binding_plan
+            .pc_scopes
+            .iter()
+            .enumerate()
+            .find(|(pc, scope)| {
+                scope.0 != 0
+                    && !matches!(
+                        bytecode.code[*pc],
+                        crate::bytecode::ir::Op::BindingBoundary { .. }
+                    )
+            })
+            .map(|(pc, _)| pc)
+            .expect("nested binding scope");
+        vm.current.binding_scope = Some(crate::binding::ScopeId(0));
+        vm.verify_dispatch_interval::<true>(vm.current.authoritative_slots, pc, &bytecode.code);
     }
 }

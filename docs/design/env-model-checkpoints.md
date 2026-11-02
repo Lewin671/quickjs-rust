@@ -11,7 +11,9 @@ stream. ReferenceEvent.pc names the actual operation; its preceding checkpoint
 holds the event index. Source byte spans are unchanged. Tier CFG/stack/recovery
 maps derive from the final stream, never from obsolete instruction offsets.
 
-Plain interpreter operations poll no scope/reference side tables. A checkpoint
+Production interpreter operations poll no scope/reference side tables. Debug
+builds cross-check the active scope against pc_scopes before each ordinary
+operation; a boundary may install its target scope before that check. A checkpoint
 updates scope, selects/reads/writes a reference, and cleans up at lifetime ends,
 abrupt edges and handler entries. Selected bases survive RHS effects and
 suspension. Promotion before selection restarts at the checkpoint; completed

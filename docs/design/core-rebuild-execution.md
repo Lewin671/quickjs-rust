@@ -96,6 +96,11 @@ need JS use cold resumable operation records, returning CallRequest once, then
 continuing at a saved semantic step. They cannot recursively invoke eval through
 a supposedly synchronous helper. Preserve proxy trap order, construct/new.target,
 derived-this and field failure rules. Count JS-depth separately from native depth.
+Frame-layout qualification runs the complete default inventory in
+`tasks/diagnostics/T077-s3a-depth-probe.py` in debug and release, against the
+preceding accepted milestone with `--baseline`: native callbacks, call/apply,
+delegation, try/catch, construct, spread, arguments, super and general-VM fallback.
+Use the ordinary CLI main-thread stack; no stack-policy override.
 
 ## Native boundary
 
