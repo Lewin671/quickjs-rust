@@ -132,3 +132,14 @@ arm64/x86 type layouts agree. Call slopes and hash-map/method controls preserve
 the required gains. Fannkuch's small excess stays visible for final recheck.
 Order regeneration and the complete final matrix are next, before source
 freeze and the single final public86. Formal/held-out/RSS remain lead-owned.
+
+## C5: native orders
+
+The [native-order receipt](T077-s3c5-order/README.md) records the required fresh
+x86 public profile, job **20261102T071157Z-t077-s3c2-order**, with strict audit.
+ARM sampling failed and is recorded as such; its prior ranking is rebound to
+unique current symbols and passes strict audit. Neither uses an offset scan
+or held-out inputs. Runtime source remains exactly 2aa117b7. The profiler now
+reaps fast targets and bounds sampler waits; its regressions and tool gate pass.
+Final binaries and the complete C5 correctness/exact matrix are next, followed
+by the single frozen final public86.

@@ -1,0 +1,809 @@
+{
+  "prior_rank_preserved": true,
+  "dropped": [
+    {
+      "old": "__RNvNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode2vm25eval_direct_call_bytecode",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvNtCsg55jX0GwzBC_3std2rt19lang_start_internal",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNCINvNtCsg55jX0GwzBC_3std2rt10lang_startNtNtB6_7process8ExitCodeE0Csdgx7hTukmJ6_3qjs",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvNtCs9nYd1Hk1rek_11qjs_runtime8bytecode34eval_bytecode_with_module_resolver",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvNtNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode10compact_fn10activation18try_run_standalone",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvNtNtNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode10compact_fn4wide10activation3run",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvNtNtNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode10compact_fn4wide10activation19exit_to_interpreter",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvNtNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode10compact_fn10activation3run",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvNtNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode10compact_fn10activation21try_run_in_caller_env",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvNtNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode2vm11wide_resume27resume_direct_call_bytecode",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvNtNtNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode10compact_fn4wide10activation19run_typed_loop_here",
+      "live_definitions": 2
+    },
+    {
+      "old": "__RNvNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode24vm_numeric_mutation_loop29try_run_numeric_mutation_loop",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode7vm_callNtNtB4_2vm2Vm23call_callee_with_marker",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode17vm_virtual_objectNtNtB4_2vm2Vm21run_virtual_object_op",
+      "live_definitions": 2
+    },
+    {
+      "old": "__RNvMs2_NtNtNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode24vm_numeric_mutation_loop5dense6legacyNtB5_22LegacyDynamicDensePlan7try_run",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMs2_NtNtNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode24vm_numeric_mutation_loop5dense6legacyNtB5_22LegacyDynamicDensePlan19try_run_suppressing",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RINvMs4_NtNtCs9nYd1Hk1rek_11qjs_runtime5value5arrayNtB6_8ArrayRef32with_dense_readable_element_setsNtNtNtNtBa_8bytecode24vm_numeric_mutation_loop5dense17DynamicProgramRunNCNvMs2_NtB1B_6legacyNtB2Q_22LegacyDynamicDensePlan7try_runs2_0EBa_",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMs7_NtNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode24vm_numeric_mutation_loop5denseNtB5_16DynamicDensePlan7try_run",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMs_NtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode24vm_numeric_mutation_loopNtB4_11SpecialPlan7try_run",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMs0_NtNtNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode24vm_numeric_mutation_loop5dense6nestedNtB5_15NestedDensePlan7try_run",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RINvMs4_NtNtCs9nYd1Hk1rek_11qjs_runtime5value5arrayNtB6_8ArrayRef37with_distinct_dense_writable_elementsNtNtNtNtNtBa_8bytecode24vm_numeric_mutation_loop5dense6nested13RegionOutcomeNCNvMs0_B1G_NtB1G_15NestedDensePlan7try_runs0_0EBa_",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvNtNtNtNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode24vm_numeric_mutation_loop5dense6legacy11typed_array7try_run",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNCNvMs7_NtNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode24vm_numeric_mutation_loop5denseNtB7_16DynamicDensePlan24try_run_hole_tail_append0Bd_",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RINvMs4_NtNtCs9nYd1Hk1rek_11qjs_runtime5value5arrayNtB6_8ArrayRef37with_distinct_dense_writable_elementsNtNtNtNtBa_8bytecode24vm_numeric_mutation_loop5dense17DynamicProgramRunNCNvMs7_B1G_NtB1G_16DynamicDensePlan7try_runs6_0EBa_",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMs5_NtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode2vmNtB5_2Vm16construct_callee",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMs4_NtNtCs9nYd1Hk1rek_11qjs_runtime5value5arrayNtB5_8ArrayRef28direct_dense_index_of_number",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RINvMs4_NtNtCs9nYd1Hk1rek_11qjs_runtime5value5arrayNtB6_8ArrayRef32with_dense_readable_element_setsNtNtNtNtBa_8bytecode24vm_numeric_mutation_loop5dense17DynamicProgramRunNCNvMs2_NtB1B_6legacyNtB2Q_22LegacyDynamicDensePlan7try_runs_0EBa_",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvNtNtNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode10compact_fn4wide10activation17enter_constructor",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMs7_NtNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode24vm_numeric_mutation_loop5denseNtB5_16DynamicDensePlan24try_run_hole_tail_append",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RINvMs4_NtNtCs9nYd1Hk1rek_11qjs_runtime5value5arrayNtB6_8ArrayRef49with_dense_hole_tail_append_and_readable_elementsNtNtNtNtBa_8bytecode24vm_numeric_mutation_loop5dense17DynamicProgramRunNCNvMs7_B1S_NtB1S_16DynamicDensePlan24try_run_hole_tail_append0EBa_",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvNtNtNtCs9nYd1Hk1rek_11qjs_runtime6string9prototype8sequence34numeric_string_slice_code_unit_len",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvNtCs9nYd1Hk1rek_11qjs_runtime6native20call_native_function",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RINvNtCsl8K0bEFm1U0_4core3ptr13drop_in_placeNtNtCs2bPPZcABlJN_7qjs_ast10expression4ExprECs9nYd1Hk1rek_11qjs_runtime",
+      "live_definitions": 6
+    },
+    {
+      "old": "__RNvMNtNtNtCs9nYd1Hk1rek_11qjs_runtime5value6object10slot_readsNtB4_9ObjectRef23literal_data_slot_value",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMNtNtNtCs9nYd1Hk1rek_11qjs_runtime5value6object10slot_readsNtB4_9ObjectRef17literal_data_slot",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvNtCs9nYd1Hk1rek_11qjs_runtime6native18call_native_family",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvXs3_NtNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode24vm_numeric_mutation_loop5denseNtB5_11MultiAccessNtB5_11DenseAccess13commit_stores",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMs_NtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode8compilerNtB4_8Compiler24compile_into_with_hoists",
+      "live_definitions": 2
+    },
+    {
+      "old": "__RNvMNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode16vm_loop_dispatchNtB2_12LoopPlanView12for_bytecode",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RINvNtCsl8K0bEFm1U0_4core3ptr13drop_in_placeNtNtNtCs9nYd1Hk1rek_11qjs_runtime5value6object10ObjectDataEBM_",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvNtNtCs9nYd1Hk1rek_11qjs_runtime6native6arrays17call_array_native",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvNtNtCs9nYd1Hk1rek_11qjs_runtime5array6splice29native_array_prototype_splice",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RINvNtCsl8K0bEFm1U0_4core3ptr13drop_in_placeNtNtCs2bPPZcABlJN_7qjs_ast9statement4StmtECs9nYd1Hk1rek_11qjs_runtime",
+      "live_definitions": 5
+    },
+    {
+      "old": "__RNvMs4_NtNtCs9nYd1Hk1rek_11qjs_runtime5value6objectNtB5_15PropertyStorage6insert",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMs4_NtCs1OjIl8oxbrv_5alloc7raw_vecNtB5_11RawVecInner11finish_growCs9nYd1Hk1rek_11qjs_runtime",
+      "live_definitions": 11
+    },
+    {
+      "old": "__RNCNvMs_NtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode8compilerNtB6_8Compiler24compile_into_with_hoists0Ba_",
+      "live_definitions": 2
+    },
+    {
+      "old": "__RNvMNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode13compiler_exprNtNtB4_8compiler8Compiler12compile_expr",
+      "live_definitions": 3
+    },
+    {
+      "old": "__RNvMs4_NtNtCs9nYd1Hk1rek_11qjs_runtime5value6objectNtB5_15PropertyStorage7get_mut",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvNtNtNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode10compact_fn4wide10activation12inline_entry",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMNtNtNtCs9nYd1Hk1rek_11qjs_runtime5value6object10slot_readsNtB4_9ObjectRef16shared_data_slot",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMs4_NtNtCs9nYd1Hk1rek_11qjs_runtime5value6objectNtB5_15PropertyStorage3get",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMsF_NtCs1OjIl8oxbrv_5alloc3vecINtB5_3VecNtNtCs9nYd1Hk1rek_11qjs_runtime5value5ValueE8push_mutBJ_",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode20named_property_cacheNtB2_18NamedPropertyCache3get",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvNtNtCs9nYd1Hk1rek_11qjs_runtime6native7strings18call_string_native",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMs_NtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode8vm_propsNtNtB6_2vm2Vm21try_cached_get_string",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMs3_NtCs1OjIl8oxbrv_5alloc7raw_vecINtB5_6RawVecINtNtNtNtCsg55jX0GwzBC_3std11collections4hash3map7HashMapNtNtB7_6string6StringjEE8grow_oneCs9nYd1Hk1rek_11qjs_runtime",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMNtNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode2vm8rare_opsNtB4_2Vm11run_rare_op",
+      "live_definitions": 2
+    },
+    {
+      "old": "__RINvNtCsl8K0bEFm1U0_4core3ptr13drop_in_placeSNtNtCs9nYd1Hk1rek_11qjs_runtime5value5ValueEBL_",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvNtNtNtCs9nYd1Hk1rek_11qjs_runtime6string9prototype4case38native_string_prototype_locale_compare",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMs3_NtCs1OjIl8oxbrv_5alloc3vecINtB5_3VecNtNtCs9nYd1Hk1rek_11qjs_runtime5value5ValueE11extend_withBJ_",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode20named_property_cacheNtB2_18NamedPropertyCache5write",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNCNvMNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode17vm_virtual_objectNtNtB6_2vm2Vm21run_virtual_object_opsb_0B8_",
+      "live_definitions": 2
+    },
+    {
+      "old": "__RINvNtCsl8K0bEFm1U0_4core3ptr13drop_in_placeINtNtB4_4cell10UnsafeCellNtNtNtCs9nYd1Hk1rek_11qjs_runtime5value6object15PropertyStorageEEB1b_",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMs8_NtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode10typed_loopNtB5_12InheritedWay4read",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvXs_NtNtCs1OjIl8oxbrv_5alloc3vec21spec_from_iter_nestedINtB6_3VecTINtNtB8_2rc2RceENtNtNtCs9nYd1Hk1rek_11qjs_runtime5value8property8PropertyEEINtB4_18SpecFromIterNestedB13_INtNtNtNtCsl8K0bEFm1U0_4core4iter8adapters3map3MapINtNtB6_9into_iter8IntoIterB14_ENCNvMs4_NtB1o_6objectNtB4d_15PropertyStorage7dynamic0EE9from_iterB1q_",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RINvNtCsl8K0bEFm1U0_4core3ptr13drop_in_placeTINtNtCs1OjIl8oxbrv_5alloc2rc2RceENtNtNtCs9nYd1Hk1rek_11qjs_runtime5value8property8PropertyEEB1k_",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMs1_NtNtCs9nYd1Hk1rek_11qjs_runtime5value5arrayNtB5_8ArrayRef12release_into",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RINvNvMs2_NtCs1OjIl8oxbrv_5alloc7raw_vecINtB8_11RawVecInnerpE7reserve21do_reserve_and_handleNtNtBa_5alloc6GlobalECs9nYd1Hk1rek_11qjs_runtime",
+      "live_definitions": 10
+    },
+    {
+      "old": "__RNvNtNtNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode10compact_fn4wide10activation26compute_fixed_inline_facts",
+      "live_definitions": 2
+    },
+    {
+      "old": "__RNvNtNtNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode10compact_fn4wide7compile14compile_traced",
+      "live_definitions": 6
+    },
+    {
+      "old": "__RINvMs3_NtCs1OjIl8oxbrv_5alloc3stre7replacecECs9nYd1Hk1rek_11qjs_runtime",
+      "live_definitions": 2
+    },
+    {
+      "old": "__RNvMs_NtNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode10compact_fn14creation_cacheNtB4_13CreationCache10try_create",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvXs3_NtNtCsl8K0bEFm1U0_4core4hash3sipINtB5_6HasherNtB5_11Sip13RoundsENtB7_6Hasher5writeCs9nYd1Hk1rek_11qjs_runtime",
+      "live_definitions": 2
+    },
+    {
+      "old": "__RNvMNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode13vm_frame_initNtNtB4_2vm2Vm58new_with_globals_upvalues_with_stack_and_direct_call_slots",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMNtNtNtCs9nYd1Hk1rek_11qjs_runtime5value6object10slot_readsNtB4_9ObjectRef25prototype_data_slot_value",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvXs_NtNtNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode10compact_fn4wide10loop_frameNtB4_13WideLoopFrameNtNtNtBa_10typed_loop5frame9LoopFrame21array_access_is_plain",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMNtNtNtCs9nYd1Hk1rek_11qjs_runtime5value6object10slot_readsNtB4_9ObjectRef33literal_prototype_data_slot_value",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RINvNtCsl8K0bEFm1U0_4core3ptr13drop_in_placeNtNtNtCs9nYd1Hk1rek_11qjs_runtime5value5array9ArrayDataEBM_",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode20named_property_cacheNtB2_18NamedPropertyCache6update",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvNtNtNtCs9nYd1Hk1rek_11qjs_runtime5value6object8teardown14defer_children",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode8vm_props15enumerable_keys",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMNtNtNtCs9nYd1Hk1rek_11qjs_runtime5value6object8teardownNtB4_9ObjectRef12release_into",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RINvNtNtCsl8K0bEFm1U0_4core4iter8adapters11try_processINtNtB2_3map3MapINtNtNtB6_5slice4iter4IterNtNtNtNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode24vm_numeric_mutation_loop5dense6legacy11ArraySourceENCNvMs2_B1y_NtB1y_22LegacyDynamicDensePlan7try_runs1_0ENtNtNtB1G_5value5array8ArrayRefINtNtB6_6option6OptionNtNtB6_7convert10InfallibleENCINvXsI_B4y_IB4w_INtNtCs1OjIl8oxbrv_5alloc3vec3VecB40_EEINtNtNtB4_6traits7collect12FromIteratorIB4w_B40_EE9from_iterBQ_E0B5B_EB1G_",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMsb_NtNtCs9nYd1Hk1rek_11qjs_runtime8function3envNtB5_7CallEnv3get",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMsb_NtNtCs9nYd1Hk1rek_11qjs_runtime8function3envNtB5_7CallEnv32new_function_frame_with_capacity",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMs6_NtNtCs9nYd1Hk1rek_11qjs_runtime5value6objectNtB5_9ObjectRef31create_absent_own_data_property",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RINvNtCsl8K0bEFm1U0_4core3ptr13drop_in_placeNtNtNtCs9nYd1Hk1rek_11qjs_runtime8function3env7CallEnvEBM_",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMs2_NtNtCs9nYd1Hk1rek_11qjs_runtime8function3envNtB5_13FrameBindings3get",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMNtNtNtCs9nYd1Hk1rek_11qjs_runtime5value6object10slot_readsNtB4_9ObjectRef22shared_data_slot_write",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RINvNtCsl8K0bEFm1U0_4core3ptr13drop_in_placeNtNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode2ir8BytecodeEBM_",
+      "live_definitions": 4
+    },
+    {
+      "old": "__RNvNtNtCs9nYd1Hk1rek_11qjs_runtime5array8sequence28native_array_prototype_slice",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMs4_NtNtCs9nYd1Hk1rek_11qjs_runtime5value5arrayNtB5_8ArrayRef19delete_indices_from",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvNtCs9nYd1Hk1rek_11qjs_runtime8bytecode29field_initializer_member_read",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMs2_NtNtCs9nYd1Hk1rek_11qjs_runtime8function5valueNtB5_22LazyFunctionProperties16ensure_allocated",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMsb_NtNtCs9nYd1Hk1rek_11qjs_runtime8function3envNtB5_7CallEnv29dynamic_function_realm_global",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvNtNtCs9nYd1Hk1rek_11qjs_runtime6native12typed_arrays23call_typed_array_native",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvNtCs1OjIl8oxbrv_5alloc2rc32rc_inner_layout_for_value_layout",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMs6_NtCs1OjIl8oxbrv_5alloc2rcINtB5_2RcINtNtCsl8K0bEFm1U0_4core4cell7RefCellINtNtB7_3vec3VecIB1f_NtNtCs9nYd1Hk1rek_11qjs_runtime5value5ValueEEEE9drop_slowB1D_",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvNtNtCs9nYd1Hk1rek_11qjs_runtime6native6regexp18call_regexp_native",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode2ir38collect_written_binding_names_from_ops",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvXNtNtCs1OjIl8oxbrv_5alloc3vec21spec_from_iter_nestedINtB4_3VecINtNtB6_2rc2RceEEINtB2_18SpecFromIterNestedB11_INtNtNtNtCsl8K0bEFm1U0_4core4iter8adapters6cloned6ClonedINtNtNtNtCsg55jX0GwzBC_3std11collections4hash3map4KeysB11_NtNtNtCs9nYd1Hk1rek_11qjs_runtime5value8property8PropertyEEE9from_iterB3I_",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RINvNtCsl8K0bEFm1U0_4core3ptr13drop_in_placeNtNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode2vm2VmEBM_",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RINvNtCsl8K0bEFm1U0_4core3ptr13drop_in_placeNtNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode2vm10FrameStateEBM_",
+      "live_definitions": 3
+    },
+    {
+      "old": "__RNvMs3_NtNtCs9nYd1Hk1rek_11qjs_runtime8function3envNtB5_15DynamicBindings3get",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMsb_NtNtCs9nYd1Hk1rek_11qjs_runtime8function3envNtB5_7CallEnv32replace_existing_realm_with_cell",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvNtNtNtCs9nYd1Hk1rek_11qjs_runtime6string9prototype6search31native_string_prototype_replace",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RINvMs2_NtNtCsg55jX0GwzBC_3std6thread5localINtB6_8LocalKeyINtNtCsl8K0bEFm1U0_4core4cell4CellTyyEEE4withNCNvMNtNtBa_4hash6randomNtB1I_11RandomState3new0B21_ECs9nYd1Hk1rek_11qjs_runtime",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RINvYNtNtNtCsg55jX0GwzBC_3std4hash6random11RandomStateNtNtCsl8K0bEFm1U0_4core4hash11BuildHasher8hash_oneRNtNtCs1OjIl8oxbrv_5alloc6string6StringECs9nYd1Hk1rek_11qjs_runtime",
+      "live_definitions": 2
+    },
+    {
+      "old": "__RNvNtNtCs9nYd1Hk1rek_11qjs_runtime5array8sequence29native_array_prototype_concat",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RINvXs0_NtNtNtCsl8K0bEFm1U0_4core4iter8adapters3mapINtB6_3MapINtNtNtNtCsg55jX0GwzBC_3std11collections4hash3map8IntoIterNtNtCs1OjIl8oxbrv_5alloc6string6StringNtNtCs9nYd1Hk1rek_11qjs_runtime5value5ValueENCNvMs6_NtB2x_6objectNtB3l_9ObjectRef19with_prototype_slot0ENtNtNtBa_6traits8iterator8Iterator4folduNCINvNvB4b_8for_each4callTINtNtB1X_2rc2RceENtNtB2x_8property8PropertyENCINvXs1i_NtCsfNEzM6rR6Th_9hashbrown3mapINtB67_7HashMapB5f_B5w_INtNtBc_4hash18BuildHasherDefaultNtNtB2x_9name_hash10NameHasherEEINtNtB4f_7collect6ExtendB5e_E6extendBN_E0E0EB2z_",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMs_NtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode8compilerNtB4_8Compiler16compile_function",
+      "live_definitions": 2
+    },
+    {
+      "old": "__RNvNtNtCs9nYd1Hk1rek_11qjs_runtime6object10descriptor28define_property_on_value_key",
+      "live_definitions": 2
+    },
+    {
+      "old": "__RINvMs2_NtNtCsg55jX0GwzBC_3std6thread5localINtB6_8LocalKeyINtNtCsl8K0bEFm1U0_4core4cell7RefCellNtNtNtNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode10compact_fn4wide10activation12FrameStorageEE4withNCNvB1x_3runs_0B1v_EB1F_",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvNtNtCs9nYd1Hk1rek_11qjs_runtime6native4core16call_core_native",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode13vm_frame_initNtNtB4_2vm2Vm3new",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvNtNtCs9nYd1Hk1rek_11qjs_runtime6string8indexing17this_string_value",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMsb_NtNtCs9nYd1Hk1rek_11qjs_runtime8function3envNtB5_7CallEnv19module_import_value",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode16upvalue_resolver16resolve_upvalues",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode20named_property_cacheNtB2_18NamedPropertyCache22remember_receiver_miss",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMsF_NtCs1OjIl8oxbrv_5alloc3vecINtB5_3VecNtNtNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode14virtual_object4flow13AbstractValueE8push_mutBN_",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMs7_NtNtCs9nYd1Hk1rek_11qjs_runtime8function5valueNtB5_8Function17new_user_compiled",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvNtNtCs9nYd1Hk1rek_11qjs_runtime8function4call12function_env",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RINvMs1_NtCsfNEzM6rR6Th_9hashbrown3mapINtB6_7HashMapNtNtCs1OjIl8oxbrv_5alloc6string6StringNtNtNtCs9nYd1Hk1rek_11qjs_runtime5value8property8PropertyNtNtNtCsg55jX0GwzBC_3std4hash6random11RandomStateE6removeBO_EB1w_",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvNtNtCs9nYd1Hk1rek_11qjs_runtime5array7species20array_species_create",
+      "live_definitions": 2
+    },
+    {
+      "old": "__RNvNtNtCs9nYd1Hk1rek_11qjs_runtime5array7species26species_is_intrinsic_array",
+      "live_definitions": 2
+    },
+    {
+      "old": "__RNvNtCs9nYd1Hk1rek_11qjs_runtime6global22native_global_unescape",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMsb_NtNtCs9nYd1Hk1rek_11qjs_runtime8function3envNtB5_7CallEnv15snapshot_locals",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RINvXs1e_NtNtNtCsg55jX0GwzBC_3std11collections4hash3mapINtB7_7HashMapNtNtCs1OjIl8oxbrv_5alloc6string6StringNtNtCs9nYd1Hk1rek_11qjs_runtime5value5ValueEINtNtNtNtCsl8K0bEFm1U0_4core4iter6traits7collect12FromIteratorTB15_B1H_EE9from_iterINtNtNtB2w_8adapters3map3MapINtNtNtB2y_5slice4iter4IterTB15_NtNtNtB1L_8function3env17FrameBindingValueEENCNvMs2_B4K_NtB4K_13FrameBindings8snapshot0EEB1L_",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RINvXs0_NtNtNtCsl8K0bEFm1U0_4core4iter8adapters3mapINtB6_3MapINtNtNtBc_5slice4iter4IterTNtNtCs1OjIl8oxbrv_5alloc6string6StringNtNtNtCs9nYd1Hk1rek_11qjs_runtime8function3env17FrameBindingValueEENCNvMs2_B22_NtB22_13FrameBindings8snapshot0ENtNtNtBa_6traits8iterator8Iterator4folduNCINvNvB3N_8for_each4callTB1o_NtNtB26_5value5ValueENCINvXs1i_NtCsfNEzM6rR6Th_9hashbrown3mapINtB5q_7HashMapB1o_B4V_NtNtNtCsg55jX0GwzBC_3std4hash6random11RandomStateEINtNtB3R_7collect6ExtendB4Q_E6extendBN_E0E0EB26_",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvNtNtCs9nYd1Hk1rek_11qjs_runtime6native7numbers18call_number_native",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvNtNtCs9nYd1Hk1rek_11qjs_runtime6number7parsing16native_parse_int",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvYNCNKNvNvMNtNtCsg55jX0GwzBC_3std4hash6randomNtBb_11RandomState3new4KEYS0s_0INtNtNtCsl8K0bEFm1U0_4core3ops8function6FnOnceTINtNtB1l_6option6OptionQIB20_INtNtB1l_4cell4CellTyyEEEEEE9call_onceCs9nYd1Hk1rek_11qjs_runtime",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMNtNtCs9nYd1Hk1rek_11qjs_runtime8function7upvalueNtB2_7Upvalue3get",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RINvXs4_NtNtCs1OjIl8oxbrv_5alloc3vec9into_iterINtB6_8IntoIterINtNtBa_2rc2RceEENtNtNtNtCsl8K0bEFm1U0_4core4iter6traits8iterator8Iterator4folduNCINvNtNtB1k_8adapters3map8map_foldBX_TBX_NtNtNtCs9nYd1Hk1rek_11qjs_runtime5value8property8PropertyEuNCNvMs4_NtB2Z_6objectNtB40_15PropertyStorage7dynamic0NCINvNvB1e_8for_each4callB2R_NCINvMsj_B8_INtB8_3VecB2R_E14extend_trustedINtB2k_3MapBI_B3S_EE0E0E0EB31_",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMs_NtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode11vm_call_envNtNtB6_2vm2Vm11current_env",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNCNvMs_NtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode8compilerNtB6_8Compiler16compile_functions_0Ba_",
+      "live_definitions": 2
+    },
+    {
+      "old": "__RNvNtNtCs9nYd1Hk1rek_11qjs_runtime5array8mutation27native_array_prototype_push",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RINvNtCsl8K0bEFm1U0_4core3ptr13drop_in_placeINtNtCs1OjIl8oxbrv_5alloc3vec3VecNtNtNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode14virtual_object4flow13AbstractValueEEB1l_",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvNtNtNtCsl8K0bEFm1U0_4core3num7dec2flt5parse12parse_number",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvXNtNtCs1OjIl8oxbrv_5alloc3vec21spec_from_iter_nestedINtB4_3VecTjjEEINtB2_18SpecFromIterNestedB11_INtNtNtNtCsl8K0bEFm1U0_4core4iter8adapters10filter_map9FilterMapINtNtB1F_9enumerate9EnumerateINtNtNtB1J_5slice4iter4IterNtNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode2ir2OpEENCNvMs0_NtB3A_24vm_numeric_mutation_loopNtB4s_23NumericMutationLoopPlan11compile_all0EE9from_iterB3C_",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvXNtNtCs1OjIl8oxbrv_5alloc3vec21spec_from_iter_nestedINtB4_3VecNtNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode10typed_loop16TypedLoopProgramEINtB2_18SpecFromIterNestedB11_INtNtNtNtCsl8K0bEFm1U0_4core4iter8adapters10filter_map9FilterMapIB2H_INtNtB2L_9enumerate9EnumerateINtNtNtB2P_5slice4iter4IterNtNtB15_2ir2OpEENCNvNtB13_7compile11compile_all0ENCB4Z_s_0EE9from_iterB17_",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode8ir_names45collect_nested_written_binding_names_from_ops",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode8ir_names36collect_nested_global_names_from_ops",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMNtNtNtCs9nYd1Hk1rek_11qjs_runtime5value6object10slot_readsNtB4_9ObjectRef13own_data_slot",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMsb_NtNtCs9nYd1Hk1rek_11qjs_runtime8function3envNtB5_7CallEnv17has_local_binding",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RINvNtNtCsl8K0bEFm1U0_4core4iter8adapters11try_processINtNtB2_3map3MapINtNtNtB6_5slice4iter4IterNtNtNtNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode24vm_numeric_mutation_loop5dense6legacy11ArraySourceENCNvMs2_B1y_NtB1y_22LegacyDynamicDensePlan19try_run_suppressing0ENtNtNtB1G_5value5array8ArrayRefINtNtB6_6option6OptionNtNtB6_7convert10InfallibleENCINvXsI_B4I_IB4G_INtNtCs1OjIl8oxbrv_5alloc3vec3VecB4a_EEINtNtNtB4_6traits7collect12FromIteratorIB4G_B4a_EE9from_iterBQ_E0B5L_EB1G_",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RINvNtCsl8K0bEFm1U0_4core3ptr13drop_in_placeNtNtNtCs9nYd1Hk1rek_11qjs_runtime5value6object9PrototypeEBM_",
+      "live_definitions": 2
+    },
+    {
+      "old": "__RINvMs4_NtNtCs9nYd1Hk1rek_11qjs_runtime5value5arrayNtB6_8ArrayRef25with_plain_dense_mutationjNCNvNtNtBa_5array8mutation27native_array_prototype_push0EBa_",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMsl_NtCs1OjIl8oxbrv_5alloc2rcINtB5_2RcSNtNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode2ir2OpE11from_box_inBK_",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvCsfLfy6EI15iL_7___rustc11___rdl_alloc",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvXs9_NtNtCs9nYd1Hk1rek_11qjs_runtime8function3envNtB5_7CallEnvNtNtCsl8K0bEFm1U0_4core5clone5Clone5clone",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvXs_NtNtCs1OjIl8oxbrv_5alloc3vec21spec_from_iter_nestedINtB6_3VecNtNtCs9nYd1Hk1rek_11qjs_runtime5value5ValueEINtB4_18SpecFromIterNestedB13_INtNtNtNtCsl8K0bEFm1U0_4core4iter8adapters3map3MapINtNtNtB2o_3ops5range5RangejENCNvNtNtNtNtB17_8bytecode10compact_fn4wide10activation10run_frames0EE9from_iterB17_",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode20named_property_cacheNtB2_18NamedPropertyCache21update_from_prototype",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RINvMsV_NtNtNtCs1OjIl8oxbrv_5alloc11collections5btree3mapINtB6_14ExtractIfInnerjNtNtB8_7set_val9SetValZSTNtNtNtCsl8K0bEFm1U0_4core3ops5range9RangeFullE4nextNCNvXsj_NtB8_3setINtB2C_9ExtractIfjB1F_NCINvMsc_B2C_INtB2C_8BTreeSetjE6retainNCNvMs4_NtNtCs9nYd1Hk1rek_11qjs_runtime5value5arrayNtB3R_8ArrayRef7set_len0E0ENtNtNtNtB1L_4iter6traits8iterator8Iterator4next0NtNtBc_5alloc6GlobalEB3V_",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvNtNtCs9nYd1Hk1rek_11qjs_runtime8function4call24direct_leaf_function_env",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvXNtNtCs1OjIl8oxbrv_5alloc3vec21spec_from_iter_nestedINtB4_3VecNtNtNtCs9nYd1Hk1rek_11qjs_runtime8function7upvalue7UpvalueEINtB2_18SpecFromIterNestedB11_INtNtNtNtCsl8K0bEFm1U0_4core4iter8adapters10filter_map9FilterMapINtNtB2x_6filter6FilterINtNtNtB2B_5slice4iter4IterNtNtNtB17_8bytecode2ir5LocalENCNvMNtB4m_10vm_captureNtNtB4m_2vm2Vm44captured_upvalues_for_function_with_override0ENCB4N_s_0EE9from_iterB17_",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode10vm_privateNtNtB4_2vm2Vm27capture_private_environment",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMs_NtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode11vm_call_envNtNtB6_2vm2Vm14apply_call_env",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode17compiler_function30compile_with_captured_lexicals",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvXsa_NtCs1OjIl8oxbrv_5alloc3vecINtB5_3VecTNtNtB7_6string6StringNtNtNtCs9nYd1Hk1rek_11qjs_runtime8function3env17FrameBindingValueEENtNtCsl8K0bEFm1U0_4core5clone5Clone5cloneB17_",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvNtNtCs9nYd1Hk1rek_11qjs_runtime6regexp14symbol_replace15collect_matches",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvNtCs9nYd1Hk1rek_11qjs_runtime6regexp29native_regexp_prototype_flags",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RINvMsj_NtCs1OjIl8oxbrv_5alloc3vecINtB6_3VecjE16extend_desugaredINtNtNtNtCsl8K0bEFm1U0_4core4iter8adapters10filter_map9FilterMapINtNtB15_9enumerate9EnumerateINtNtNtB19_5slice4iter4IterNtNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode2ir5LocalEENCNvMNtB30_11vm_bindingsNtNtB30_2vm2Vm22initial_local_upvaluess3_0EEB32_",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvNtNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode10compact_fn14creation_cache13chain_matches",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMs5_NtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode13operand_stackNtB5_17LocalSlotRecycler7recycle",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvNtNtCs9nYd1Hk1rek_11qjs_runtime7reflect7install23define_reflect_function",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RINvNtCsl8K0bEFm1U0_4core3ptr13drop_in_placeNtNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode2ir2OpEBM_",
+      "live_definitions": 3
+    },
+    {
+      "old": "__RNvXNtNtCs1OjIl8oxbrv_5alloc3vec21spec_from_iter_nestedINtB4_3VecRSTNtNtB6_6string6StringjEEINtB2_18SpecFromIterNestedB11_INtNtNtNtCsl8K0bEFm1U0_4core4iter8adapters10filter_map9FilterMapINtNtNtB25_5slice4iter4IterNtNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode2ir2OpENCNvNtB3t_16upvalue_resolver16resolve_upvalues0EE9from_iterB3v_",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode11vm_bindingsNtNtB4_2vm2Vm24global_this_own_property",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMs3_NtCs1OjIl8oxbrv_5alloc7raw_vecINtB5_6RawVecINtNtB7_3vec3VecINtNtCsl8K0bEFm1U0_4core6option6OptionNtNtCs9nYd1Hk1rek_11qjs_runtime5value5ValueEEE8grow_oneB1I_",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RINvMs6_NtCsfNEzM6rR6Th_9hashbrown3rawINtB6_8RawTableTINtNtCs1OjIl8oxbrv_5alloc2rc2RceEuEE14reserve_rehashNCINvNtB8_3map11make_hasherBQ_uINtNtCsl8K0bEFm1U0_4core4hash18BuildHasherDefaultNtNtNtCs9nYd1Hk1rek_11qjs_runtime5value9name_hash10NameHasherEE0EB34_",
+      "live_definitions": 2
+    },
+    {
+      "old": "__RINvMsa_NtCsfNEzM6rR6Th_9hashbrown3rawNtB6_13RawTableInner22fallible_with_capacityNtNtCs1OjIl8oxbrv_5alloc5alloc6GlobalECs9nYd1Hk1rek_11qjs_runtime",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode11vm_bindingsNtNtB4_2vm2Vm38write_through_module_live_binding_slot",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvNtCs9nYd1Hk1rek_11qjs_runtime6global10encode_uri",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvNtCs9nYd1Hk1rek_11qjs_runtime6global21encode_uri_code_point",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvNtCs9nYd1Hk1rek_11qjs_runtime6regexp14install_regexp",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMs4_NtNtCs9nYd1Hk1rek_11qjs_runtime5value5arrayNtB5_8ArrayRef24effective_prototype_slot",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMs3_NtNtCs9nYd1Hk1rek_11qjs_runtime8function3envNtB5_15DynamicBindings4cell",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvXs1_NtNtNtCsl8K0bEFm1U0_4core3ops8function5implsQNCNvMNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode10vm_captureNtNtBV_2vm2Vm44captured_upvalues_for_function_with_overrides_0INtB7_5FnMutTRNtNtBV_2ir5LocalEE8call_mutBX_",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMs4_NtCs1OjIl8oxbrv_5alloc7raw_vecNtB5_11RawVecInner11finish_growCsix9UrWmboNL_10qjs_parser",
+      "live_definitions": 11
+    },
+    {
+      "old": "__RNvXs_NtNtCs1OjIl8oxbrv_5alloc3vec21spec_from_iter_nestedINtB6_3VecINtNtCsl8K0bEFm1U0_4core6option6OptionNtNtCs9nYd1Hk1rek_11qjs_runtime5value5ValueEEINtB4_18SpecFromIterNestedB13_INtNtNtNtB18_4iter8adapters3map3MapINtNtNtB18_5slice4iter4IterNtNtNtB1J_8bytecode2ir5LocalENCNvMNtB3W_11vm_bindingsNtNtB3W_2vm2Vm13initial_slots0EE9from_iterB1J_",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMsa_NtCsl8K0bEFm1U0_4core3fmtNtB5_9Formatter9write_str",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvYNCNKNvNtNtNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode10compact_fn4wide10activation13FRAME_STORAGE00INtNtNtCsl8K0bEFm1U0_4core3ops8function6FnOnceTINtNtB1H_6option6OptionQIB2m_INtNtB1H_4cell7RefCellNtB8_12FrameStorageEEEEE9call_onceBg_",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvXNtNtCs1OjIl8oxbrv_5alloc3vec21spec_from_iter_nestedINtB4_3VecNtNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode24vm_numeric_mutation_loop23NumericMutationLoopPlanEINtB2_18SpecFromIterNestedB11_INtNtNtNtCsl8K0bEFm1U0_4core4iter8adapters10filter_map9FilterMapINtNtB36_3zip3ZipINtNtB4_9into_iter8IntoIterTjjEEIB4l_INtNtB3a_6option6OptionNtNtNtB13_5dense6nested14EnclosingOuterEEENCNvMs0_B13_B11_11compile_alls_0EE9from_iterB17_",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMNtCs1xG3odrkKst_9qjs_lexer7scannerNtB2_5Lexer3lex",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvCsfLfy6EI15iL_7___rustc35___rust_no_alloc_shim_is_unstable_v2",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RINvNtCsl8K0bEFm1U0_4core3ptr13drop_in_placeINtNtCs1OjIl8oxbrv_5alloc3vec3VecNtNtNtCs9nYd1Hk1rek_11qjs_runtime5value5array8ArrayRefEEB1j_",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMs_NtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode13operand_stackNtB4_20OperandStackRecycler7recycle",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvNtNtCs9nYd1Hk1rek_11qjs_runtime6native4math16call_math_native",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvXs1_NtNtNtCsl8K0bEFm1U0_4core3ops8function5implsQNCNvMNtNtCs9nYd1Hk1rek_11qjs_runtime8bytecode11vm_bindingsNtNtBV_2vm2Vm22initial_local_upvaluess3_0INtB7_5FnMutTTjRNtNtBV_2ir5LocalEEE8call_mutBX_",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvNtNtCs9nYd1Hk1rek_11qjs_runtime5array7species21set_array_like_length",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RINvMNtNtCsl8K0bEFm1U0_4core4cell4onceINtB3_8OnceCellINtNtCs1OjIl8oxbrv_5alloc5boxed3BoxNtNtNtCs9nYd1Hk1rek_11qjs_runtime5value5array13ArrayColdDataEE8try_initNCINvB2_11get_or_initNvYBP_NtNtB7_7default7Default7defaultE0zEB1u_",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNCNvNtNtCs9nYd1Hk1rek_11qjs_runtime5array7species26species_is_intrinsic_array0B7_",
+      "live_definitions": 2
+    },
+    {
+      "old": "__RNvNtNtCs9nYd1Hk1rek_11qjs_runtime5array7species28default_array_species_create",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RINvNtCsl8K0bEFm1U0_4core3ptr13drop_in_placeINtNtB4_6option6OptionNtNtCs9nYd1Hk1rek_11qjs_runtime7private18PrivateEnvironmentEEB16_",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvXso_NtCs1OjIl8oxbrv_5alloc3vecINtB5_3VecTNtNtB7_6string6StringNtNtNtCs9nYd1Hk1rek_11qjs_runtime8function3env17FrameBindingValueEENtNtNtCsl8K0bEFm1U0_4core3ops4drop4Drop4dropB17_",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RINvXs5_NtCs1OjIl8oxbrv_5alloc6stringNtB6_6StringINtNtNtNtCsl8K0bEFm1U0_4core4iter6traits7collect12FromIteratorcE9from_iterINtNtNtB8_3vec9into_iter8IntoItercEECs9nYd1Hk1rek_11qjs_runtime",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RINvXs4_NtNtCs1OjIl8oxbrv_5alloc3vec9into_iterINtB6_8IntoItercENtNtNtNtCsl8K0bEFm1U0_4core4iter6traits8iterator8Iterator4folduNCINvNvBZ_8for_each4callcNCINvXsd_NtBa_6stringNtB2y_6StringINtNtB13_7collect6ExtendcE6extendBI_E0E0ECs9nYd1Hk1rek_11qjs_runtime",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMs3_NtCs1OjIl8oxbrv_5alloc7raw_vecINtB5_6RawVeccE8grow_oneCs9nYd1Hk1rek_11qjs_runtime",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNvMsf_NtNtNtCsl8K0bEFm1U0_4core3fmt3num3impy4__fmt",
+      "live_definitions": 0
+    },
+    {
+      "old": "__RNCINvMs4_NtNtCs9nYd1Hk1rek_11qjs_runtime5value5arrayNtB8_8ArrayRef25with_plain_dense_mutationINtNtCsl8K0bEFm1U0_4core6option6OptionNtBa_5ValueENCNvNtNtBc_5array8mutation26native_array_prototype_pop0E0Bc_",
+      "live_definitions": 0
+    }
+  ]
+}

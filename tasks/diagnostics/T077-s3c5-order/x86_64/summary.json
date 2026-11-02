@@ -1,0 +1,10 @@
+{
+  "source_commit": "e71c82a4512ce7bb23b8f4ec36386df2b7cd754e",
+  "architecture": "x86_64",
+  "binary_sha256": "4779454e0943db30519e52e50ca30cc178b5136d2b7ec9f3cee5cae4ee7df90c",
+  "order_sha256": "1321478bb6f36d8b382c1173e6e09676e029abec33d67943b372e86f227c7655",
+  "strict_audit_passed": true,
+  "relinks": 1,
+  "order_lines": 536,
+  "runtime_unchanged": true
+}
