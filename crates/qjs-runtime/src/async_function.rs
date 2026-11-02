@@ -18,7 +18,7 @@ use std::collections::HashMap;
 
 use crate::{
     Function, NativeFunction, ObjectRef, Property, RuntimeError, Value,
-    bytecode::{GeneratorOutcome, GeneratorStart, GeneratorState, Resume, resume_generator},
+    bytecode::{GeneratorOutcome, GeneratorState, Resume, resume_generator},
     function_constructor_as_prototype_slot, function_intrinsic_prototype_slot, promise, symbol,
 };
 
@@ -93,16 +93,19 @@ pub(crate) fn call_async_function(
         .clone()
         .expect("async function has a bytecode body");
     let context = ObjectRef::new(HashMap::new(), env.realm().atoms());
-    *context.generator_state().borrow_mut() =
-        Some(GeneratorState::SuspendedStart(Box::new(GeneratorStart {
+    *context.generator_state().borrow_mut() = Some(GeneratorState::SuspendedStart(
+        crate::bytecode::prepare_suspended_start(
             bytecode,
-            env: function_env,
-            upvalues: function.upvalues.clone(),
-            with_stack: Vec::new(),
-        })));
+            function_env,
+            function.upvalues.clone(),
+            Vec::new(),
+            inputs,
+            env.runtime,
+        ),
+    ));
 
     let result_promise = promise::new_pending_promise(env);
-    let outcome = crate::bytecode::start_with_call_inputs(&context, inputs, env);
+    let outcome = resume_generator(&context, Resume::Next(Value::Undefined), env);
     settle_outcome(outcome, &context, &result_promise, env);
     Value::Object(result_promise)
 }

@@ -110,3 +110,14 @@ strict C3 gate. Every public lane wall geomean improves. Hash-map/method_call
 instructions meet <=1 on x86 too; fannkuch **1.001625** is carried for C5
 recheck without rounding or waiver. Final formal/held-out/RSS remain pending.
 C4 suspension ownership is next, then C5 under the unchanged contract.
+
+## C4: complete prepared suspension ownership
+
+The [C4 receipt](T077-s3c4-owner/README.md) pins the single prepared boxed owner
+for all four entry families. GeneratorStart, its four constructors, duplicate
+bytecode ownership and late call-input resume APIs are gone; all seven kinds
+retain box/code identity. Full/5,174 curated, runtime 2,746, counters 2,798,
+nine-mode NG, all stress and both depth profiles pass. C5 must still retire
+per-body free pools under the [frozen plan](../proposals/T077-s3c-pool-retirement.md),
+then complete qualification and the frozen final public86. No final acceptance
+or origin push/main merge is claimed.

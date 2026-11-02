@@ -184,13 +184,14 @@ fn call_with_arguments(
             );
             return crate::generator::make_generator_object(
                 function,
-                crate::bytecode::GeneratorStart {
-                    bytecode: bytecode.clone(),
-                    env: enter_function_activation.env,
-                    upvalues: function.upvalues.clone(),
-                    with_stack: Vec::new(),
-                },
-                enter_function_activation.call_inputs,
+                crate::bytecode::prepare_suspended_start(
+                    bytecode.clone(),
+                    enter_function_activation.env,
+                    function.upvalues.clone(),
+                    Vec::new(),
+                    enter_function_activation.call_inputs,
+                    env.runtime,
+                ),
                 env,
             );
         }

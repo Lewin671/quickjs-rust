@@ -8,7 +8,7 @@ use std::collections::HashMap;
 
 use crate::{
     Function, NativeFunction, ObjectRef, Property, RuntimeError, Value,
-    bytecode::{GeneratorOutcome, GeneratorStart, Resume, resume_generator},
+    bytecode::{GeneratorOutcome, Resume, SuspendedActivation, resume_generator},
     function_constructor_as_prototype_slot, function_intrinsic_prototype_slot, object_prototype,
     symbol,
 };
@@ -202,11 +202,10 @@ pub(crate) fn wire_generator_function_intrinsics(
 /// state for the first resume.
 pub(crate) fn make_generator_object(
     function: &Function,
-    start: GeneratorStart,
-    inputs: Option<crate::function::CallInputs<'_>>,
+    start: SuspendedActivation,
     env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
-    let state = crate::bytecode::start_suspended_at_body(start, inputs, env)?;
+    let state = crate::bytecode::start_suspended_at_body(start, env.runtime)?;
     let prototype = generator_object_prototype(function, env);
     let generator = ObjectRef::with_prototype(HashMap::new(), prototype, env.realm().atoms());
     *generator.generator_state().borrow_mut() = Some(state);

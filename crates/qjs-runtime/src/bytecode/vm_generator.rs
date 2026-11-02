@@ -16,8 +16,8 @@ use super::vm_result::Completion;
 
 /// The lifecycle state of a generator object (ES2023 27.5.3 [[GeneratorState]]).
 pub(crate) enum GeneratorState {
-    /// Created but never resumed: the first `next` runs the body from the top.
-    SuspendedStart(Box<GeneratorStart>),
+    /// Body not started: first `next` runs from the retained initial/prologue PC.
+    SuspendedStart(SuspendedActivation),
     /// Suspended at a `yield`: the next resume re-enters the saved VM.
     SuspendedYield(SuspendedActivation),
     /// Currently running: re-entrancy is a TypeError.
@@ -27,21 +27,13 @@ pub(crate) enum GeneratorState {
     Completed,
 }
 
-/// The captured call frame for a not-yet-started generator.
-pub(crate) struct GeneratorStart {
-    pub(crate) bytecode: Rc<Bytecode>,
-    pub(crate) env: crate::context::ActivationContext,
-    pub(crate) upvalues: Vec<crate::function::BindingCell>,
-    pub(crate) with_stack: Vec<Value>,
-}
-
 /// A suspended owning record, including semantic state and its resume kind.
 pub(crate) struct SuspendedActivation {
     frame: Box<super::vm::FrameState<'static>>,
-    bytecode: Rc<Bytecode>,
     suspension: SuspensionKind,
 }
 
+#[derive(Clone, Copy)]
 enum SuspensionKind {
     Ordinary,
     DelegateYield,
@@ -99,17 +91,58 @@ pub(crate) fn is_suspended_at_plain_yield(generator: &ObjectRef) -> bool {
 
 impl Vm<'static, '_, Box<super::vm::FrameState<'static>>> {
     /// Detach the exact owning record; no semantic state is reconstructed.
-    fn into_record(
-        self,
-        bytecode: Rc<Bytecode>,
-        suspension: SuspensionKind,
-    ) -> SuspendedActivation {
+    fn into_record(self, suspension: SuspensionKind) -> SuspendedActivation {
         SuspendedActivation {
             frame: self.into_frame(),
-            bytecode,
             suspension,
         }
     }
+}
+
+impl SuspendedActivation {
+    /// Attach services for one segment, consuming the unique frame owner.
+    /// The code handle and every semantic field already belong to that frame.
+    fn attach<'s>(
+        self,
+        runtime: &'s mut crate::context::RuntimeServices,
+    ) -> Vm<'static, 's, Box<super::vm::FrameState<'static>>> {
+        let mut vm = Vm {
+            runtime,
+            current: self.frame,
+            callers: Vec::new(),
+            pending_frame_entry: None,
+            frame_lifetime: std::marker::PhantomData,
+        };
+        vm.reset_segment();
+        vm.stop_at_prologue = false;
+        vm.refresh_authoritative_slots();
+        vm.verify_binding_authority();
+        vm
+    }
+}
+
+/// Prepare all owned call state before publishing a suspendable activation.
+/// Argument slices are consumed into slots/owned recipes here; parameter
+/// initializers still execute at the driver's existing prologue boundary.
+pub(crate) fn prepare_suspended_start(
+    bytecode: Rc<Bytecode>,
+    activation: crate::context::ActivationContext,
+    upvalues: Vec<crate::function::BindingCell>,
+    with_stack: Vec<Value>,
+    inputs: Option<crate::function::CallInputs<'_>>,
+    runtime: &mut crate::context::RuntimeServices,
+) -> SuspendedActivation {
+    Vm::with_frame_bytecode(
+        super::frame_program::FrameBytecode::Shared(bytecode),
+        runtime,
+        activation,
+        upvalues,
+        with_stack,
+        None,
+        inputs,
+    )
+    .into_suspendable()
+    .into_record(SuspensionKind::Ordinary)
 }
 
 /// Runs a generator's parameter prologue synchronously, returning a record
@@ -118,33 +151,17 @@ impl Vm<'static, '_, Box<super::vm::FrameState<'static>>> {
 /// throwing default initializer) propagates here, before the generator object is
 /// observable, instead of on the first `next`.
 pub(crate) fn start_suspended_at_body(
-    start: GeneratorStart,
-    inputs: Option<crate::function::CallInputs<'_>>,
-    _caller_env: &mut crate::context::Context<'_>,
+    start: SuspendedActivation,
+    runtime: &mut crate::context::RuntimeServices,
 ) -> Result<GeneratorState, RuntimeError> {
-    let GeneratorStart {
-        bytecode,
-        env,
-        upvalues,
-        with_stack,
-    } = start;
-    let mut vm = Vm::with_frame_bytecode(
-        super::frame_program::FrameBytecode::Shared(bytecode.clone()),
-        _caller_env.runtime,
-        env,
-        upvalues,
-        with_stack,
-        None,
-        inputs,
-    )
-    .into_suspendable();
+    let mut vm = start.attach(runtime);
     vm.stop_at_prologue = true;
     let result = vm.run_completion();
     match result {
         // Suspended exactly at the prologue boundary: capture the body-start
         // state for the first resume.
-        Ok(Completion::PrologueEnd) => Ok(GeneratorState::SuspendedYield(
-            vm.into_record(bytecode.clone(), SuspensionKind::Ordinary),
+        Ok(Completion::PrologueEnd) => Ok(GeneratorState::SuspendedStart(
+            vm.into_record(SuspensionKind::Ordinary),
         )),
         // A function with no executable prologue suspension (should not happen,
         // since every compiled function emits the marker) — treat a clean return
@@ -158,64 +175,37 @@ pub(crate) fn start_suspended_at_body(
     }
 }
 
-/// Drives a generator from `SuspendedStart`: builds the body VM and runs it.
+/// Drives the prepared owner from its initial PC or completed prologue.
 fn run_from_start(
-    start: GeneratorStart,
-    inputs: Option<crate::function::CallInputs<'_>>,
-    _caller_env: &mut crate::context::Context<'_>,
+    start: SuspendedActivation,
+    runtime: &mut crate::context::RuntimeServices,
 ) -> Result<(GeneratorState, GeneratorOutcome), RuntimeError> {
-    let GeneratorStart {
-        bytecode,
-        env,
-        upvalues,
-        with_stack,
-    } = start;
-    let mut vm = Vm::with_frame_bytecode(
-        super::frame_program::FrameBytecode::Shared(bytecode.clone()),
-        _caller_env.runtime,
-        env,
-        upvalues,
-        with_stack,
-        None,
-        inputs,
-    )
-    .into_suspendable();
+    let mut vm = start.attach(runtime);
     let result = vm.run_completion();
-    drive(result, vm, &bytecode)
+    drive(result, vm)
 }
 
 /// Resumes a generator suspended at a `yield`, delivering `resume`.
 fn run_from_yield(
     record: SuspendedActivation,
     resume: Resume,
-    _caller_env: &mut crate::context::Context<'_>,
+    runtime: &mut crate::context::RuntimeServices,
 ) -> Result<(GeneratorState, GeneratorOutcome), RuntimeError> {
-    let bytecode = record.bytecode.clone();
-    let mut vm = Vm {
-        runtime: _caller_env.runtime,
-        current: record.frame,
-        callers: Vec::new(),
-        pending_frame_entry: None,
-        frame_lifetime: std::marker::PhantomData,
-    };
-    vm.reset_segment();
-    vm.stop_at_prologue = false;
-    vm.refresh_authoritative_slots();
-    vm.verify_binding_authority();
+    let suspension = record.suspension;
+    let mut vm = record.attach(runtime);
 
     // A suspension inside a `yield*` forwards the resume to the inner iterator:
     // the re-entered `Op::YieldDelegate` reads `resume_mode` and decides how to
     // drive (next/return/throw) the inner iterator and whether the outer body
     // continues, suspends again, or completes.
-    match record.suspension {
+    match suspension {
         SuspensionKind::DelegateYield | SuspensionKind::DelegateYieldAsync => {
             vm.cold_mut().resume_mode = Some(match resume {
                 Resume::Next(value) => super::vm_result::ResumeMode::Next(value),
                 Resume::Return(value)
-                    if matches!(record.suspension, SuspensionKind::DelegateYieldAsync) =>
+                    if matches!(suspension, SuspensionKind::DelegateYieldAsync) =>
                 {
-                    let record =
-                        vm.into_record(bytecode.clone(), SuspensionKind::DelegateYieldReturnAwait);
+                    let record = vm.into_record(SuspensionKind::DelegateYieldReturnAwait);
                     return Ok((
                         GeneratorState::SuspendedYield(record),
                         GeneratorOutcome::Await(value),
@@ -227,7 +217,7 @@ fn run_from_yield(
                 Resume::Throw(value) => super::vm_result::ResumeMode::Throw(value),
             });
             let result = vm.run_completion();
-            return drive(result, vm, &bytecode);
+            return drive(result, vm);
         }
         SuspensionKind::DelegateAwait => {
             vm.cold_mut().resume_mode = Some(match resume {
@@ -238,7 +228,7 @@ fn run_from_yield(
                 }
             });
             let result = vm.run_completion();
-            return drive(result, vm, &bytecode);
+            return drive(result, vm);
         }
         SuspensionKind::DelegateYieldReturnAwait => {
             vm.cold_mut().resume_mode = Some(match resume {
@@ -251,7 +241,7 @@ fn run_from_yield(
                 }
             });
             let result = vm.run_completion();
-            return drive(result, vm, &bytecode);
+            return drive(result, vm);
         }
         SuspensionKind::DelegateAwaitReturn => {
             vm.cold_mut().resume_mode = Some(match resume {
@@ -262,7 +252,7 @@ fn run_from_yield(
                 }
             });
             let result = vm.run_completion();
-            return drive(result, vm, &bytecode);
+            return drive(result, vm);
         }
         SuspensionKind::DelegateAwaitReturnValue => {
             vm.cold_mut().resume_mode = Some(match resume {
@@ -275,7 +265,7 @@ fn run_from_yield(
                 }
             });
             let result = vm.run_completion();
-            return drive_with_return_already_awaited(result, vm, &bytecode);
+            return drive_with_return_already_awaited(result, vm);
         }
         SuspensionKind::Ordinary => {}
     }
@@ -310,9 +300,9 @@ fn run_from_yield(
     started?;
     let result = vm.run_completion();
     if return_already_awaited {
-        drive_with_return_already_awaited(result, vm, &bytecode)
+        drive_with_return_already_awaited(result, vm)
     } else {
-        drive(result, vm, &bytecode)
+        drive(result, vm)
     }
 }
 
@@ -323,11 +313,10 @@ fn run_from_yield(
 fn drive(
     result: Result<Completion, RuntimeError>,
     vm: Vm<'static, '_, Box<super::vm::FrameState<'static>>>,
-    bytecode: &Rc<Bytecode>,
 ) -> Result<(GeneratorState, GeneratorOutcome), RuntimeError> {
     match result {
         Ok(Completion::Yield(value)) => {
-            let record = vm.into_record(bytecode.clone(), SuspensionKind::Ordinary);
+            let record = vm.into_record(SuspensionKind::Ordinary);
             Ok((
                 GeneratorState::SuspendedYield(record),
                 GeneratorOutcome::Yield(value),
@@ -338,7 +327,7 @@ fn drive(
             // delivers the fulfillment value (or injects a throw) at the await
             // site. Only the outcome tag differs, so the driver routes the
             // suspension to a promise reaction instead of to a consumer.
-            let record = vm.into_record(bytecode.clone(), SuspensionKind::Ordinary);
+            let record = vm.into_record(SuspensionKind::Ordinary);
             Ok((
                 GeneratorState::SuspendedYield(record),
                 GeneratorOutcome::Await(value),
@@ -347,35 +336,35 @@ fn drive(
         Ok(Completion::YieldDelegate(value)) => {
             // Suspended inside a `yield*`: the yielded value is the inner
             // iterator's result object, returned to the outer caller unwrapped.
-            let record = vm.into_record(bytecode.clone(), SuspensionKind::DelegateYield);
+            let record = vm.into_record(SuspensionKind::DelegateYield);
             Ok((
                 GeneratorState::SuspendedYield(record),
                 GeneratorOutcome::YieldDelegate(value),
             ))
         }
         Ok(Completion::YieldDelegateAsync(value)) => {
-            let record = vm.into_record(bytecode.clone(), SuspensionKind::DelegateYieldAsync);
+            let record = vm.into_record(SuspensionKind::DelegateYieldAsync);
             Ok((
                 GeneratorState::SuspendedYield(record),
                 GeneratorOutcome::YieldDelegate(value),
             ))
         }
         Ok(Completion::YieldDelegateAwait(value)) => {
-            let record = vm.into_record(bytecode.clone(), SuspensionKind::DelegateAwait);
+            let record = vm.into_record(SuspensionKind::DelegateAwait);
             Ok((
                 GeneratorState::SuspendedYield(record),
                 GeneratorOutcome::Await(value),
             ))
         }
         Ok(Completion::YieldDelegateAwaitReturn(value)) => {
-            let record = vm.into_record(bytecode.clone(), SuspensionKind::DelegateAwaitReturn);
+            let record = vm.into_record(SuspensionKind::DelegateAwaitReturn);
             Ok((
                 GeneratorState::SuspendedYield(record),
                 GeneratorOutcome::Await(value),
             ))
         }
         Ok(Completion::YieldDelegateAwaitReturnValue(value)) => {
-            let record = vm.into_record(bytecode.clone(), SuspensionKind::DelegateAwaitReturnValue);
+            let record = vm.into_record(SuspensionKind::DelegateAwaitReturnValue);
             Ok((
                 GeneratorState::SuspendedYield(record),
                 GeneratorOutcome::Await(value),
@@ -398,14 +387,13 @@ fn drive(
 fn drive_with_return_already_awaited(
     result: Result<Completion, RuntimeError>,
     vm: Vm<'static, '_, Box<super::vm::FrameState<'static>>>,
-    bytecode: &Rc<Bytecode>,
 ) -> Result<(GeneratorState, GeneratorOutcome), RuntimeError> {
     match result {
         Ok(Completion::Return(value)) => Ok((
             GeneratorState::Completed,
             GeneratorOutcome::ReturnAlreadyAwaited(value),
         )),
-        other => drive(other, vm, bytecode),
+        other => drive(other, vm),
     }
 }
 
@@ -415,27 +403,6 @@ fn drive_with_return_already_awaited(
 pub(crate) fn resume_generator(
     generator: &ObjectRef,
     resume: Resume,
-    caller_env: &mut crate::context::Context<'_>,
-) -> Result<GeneratorOutcome, RuntimeError> {
-    resume_with_inputs(generator, resume, None, caller_env)
-}
-
-pub(crate) fn start_with_call_inputs(
-    generator: &ObjectRef,
-    inputs: Option<crate::function::CallInputs<'_>>,
-    caller_env: &mut crate::context::Context<'_>,
-) -> Result<GeneratorOutcome, RuntimeError> {
-    resume_with_inputs(
-        generator,
-        Resume::Next(Value::Undefined),
-        inputs,
-        caller_env,
-    )
-}
-fn resume_with_inputs(
-    generator: &ObjectRef,
-    resume: Resume,
-    inputs: Option<crate::function::CallInputs<'_>>,
     caller_env: &mut crate::context::Context<'_>,
 ) -> Result<GeneratorOutcome, RuntimeError> {
     // Take the state out behind the re-entrancy guard: a nested `next` while the
@@ -473,7 +440,7 @@ fn resume_with_inputs(
             // completes the generator without running the body; a `throw(v)`
             // before start completes it and rethrows.
             match resume {
-                Resume::Next(_) => finish(generator, run_from_start(*start, inputs, caller_env)),
+                Resume::Next(_) => finish(generator, run_from_start(start, caller_env.runtime)),
                 Resume::Return(value) => {
                     *generator.generator_state().borrow_mut() = Some(GeneratorState::Completed);
                     Ok(GeneratorOutcome::Return(value))
@@ -488,9 +455,10 @@ fn resume_with_inputs(
                 }
             }
         }
-        GeneratorState::SuspendedYield(record) => {
-            finish(generator, run_from_yield(record, resume, caller_env))
-        }
+        GeneratorState::SuspendedYield(record) => finish(
+            generator,
+            run_from_yield(record, resume, caller_env.runtime),
+        ),
     }
 }
 
@@ -533,56 +501,4 @@ pub(crate) fn throw_completion(value: Value) -> RuntimeError {
 }
 
 #[cfg(test)]
-mod owner_tests {
-    use super::*;
-    fn frame_address(generator: &ObjectRef) -> usize {
-        let state = generator.generator_state().borrow();
-        let Some(GeneratorState::SuspendedYield(suspended)) = state.as_ref() else {
-            panic!("suspended owning record");
-        };
-        &*suspended.frame as *const super::super::vm::FrameState<'static> as usize
-    }
-    #[test]
-    fn resumes_the_same_box_from_prologue_through_multiple_yields() {
-        let Value::Object(generator) = crate::eval("function* g(){yield 1; yield 2;} g()").unwrap()
-        else {
-            panic!("generator")
-        };
-        let address = frame_address(&generator);
-        let mut root = crate::context::HostRoot::script();
-        for n in [1.0, 2.0] {
-            let result = resume_generator(
-                &generator,
-                Resume::Next(Value::Undefined),
-                &mut root.context(),
-            )
-            .unwrap();
-            assert!(matches!(result, GeneratorOutcome::Yield(Value::Number(v)) if v == n));
-            assert_eq!(frame_address(&generator), address);
-        }
-    }
-    #[test]
-    fn segment_resume_clears_declines_without_losing_semantic_state() {
-        let code = Rc::new(crate::compile_script(&qjs_parser::parse_script("1").unwrap()).unwrap());
-        let (mut runtime, activation) = crate::context::HostRoot::script().into_parts();
-        let mut vm = Vm::with_frame_bytecode(
-            code.into(),
-            &mut runtime,
-            activation,
-            Vec::new(),
-            Vec::new(),
-            None,
-            None,
-        )
-        .into_suspendable();
-        vm.declined_typed_loop_programs = u128::MAX;
-        vm.cold_mut().wide_handback = Some(Some(10));
-        vm.cold_mut().pending_return = Some(Value::Number(42.0));
-        let address = &*vm.current as *const _ as usize;
-        vm.reset_segment();
-        assert_eq!(vm.declined_typed_loop_programs, 0);
-        assert!(vm.cold().unwrap().wide_handback.is_none());
-        assert_eq!(vm.cold().unwrap().pending_return, Some(Value::Number(42.0)));
-        assert_eq!(&*vm.current as *const _ as usize, address);
-    }
-}
+mod owner_tests;

@@ -21,7 +21,7 @@ use std::collections::HashMap;
 use crate::{
     Function, NativeFunction, ObjectRef, Property, RuntimeError, Value,
     bytecode::{
-        GeneratorOutcome, GeneratorStart, GeneratorState, Resume, is_suspended_at_plain_yield,
+        GeneratorOutcome, GeneratorState, Resume, SuspendedActivation, is_suspended_at_plain_yield,
         resume_generator,
     },
     call_function, function_constructor_as_prototype_slot, function_intrinsic_prototype_slot,
@@ -234,11 +234,10 @@ pub(crate) fn async_generator_prototype(env: &crate::context::Context<'_>) -> Op
 /// state for the first resume.
 pub(crate) fn make_async_generator_object(
     function: &Function,
-    start: GeneratorStart,
-    inputs: Option<crate::function::CallInputs<'_>>,
+    start: SuspendedActivation,
     env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
-    let state = crate::bytecode::start_suspended_at_body(start, inputs, env)?;
+    let state = crate::bytecode::start_suspended_at_body(start, env.runtime)?;
     let prototype = async_generator_object_prototype(function, env);
     let generator = ObjectRef::with_prototype(HashMap::new(), prototype, env.realm().atoms());
     *generator.generator_state().borrow_mut() = Some(state);
@@ -1314,13 +1313,14 @@ pub(crate) fn call_async_generator_function(
         .expect("async generator has a bytecode body");
     make_async_generator_object(
         function,
-        GeneratorStart {
+        crate::bytecode::prepare_suspended_start(
             bytecode,
-            env: function_env,
-            upvalues: function.upvalues.clone(),
-            with_stack: Vec::new(),
-        },
-        inputs,
+            function_env,
+            function.upvalues.clone(),
+            Vec::new(),
+            inputs,
+            env.runtime,
+        ),
         env,
     )
 }

@@ -13,7 +13,7 @@ use crate::{
 
 use super::ir::Bytecode;
 use super::vm::Vm;
-use super::vm_generator::{GeneratorStart, GeneratorState};
+use super::vm_generator::{GeneratorState, prepare_suspended_start};
 use super::{ModuleBindings, ModuleEvaluation};
 
 /// Evaluates a prelude *script* against the shared graph `realm` before any
@@ -171,12 +171,14 @@ fn eval_async_module_body(
     let mut runtime = crate::context::RuntimeServices::for_realm(env.realm());
     let context = ObjectRef::new(HashMap::new(), env.realm().atoms());
     *context.generator_state().borrow_mut() =
-        Some(GeneratorState::SuspendedStart(Box::new(GeneratorStart {
-            bytecode: bytecode.clone(),
+        Some(GeneratorState::SuspendedStart(prepare_suspended_start(
+            bytecode.clone(),
             env,
-            upvalues: Vec::new(),
-            with_stack: Vec::new(),
-        })));
+            Vec::new(),
+            Vec::new(),
+            None,
+            &mut runtime,
+        )));
 
     let mut job_activation =
         crate::context::ActivationContext::new(creation, crate::context::ExecutionMode::Module);

@@ -28,17 +28,21 @@ never freed.
 
 ## What a suspended frame owns
 
-`SuspendedActivation` retains the same boxed `FrameState` allocated before
-its prologue. That record owns code, PC, operands/locals, cells, Context, scope
+`prepare_suspended_start` builds the complete boxed `FrameState` for generator,
+async function, async generator and TLA entries. Both SuspendedStart and
+SuspendedYield consume that same `SuspendedActivation`. Its frame owns the sole
+retained code handle, PC, operands/locals, cells, Context, scope
 instances, selected references, partial classes/private overlays, with-stack,
 try/disposal stacks and pending completion. The continuation adds only its
-suspension kind. Resume reattaches RuntimeServices and resets segment declines
-and wide handback; it neither reconstructs fields nor copies Bytecode. Ordinary
+suspension kind. There is no separate start metadata owner, duplicate code Rc,
+late frame construction or call-input resume API. Resume reattaches
+RuntimeServices and resets segment declines and wide handback; it neither
+reconstructs fields nor copies Bytecode. Ordinary
 VM records are values; storage selection is static, without an enum test per op.
 
 1. **Cell identity survives.** The record holds the same `BindingCell` cells
    as the closures and declaring frames. Suspend and resume copy no binding
-   value, run no refresh or write-back, and do not consult the resuming
+   value, run no value refresh or write-back, and do not consult the resuming
    caller's environment ([env-model-rewrite.md](env-model-rewrite.md)). Tests:
    `generators.rs::suspended_generator_keeps_parameter_and_var_capture_cells`,
    `async_functions.rs::await_resume_observes_sibling_closure_capture_writes`.
@@ -62,7 +66,13 @@ synchronously (`start_suspended_at_body`) and stops at
 before the object exists, and the body has not run. An async function is
 stored as `SuspendedStart` and driven at once to its first `await` or
 completion; every error, including a parameter-binding error, rejects the
-returned promise. Tests:
+returned promise. The prepared frame consumes borrowed arguments into slots
+and owned recipes before publication; preparation does not execute parameter
+initializers. A completed synchronous prologue remains SuspendedStart, so the
+first next ignores its argument without injecting a synthetic yield value.
+Early return/throw and dropping an unresumed owner release that frame. Ownership
+tests in `bytecode/vm_generator/owner_tests.rs` prove stable box/code ownership
+through all seven suspension kinds and release of private values. Tests:
 `generators.rs::calling_a_generator_runs_the_parameter_prologue`,
 `async_functions.rs::parameter_binding_error_rejects`.
 

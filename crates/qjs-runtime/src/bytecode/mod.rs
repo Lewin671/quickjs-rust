@@ -133,8 +133,8 @@ pub(crate) fn field_initializer_member_read(
 pub use ir::Bytecode;
 pub(crate) use vm_class::install_field_value;
 pub(crate) use vm_generator::{
-    GeneratorOutcome, GeneratorStart, GeneratorState, Resume, is_suspended_at_plain_yield,
-    resume_generator, start_suspended_at_body,
+    GeneratorOutcome, GeneratorState, Resume, SuspendedActivation, is_suspended_at_plain_yield,
+    prepare_suspended_start, resume_generator, start_suspended_at_body,
 };
 pub(crate) use vm_iter::sync_iterator_for_value;
 pub(crate) use vm_numeric_leaf::try_eval_numeric_leaf;
@@ -549,8 +549,6 @@ pub(crate) fn eval_bytecode_with_env_ephemeral_global_lexicals(
         None,
     )
 }
-
-pub(crate) use vm_generator::start_with_call_inputs;
 
 #[inline(always)]
 pub(crate) fn try_eval_indexed_call(
