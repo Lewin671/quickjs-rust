@@ -47,7 +47,8 @@ Exact cached/IC-off Test262 is not repeated for this frame-layout-only repair:
 no JS operation, frame contents, scope transition, admission or binding policy
 changes; the existing complete production scans each pass 42,672 configured
 cases. The debug assertion adds observation only. Round4 still repeats the
-requested stress, semantic and depth gates; source-pinned results follow.
+requested stress, semantic and depth gates; the source-pinned results below
+all qualify the same frozen runtime.
 
 Pre-existing reproducers are retained in [s3c-findings](s3c-findings/). They
 remain out of scope: nested finally/continue skips outer finally, duplicate
@@ -105,5 +106,21 @@ Both production binaries use the canonical agents/fat-LTO/16-unit recipe;
 the new ARM order removes only the no-longer-emitted inline driver symbol.
 No runtime change or measurement-driven tuning follows either collection. ARM order is
 a strict-audited symbol refresh of the prior ranking (no new profile claim).
-x86 fresh public profiling is queued as 20261102T102424Z-t077-s3c-r4-order.
-No formal/held-out/RSS claim is made; these remain lead-owned.
+[Fresh native x86 public profiling](qualification/x86-order/summary.json) completes
+as job **20261102T102424Z-t077-s3c-r4-order**, exit0, source400a14de:
+537-line order, one relink, zero stale/executor/strict failures. Seven optional
+inlining/alias findings remain (the preceding receipt also has seven), all
+preserved in the raw audit. Binary SHA1879388fc450b2fbaa3634b72ab9782fc52da7de4acde2a0cf7ca5c8f6f4afe5;
+order SHAd582777240e44534d017d8a56d3ea46f936495541f0bbae4eee70b7d3a7ad0ef.
+The job checks every runtime hash unchanged and restores its generated order
+before exit; the persistent runner checkout was verified clean at400a14de.
+Artifacts were fetched directly into this worktree. The attempted cross-build
+shortcut was rejected for host-dependent raw symbol identities; it changed no
+order. The published order comes from the completed native job.
+
+[The final seal](freeze.json) records the runtime, both native orders and every
+qualification artifact. **Owner STOP.** Lead redoes formal, held-out and RSS
+acceptance on this frozen source/order pair. No further owner runtime tuning
+or timing collection, no origin push and no main merge. The earlier c80ac690
+lead results and all tiny positive instruction ratios remain observations,
+not final acceptance for400a14de.

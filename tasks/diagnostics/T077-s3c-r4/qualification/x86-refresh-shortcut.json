@@ -1,0 +1,17 @@
+{
+  "runtime_revision": "400a14de",
+  "attempt": "Canonical recipe cross-build; no program execution or order mutation",
+  "result": "Rejected shortcut: native-host raw symbol identities differ from cross-build identities. Native queued order job remains required.",
+  "stale_raw_identities": 485,
+  "example": {
+    "name": "__RINvNtNtNtCs93CNxA9ZQ5c_11qjs_runtime8bytecode10typed_loop7execute3runNtNtNtNtB6_10compact_fn4wide10loop_frame13WideLoopFrameEB8_",
+    "source": "budget",
+    "reason": "not in the binary",
+    "engine": true,
+    "canonical": "qjs_runtime::bytecode::typed_loop::execute::run::<qjs_runtime::bytecode::compact_fn::wide::loop_frame::WideLoopFrame>",
+    "replacement": "__RINvNtNtNtCs3c4d8oBRpcP_11qjs_runtime8bytecode10typed_loop7execute3runNtNtNtNtB6_10compact_fn4wide10loop_frame13WideLoopFrameEB8_"
+  },
+  "cross_binary_sha256": "66ff5b65d99c97b7788683efc2d19988a143679f693a67d73a8825dae9f9d6db",
+  "runtime_unchanged": true,
+  "order_unchanged": true
+}

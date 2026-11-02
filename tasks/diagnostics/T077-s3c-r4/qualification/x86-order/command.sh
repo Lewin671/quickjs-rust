@@ -1,0 +1,1 @@
+trap 'git restore --source=HEAD --worktree -- crates/qjs-cli/hot-functions-x86_64.order' EXIT; PYTHONPATH=. python3 tasks/diagnostics/T077-s3c5-order/regenerate.py --output "$BENCH_OUT/order" --target-dir target/t077-s3c-r4-order

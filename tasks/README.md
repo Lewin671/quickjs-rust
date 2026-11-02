@@ -7,7 +7,7 @@ update the resume block in the commit that lands it. When a task closes, move it
 ## Active
 | Task | Status | What it is |
 | --- | --- | --- |
-| [T077](T077-core-rebuild.md) core rebuild | active | Authorized rebuild; S3a, S1+S2, S2 follow-up and S3b (enabling stage) integrated (cumulative development 0.909, held-out 0.901 vs baseline); S3c round4 restores the general-VM native depth gate; complete 14-case matrix and semantic gates pass at400a14de; canonical109 instructions0.999866 vs predecessor; x86 order refresh queued, then STOP for lead acceptance. |
+| [T077](T077-core-rebuild.md) core rebuild | active | Authorized rebuild; S3a, S1+S2, S2 follow-up and S3b (enabling stage) integrated (cumulative development 0.909, held-out 0.901 vs baseline); S3c round4 restores the general-VM native depth gate; complete 14-case matrix and semantic gates pass at400a14de; canonical109 instructions0.999866 vs predecessor; native orders strict-audited, owner STOP for lead formal/held-out/RSS acceptance. |
 | [T073](T073-local-read-bimodal.md) local-read bimodality | active | Diagnosis complete: candidate text-layout CPU tails; T017 adopts case-health containment only. |
 | [T074](T074-direct-eval-scope-model.md) direct eval scope model | implementation (owner branch) | Approved model is being implemented under T077 S3b; context/suspension and verification cuts remain. |
 | [T057](T057-string-code-units.md) string code units | active | Stage 1 and UTF-16 correctness extraction integrated; stage 2 abandoned (0 attempts); linear-search follow-up awaits screening. |

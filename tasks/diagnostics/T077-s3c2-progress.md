@@ -227,3 +227,17 @@ repair; no runtime change follows the frozen source. Pre-existing finally,
 duplicate-parameter and native-overflow bugs are reproduced and deferred.
 ARM symbol refresh passes strict audit; x86 fresh profile/order is queued as
 20261102T102424Z-t077-s3c-r4-order. Lead owns formal/held-out/RSS acceptance.
+
+
+## Round4 final seal: native order complete, owner STOP
+
+Job **20261102T102424Z-t077-s3c-r4-order** completes exit0 after the lead's
+serialized jobs. Fresh native public profiling regenerates the537-line x86
+order at runtime400a14de, one relink; zero stale/executor/strict failures.
+Seven optional findings match the preceding count and remain in the audit.
+The runner restores its own generated file and is verified clean. No source
+change follows qualification or profiling. [The seal](T077-s3c-r4/freeze.json)
+contains both native-order hashes and every qualification artifact. Owner STOP
+for lead formal/held-out/RSS acceptance, no origin push or main merge. Optional
+local cross-CLI children13661/14047 remain in OS uninterruptible wait despite
+SIGKILL; that host limitation is recorded and is not an execution-depth claim.
