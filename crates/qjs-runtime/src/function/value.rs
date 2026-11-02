@@ -213,9 +213,9 @@ pub struct FunctionData {
     /// The compact tier's counterpart: whether its admission proof, as far as
     /// it depends on the function alone, holds, and the register count.
     pub(crate) compact_inline_facts: Cell<u32>,
-    /// Capture-index capabilities, validated once against static declaration
-    /// provenance. Indices beyond this bounded mask retain checked assignment.
-    initialized_mutable_upvalues: Option<Box<u128>>,
+    /// Enables the body's shared capture-write mask only after all selected
+    /// routes validate. A failed link keeps the whole instance checked.
+    initialized_mutable_upvalues: bool,
     pub(crate) upvalues: Vec<BindingCell>,
     /// Received-upvalue slots backed by the function creation realm. The cells
     /// stay live; this mask only avoids rediscovering their identity by name on
@@ -408,7 +408,14 @@ impl fmt::Debug for Function {
 
 impl Function {
     pub(crate) fn initialized_mutable_upvalues(&self) -> &u128 {
-        self.initialized_mutable_upvalues.as_deref().unwrap_or(&0)
+        if self.initialized_mutable_upvalues {
+            self.bytecode
+                .as_ref()
+                .expect("validated user body")
+                .received_write_capabilities()
+        } else {
+            &0
+        }
     }
     pub(crate) fn native_captures(&self) -> &crate::function::NativeCaptures {
         self.native_captures
@@ -498,7 +505,16 @@ impl Function {
             lexical_scope
         };
         let mask = bytecode.link_write_capabilities(&upvalues);
-        let initialized_mutable_upvalues = (mask != 0).then(|| Box::new(mask));
+        // The plan owns the immutable mask. One instance bit enables it only
+        // when every selected route validated; a mismatch keeps all checked.
+        let initialized_mutable_upvalues =
+            mask != 0 && mask == *bytecode.received_write_capabilities();
+        #[cfg(feature = "perf-counters")]
+        if initialized_mutable_upvalues {
+            crate::diagnostics::update(|c| {
+                c.initialized_mutable_links += u64::from(mask.count_ones())
+            });
+        }
         let needs_scope_proof = lexical_scope.is_some();
         let realm = &creation.realm;
         let realm_upvalue_slots = bytecode
@@ -709,7 +725,7 @@ impl Function {
             wide_inline_facts: Cell::new(0),
             compact_inline_facts: Cell::new(0),
             upvalues: Vec::new(),
-            initialized_mutable_upvalues: None,
+            initialized_mutable_upvalues: false,
             realm_upvalue_slots: 0,
             local_names: Rc::new(Vec::new()),
             bytecode: None,
@@ -768,7 +784,7 @@ impl Function {
             wide_inline_facts: Cell::new(0),
             compact_inline_facts: Cell::new(0),
             upvalues: Vec::new(),
-            initialized_mutable_upvalues: None,
+            initialized_mutable_upvalues: false,
             realm_upvalue_slots: 0,
             local_names: Rc::new(Vec::new()),
             bytecode: None,

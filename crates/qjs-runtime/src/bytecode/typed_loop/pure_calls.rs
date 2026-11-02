@@ -1,4 +1,4 @@
-//! Entry proofs for named-read invariance across native calls. Guard inputs
+//! Entry proofs for named-read invariance across calls. Guard inputs
 //! are immutable activation registers, never values retained in IC metadata.
 use super::{BOXED_ARGUMENTS, TypedOp};
 use crate::{NativeFunction, Value};
@@ -72,15 +72,22 @@ pub(super) fn guards(
     Some(guards)
 }
 impl Guard {
-    /// Scalar arguments cannot call ToPrimitive. The selected implementations
-    /// either ignore `this`, or read an immutable primitive string. Bound/user
-    /// functions and operations with protocols, callbacks or writes fail here.
+    /// Scalar inputs cannot run ToPrimitive. Numeric user plans are replayable:
+    /// if an operand is unsupported, the call deoptimizes before source work.
+    /// Captures are read live on every call, never folded by this guard. Other
+    /// protocols/callbacks/writes retain the unhoisted region.
     pub(super) fn holds(&self, boxed: &[Value]) -> bool {
         let Some(Value::Function(function)) = boxed.get(self.callee as usize) else {
             return false;
         };
         if function.bound.is_some() {
             return false;
+        }
+        if function.native.is_none() {
+            return crate::function::is_direct_leaf_function(&boxed[self.callee as usize])
+                && function.bytecode.as_ref().is_some_and(|code| {
+                    crate::bytecode::vm_numeric_leaf::replayable_numeric_plan(code)
+                });
         }
         match function.native {
             Some(

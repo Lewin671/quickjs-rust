@@ -7,9 +7,13 @@ name, mutable kind and completed initialization against the actual retained cell
 Observing an initialized value alone never supplies the proof.
 
 Wide captured loads/stores use compiled received indices; general frames link
-slot capabilities at preparation, completed parameters and promotion. A nonzero bounded
-128-capture capability mask is boxed once per closure; absent/out-of-range routes
-retain checked Assign. The mask owns no values and does not replace cell identity.
+slot capabilities at preparation, completed parameters and promotion. The body
+owns a bounded 128-capture proof mask. A closure enables it only when linking
+validates every indicated retained cell; a failed link keeps all writes checked.
+One instance bit selects that immutable mask without allocating another owner.
+InitializedMutable refines Mutable metadata without changing assignment semantics.
+Absent/out-of-range routes retain checked Assign. The mask owns no values and
+does not replace cell identity.
 Merely initialized lexicals, imports, NFE names, object-route cells, default-
 parameter TDZ and extensible dynamic lookup never acquire the capability.
 

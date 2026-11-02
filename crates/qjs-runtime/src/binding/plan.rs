@@ -54,6 +54,8 @@ pub(crate) enum WritePolicy {
     Mutable,
     Throw,
     IgnoreSloppy,
+    /// Compiler-proved Var/simple-parameter initialization; link still validates.
+    InitializedMutable,
 }
 
 #[derive(Clone, Debug)]
@@ -62,8 +64,6 @@ pub(crate) struct BindingMeta {
     pub(crate) name: String,
     pub(crate) kind: BindingKind,
     pub(crate) mutable: bool,
-    /// Compiler proof: this declaration is initialized before a closure can capture it.
-    pub(crate) initialized_mutable: bool,
     pub(crate) strict_write: WritePolicy,
     pub(crate) deletable: bool,
     pub(crate) initialization: InitPolicy,

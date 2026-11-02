@@ -9,23 +9,25 @@ pub(super) fn lower(body: &mut Bytecode) {
     if len == 0 {
         return;
     }
-    // Empty blocks/loops/catches and joined function bodies own no cells,
-    // with object or separate variable holder. Their parent is equivalent;
-    // retaining transitions
-    // would obstruct pure numeric regions without doing any semantic work.
+    // All-transparent trees need only a bulk scope fill, not a relocation.
+    if body.binding_plan.references.events.is_empty()
+        && body.binding_plan.references.lifetimes.is_empty()
+        && body
+            .binding_plan
+            .scopes
+            .iter()
+            .skip(1)
+            .all(|scope| transparent(scope, &body.binding_plan.scopes))
+    {
+        body.binding_plan.pc_scopes.fill(crate::binding::ScopeId(0));
+        return;
+    }
+    // Empty records own no cells, with object or separate variable holder.
     let mut canonical = Vec::with_capacity(body.binding_plan.scopes.len());
     for scope in body.binding_plan.scopes.iter() {
-        let parent = scope.parent.filter(|parent| {
-            scope.declarations.is_empty()
-                && matches!(
-                    scope.kind,
-                    crate::binding::ScopeKind::Block
-                        | crate::binding::ScopeKind::FunctionBody
-                        | crate::binding::ScopeKind::Loop
-                        | crate::binding::ScopeKind::Catch
-                )
-                && scope.variable_target == body.binding_plan.scopes[parent.0].variable_target
-        });
+        let parent = scope
+            .parent
+            .filter(|_| transparent(scope, &body.binding_plan.scopes));
         canonical.push(parent.map_or(scope.id, |parent| canonical[parent.0]));
     }
     for scope in &mut body.binding_plan.pc_scopes {
@@ -91,29 +93,31 @@ pub(super) fn lower(body: &mut Bytecode) {
         .map(|(index, event)| (event.pc, index))
         .collect();
     let mut boundary = Vec::with_capacity(len + 1);
-    let mut instruction = Vec::with_capacity(len + 1);
     let mut next = 0;
+    let mut point_cursor = points.iter().copied().peekable();
     for pc in 0..=len {
         boundary.push(next);
-        if points.contains(&pc) {
+        if point_cursor.peek() == Some(&pc) {
+            point_cursor.next();
             next += 1;
         }
-        instruction.push(next);
         if pc < len {
             next += 1;
         }
     }
     let mut code = Vec::with_capacity(next);
     let mut pc_scopes = Vec::with_capacity(next);
+    let mut point_cursor = points.iter().copied().peekable();
     for (pc, mut op) in std::mem::take(&mut body.code).into_iter().enumerate() {
-        if points.contains(&pc) {
+        if point_cursor.peek() == Some(&pc) {
+            point_cursor.next();
             code.push(Op::BindingBoundary {
                 event: events.get(&pc).copied(),
                 cleanup: cleanup_points.contains(&pc),
             });
             pc_scopes.push(scopes[pc]);
         }
-        relocate_op(&mut op, pc, &boundary, &instruction);
+        relocate_op(&mut op, pc, &boundary);
         code.push(op);
         pc_scopes.push(scopes[pc]);
     }
@@ -133,18 +137,18 @@ pub(super) fn lower(body: &mut Bytecode) {
         life.end = boundary[life.end];
     }
     for event in &mut plan.references.events {
-        event.pc = instruction[event.pc];
+        event.pc = operation_pc(&boundary, event.pc);
     }
     for site in &mut plan.exposure.sites {
-        site.pc = instruction[site.pc];
+        site.pc = operation_pc(&boundary, site.pc);
     }
-    plan.prologue_end = plan.prologue_end.map(|pc| instruction[pc]);
+    plan.prologue_end = plan.prologue_end.map(|pc| operation_pc(&boundary, pc));
     plan.pc_scopes = pc_scopes.into_boxed_slice();
     body.code = code;
     plan.validate(body.locals.len(), body.code.len());
 }
 
-fn relocate_op(op: &mut Op, old_pc: usize, boundary: &[usize], instruction: &[usize]) {
+fn relocate_op(op: &mut Op, old_pc: usize, boundary: &[usize]) {
     match op {
         Op::Jump(target)
         | Op::JumpIfFalse(target)
@@ -159,11 +163,11 @@ fn relocate_op(op: &mut Op, old_pc: usize, boundary: &[usize], instruction: &[us
         // their rewrite explicit prevents a future pre-lowering pass hiding PCs.
         Op::IncrementLocal { skip, jump, .. } => {
             *jump = jump.map(|pc| boundary[pc]);
-            *skip = boundary[old_pc + 1 + *skip] - instruction[old_pc] - 1;
+            *skip = boundary[old_pc + 1 + *skip] - boundary[old_pc + 1];
         }
         Op::CompareLocalsJumpFalse { skip, target, .. } => {
             *target = boundary[*target];
-            *skip = boundary[old_pc + 1 + *skip] - instruction[old_pc] - 1;
+            *skip = boundary[old_pc + 1 + *skip] - boundary[old_pc + 1];
         }
         Op::InitVirtualObject { skip, .. }
         | Op::InitVirtualConstants { skip, .. }
@@ -172,11 +176,34 @@ fn relocate_op(op: &mut Op, old_pc: usize, boundary: &[usize], instruction: &[us
         | Op::CopyLocal { skip, .. }
         | Op::InitVirtualFunction { skip, .. }
         | Op::LoadVirtualNumber { skip, .. } => {
-            *skip = boundary[old_pc + 1 + *skip] - instruction[old_pc] - 1;
+            *skip = boundary[old_pc + 1 + *skip] - boundary[old_pc + 1];
         }
         Op::CallVirtualFunction { allocation_ip, .. } => {
-            *allocation_ip = instruction[*allocation_ip]
+            *allocation_ip = operation_pc(boundary, *allocation_ip)
         }
         _ => {}
     }
+}
+
+// The next boundary begins immediately after this original operation, even
+// when that next position has an inserted checkpoint. No second map is needed.
+fn operation_pc(boundary: &[usize], pc: usize) -> usize {
+    boundary[pc + 1] - 1
+}
+
+fn transparent(
+    scope: &crate::binding::ScopeDescriptor,
+    scopes: &crate::binding::ScopeDescriptors,
+) -> bool {
+    scope.declarations.is_empty()
+        && matches!(
+            scope.kind,
+            crate::binding::ScopeKind::Block
+                | crate::binding::ScopeKind::FunctionBody
+                | crate::binding::ScopeKind::Loop
+                | crate::binding::ScopeKind::Catch
+        )
+        && scope
+            .parent
+            .is_some_and(|parent| scope.variable_target == scopes[parent.0].variable_target)
 }

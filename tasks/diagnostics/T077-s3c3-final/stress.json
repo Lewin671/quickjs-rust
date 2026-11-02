@@ -1,0 +1,84 @@
+[
+  {
+    "mode": "verify",
+    "exit": 0,
+    "environment": {
+      "QJS_VERIFY_BINDINGS": "1"
+    },
+    "passed": 2743,
+    "log_sha256": "29794bdc14b737a697c28f1f7eb5a0f5a3a0eb285c0d6a93eae16dfcbd6f56a6"
+  },
+  {
+    "mode": "force",
+    "exit": 0,
+    "environment": {
+      "QJS_FORCE_EVAL_EXPOSURE": "1"
+    },
+    "passed": 2743,
+    "log_sha256": "24f51d131c2fc6527dfbb68245faf4bd9b137dd8c8006b6f7e328039d7dc11bf"
+  },
+  {
+    "mode": "poison",
+    "exit": 0,
+    "environment": {
+      "QJS_POISON_RELEASED_SCOPES": "1"
+    },
+    "passed": 2743,
+    "log_sha256": "6a9d42d0d919f59eb256b21bdb1b89c965dbc4823ce2ce413bc0cd92bfe9f325"
+  },
+  {
+    "mode": "activation-poison",
+    "exit": 0,
+    "environment": {
+      "QJS_POISON_RELEASED_ACTIVATIONS": "1"
+    },
+    "passed": 2743,
+    "log_sha256": "883bdab2514939d2cd6c3cc35bad6b9e0160cc0097ba62ba9f96cebfcdd3a758"
+  },
+  {
+    "mode": "ic-verify",
+    "exit": 0,
+    "environment": {
+      "QJS_VERIFY_IC": "1"
+    },
+    "passed": 2743,
+    "log_sha256": "b12bcf7286dd779d87c354376c27424a7b81e47076fb35a61907b7696e145bd5"
+  },
+  {
+    "mode": "combined",
+    "exit": 0,
+    "environment": {
+      "QJS_VERIFY_BINDINGS": "1",
+      "QJS_FORCE_EVAL_EXPOSURE": "1",
+      "QJS_POISON_RELEASED_SCOPES": "1",
+      "QJS_VERIFY_IC": "1"
+    },
+    "passed": 2743,
+    "log_sha256": "f492bf7b3d35ec835852435cbb7e527cd62cffb0ab65357a260331fcdf49e0eb"
+  },
+  {
+    "mode": "combined-all",
+    "exit": 0,
+    "environment": {
+      "QJS_VERIFY_BINDINGS": "1",
+      "QJS_FORCE_EVAL_EXPOSURE": "1",
+      "QJS_POISON_RELEASED_SCOPES": "1",
+      "QJS_POISON_RELEASED_ACTIVATIONS": "1",
+      "QJS_VERIFY_IC": "1"
+    },
+    "passed": 2743,
+    "log_sha256": "f43058d57022b9d3b9878baef6d5ae229eed3d8cee89f56147fa54a3b5a7c051"
+  },
+  {
+    "mode": "combined-off",
+    "exit": 0,
+    "environment": {
+      "QJS_DISABLE_IC": "1",
+      "QJS_VERIFY_BINDINGS": "1",
+      "QJS_FORCE_EVAL_EXPOSURE": "1",
+      "QJS_POISON_RELEASED_SCOPES": "1"
+    },
+    "passed": 2701,
+    "log_sha256": "cac8787a38cbd35953cfbd090fd0a1618b493b84d679b876d772742bbea306ea"
+  }
+]

@@ -628,18 +628,32 @@ fn run_frames(
             let (previous, registers) = storage.registers.split_at_mut(current_base);
             let prefix = &previous[current_base - PREFIX..current_base];
             let current_callee = &prefix[0];
-            let bytecode = running_bytecode(current_callee, root_bytecode);
-            let upvalue_owner = match current_callee {
-                Value::Function(function) => Some(function),
-                _ => root_owner,
+            let function = match current_callee {
+                Value::Function(f) => Some(f),
+                _ => None,
             };
+            let bytecode = function
+                .and_then(|f| f.bytecode.as_deref())
+                .unwrap_or(root_bytecode);
+            let upvalue_owner = function.or(root_owner);
             let upvalues = upvalue_owner.map_or(&[][..], |owner| &owner.upvalues[..]);
             let Some(program) = super::program_for(bytecode) else {
                 return Err(missing_program());
             };
-            let indexed_receiver = root_activation.indexed_receiver(prefix, depth == 1);
-            let mut env = root_activation.view(runtime, header, prefix, depth == 1);
-            let strict = env.activation.strict();
+            debug_assert!(depth == 1 || function.is_some(), "admitted inline callee");
+            let inline = if depth == 1 { None } else { function };
+            let indexed_receiver = match inline {
+                Some(f) => (!f.lexical_this).then_some(&prefix[1]),
+                None => root_activation.indexed_receiver(prefix, true),
+            };
+            let mut env = match inline {
+                Some(f) => header.service.view(f, prefix, runtime),
+                None => root_activation.view(runtime, header, prefix, true),
+            };
+            // Admitted inline code cannot enter eval/class-key mode. Strictness
+            // is the callee's immutable syntax fact; full roots keep their mode.
+            let strict = inline.map_or_else(|| env.activation.strict(), |f| f.is_strict);
+            debug_assert_eq!(strict, env.activation.strict());
             let mut activation = WideActivation {
                 bytecode,
                 env: &mut env,

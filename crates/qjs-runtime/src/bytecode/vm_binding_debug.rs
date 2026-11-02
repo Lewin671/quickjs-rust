@@ -2,7 +2,7 @@
 //! exercises indexed cell routes through the existing VM; production tiers
 //! and their admission remain unchanged when the debug mode is off.
 use super::vm::Vm;
-use crate::binding::{BindingKind, ScopeId};
+use crate::binding::{BindingKind, ScopeId, WritePolicy};
 
 impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
     #[inline]
@@ -85,9 +85,16 @@ impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
             }
             if let Some(meta) = self.bytecode.binding_meta(slot) {
                 assert_eq!(cell.metadata().name, meta.name, "metadata name: {slot}");
+                // InitializedMutable is a link-time proof of Mutable, not a
+                // different assignment policy. Module aliases can carry either
+                // annotation while sharing the same canonical mutable cell.
+                let semantic_policy = |policy| match policy {
+                    WritePolicy::InitializedMutable => WritePolicy::Mutable,
+                    other => other,
+                };
                 assert_eq!(
-                    cell.metadata().strict_write,
-                    meta.strict_write,
+                    semantic_policy(cell.metadata().strict_write),
+                    semantic_policy(meta.strict_write),
                     "metadata policy: {slot}"
                 );
             }

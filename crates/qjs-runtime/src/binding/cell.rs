@@ -36,7 +36,6 @@ impl BindingMetaRef {
                     name,
                     kind: BindingKind::Var,
                     mutable,
-                    initialized_mutable: false,
                     strict_write: if mutable {
                         WritePolicy::Mutable
                     } else {
@@ -93,11 +92,10 @@ impl BindingCell {
     /// Observing an initialized state is necessary, but never supplies the proof.
     pub(crate) fn validates_initialized_mutable(&self, name: &str) -> bool {
         let meta = self.metadata();
-        meta.initialized_mutable
+        meta.strict_write == WritePolicy::InitializedMutable
             && !meta.deletable
             && meta.name == name
             && meta.mutable
-            && meta.strict_write == WritePolicy::Mutable
             && matches!(meta.kind, BindingKind::Var | BindingKind::Parameter)
             && matches!(*self.0.state.borrow(), BindingState::Initialized(_))
     }
@@ -250,7 +248,7 @@ impl BindingCell {
             WritePolicy::Throw => {}
             WritePolicy::IgnoreSloppy if strict => {}
             WritePolicy::IgnoreSloppy => return Ok(()),
-            WritePolicy::Mutable => {
+            WritePolicy::Mutable | WritePolicy::InitializedMutable => {
                 *state = BindingState::Initialized(value);
                 return Ok(());
             }

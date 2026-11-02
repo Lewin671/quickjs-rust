@@ -10,14 +10,14 @@ fn primitive_native_calls_have_a_guarded_and_a_normal_region() {
     let programs = super::compile_all(&bytecode);
     let program = programs
         .iter()
-        .find(|p| !p.native_call_guards.is_empty())
+        .find(|p| !p.pure_call_guards.is_empty())
         .expect("pure-call variant");
     assert!(!program.hoisted_reads.is_empty());
     let normal = program
         .unhoisted
         .as_ref()
         .expect("normal admission remains available");
-    assert!(normal.native_call_guards.is_empty());
+    assert!(normal.pure_call_guards.is_empty());
     assert!(normal.hoisted_reads.is_empty());
     assert_eq!(
         eval(
@@ -69,4 +69,37 @@ fn temporary_callee_provenance_does_not_survive_a_join() {
         },
     ];
     assert!(super::pure_calls::guards(&ops, &[0], &[]).is_none());
+}
+
+#[test]
+fn numeric_user_methods_use_the_same_invariance_proof() {
+    let source = "function run(receiver,n){var sum=0;for(var i=0;i<n;i++){sum+=receiver.add(i);}return sum;}";
+    let code = nested_function(source);
+    assert!(
+        super::compile_all(&code)
+            .iter()
+            .any(|p| !p.pure_call_guards.is_empty() && !p.hoisted_reads.is_empty())
+    );
+    assert_eq!(
+        eval(&format!(
+            "{source} run({{add:function(x){{return x+1;}}}},100);"
+        )),
+        Ok(Value::Number(5050.0))
+    );
+}
+
+#[test]
+fn a_coercing_capture_deoptimizes_before_mutating_the_method() {
+    assert_eq!(
+        eval(
+            "var hits=0;var holder={add:function(x){return captured+x;}};var captured={valueOf:function(){hits++;if(hits===2)holder.add=function(x){return 10+x;};return 1;}};function run(receiver,n){var sum=0;for(var i=0;i<n;i++){sum+=receiver.add(i);}return sum;}run(holder,4)+':'+hits;"
+        ),
+        Ok(Value::String("28:2".into()))
+    );
+    assert_eq!(
+        eval(
+            "var hits=0;var holder={add:function(x){hits++;if(hits===2)holder.add=function(x){return 10+x;};return x+1;}};function run(receiver,n){var sum=0;for(var i=0;i<n;i++){sum+=receiver.add(i);}return sum;}run(holder,4)+':'+hits;"
+        ),
+        Ok(Value::String("28:2".into()))
+    );
 }

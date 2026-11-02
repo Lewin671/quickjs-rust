@@ -86,3 +86,17 @@ It passes the full gate, 2,740 runtime tests, nine-mode NG including modules,
 eight stress configurations, 2,000 global-store seeds with no new regression,
 x86 checking and all depth probes versus S3b. Method instruction fixes and the
 C3 corpus/runner checkpoint remain open; C4/C5 have not begun.
+
+## C3: method fixes and complete local receipt
+
+The [C3 checkpoint](T077-s3c3-final/README.md) qualifies the current runtime:
+full gate, 2,743 runtime tests, all eight stress configurations, nine-mode NG,
+351 public invocations, 2,000 global-store seeds and both depth profiles pass.
+All 109 frozen receipt cases are remeasured with unchanged stdout hashes.
+Upw1/upw4 save 178/401 instructions per call versus S3b; paired C2 deltas price
+additional captured += operations at 82/85 instructions after removing the
+zero-write gain. Hash-map 0.998012 and method_call 0.988471 meet the required
+local instruction limits. Fannkuch's small 1.000503 excess is retained with
+overlapping prior samples, without tuning or rounding. The source/binary-sealed
+receipt owns complete counts, method/receiver attribution and exact checks.
+The single C3 runner job is next; C4/C5 have not begun.

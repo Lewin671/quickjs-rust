@@ -18,18 +18,21 @@ pub(super) fn finish(body: &mut Bytecode, params: Option<&qjs_ast::FunctionParam
         .arguments_body_copy
         .map(|(_, target)| target);
     for meta in Rc::make_mut(&mut body.binding_plan.bindings).0.iter_mut() {
-        meta.initialized_mutable = !meta.deletable
+        if !meta.deletable
             && meta.mutable
             && meta.strict_write == WritePolicy::Mutable
             && matches!(meta.kind, BindingKind::Var | BindingKind::Parameter)
-            && copy_target != Some(meta.slot.0);
+            && copy_target != Some(meta.slot.0)
+        {
+            meta.strict_write = WritePolicy::InitializedMutable;
+        }
     }
     body.binding_plan.initialized_mutable_cells = body
         .binding_plan
         .bindings
         .iter()
         .filter(|meta| {
-            meta.initialized_mutable
+            meta.strict_write == WritePolicy::InitializedMutable
                 && meta.slot.0 < 128
                 && body.binding_plan.cell_slots.contains(&meta.slot.0)
         })
@@ -44,7 +47,7 @@ fn propagate(parent: &mut Bytecode) {
         .binding_plan
         .bindings
         .iter()
-        .any(|m| m.initialized_mutable)
+        .any(|m| m.strict_write == WritePolicy::InitializedMutable)
         && parent.binding_plan.received_writes == 0
     {
         return;
@@ -53,7 +56,11 @@ fn propagate(parent: &mut Bytecode) {
         .binding_plan
         .local_bindings
         .iter()
-        .map(|id| id.is_some_and(|id| parent.binding_plan.bindings[id.0].initialized_mutable))
+        .map(|id| {
+            id.is_some_and(|id| {
+                parent.binding_plan.bindings[id.0].strict_write == WritePolicy::InitializedMutable
+            })
+        })
         .collect();
     let received = parent.binding_plan.received_writes;
     let static_parent = !parent.binding_plan.dynamic_scope_tree;
@@ -120,8 +127,12 @@ impl Bytecode {
         mask
     }
 
-    /// A bounded, immutable capability mask belongs to this function instance,
-    /// never to shared code. An unexpected link remains checked in all builds.
+    pub(crate) fn received_write_capabilities(&self) -> &u128 {
+        &self.binding_plan.received_writes
+    }
+
+    /// Validate the shared compiler mask against this instance's actual cells.
+    /// The function enables it only when every selected link validates.
     pub(crate) fn link_write_capabilities(&self, cells: &[BindingCell]) -> u128 {
         if self.binding_plan.received_writes == 0 {
             return 0;
@@ -135,8 +146,7 @@ impl Bytecode {
                 if self.binding_plan.received_writes & (1_u128 << index) != 0
                     && cell.validates_initialized_mutable(&self.locals[slot].name)
                 {
-                    debug_assert!(cell.metadata().initialized_mutable);
-                    crate::diagnostics::count!(initialized_mutable_links);
+                    debug_assert!(cell.metadata().strict_write == WritePolicy::InitializedMutable);
                     Some(1_u128 << index)
                 } else {
                     None

@@ -215,6 +215,30 @@ pub(in crate::bytecode) enum RootActivation<'a> {
     Full(&'a mut ActivationContext),
     Indexed { function: &'a Function },
 }
+impl FrameContext {
+    /// The driver has already decoded the admitted callee. Reusing that typed
+    /// input avoids rediscovering its kind/root route for the borrowed facade.
+    #[cfg_attr(not(debug_assertions), inline(always))]
+    pub(in crate::bytecode) fn view<'a>(
+        &'a mut self,
+        function: &'a Function,
+        prefix: &'a [Value],
+        runtime: &'a mut RuntimeServices,
+    ) -> Context<'a> {
+        Context {
+            runtime,
+            activation: ActivationBorrow::Indexed {
+                state: self,
+                seed: CallSeed {
+                    function,
+                    prefix: prefix.try_into().expect("four call-prefix slots"),
+                },
+            },
+            native: None,
+        }
+    }
+}
+
 impl RootActivation<'_> {
     /// A non-lexical indexed receiver is the immutable owning prefix slot.
     /// Full/lexical receivers remain selected through the semantic Context.
@@ -268,17 +292,7 @@ impl RootActivation<'_> {
             header.service.routes.target.set(CallSlotRef::LEXICAL);
             header.service.routes.home.set(CallSlotRef::LEXICAL);
         }
-        Context {
-            runtime,
-            activation: ActivationBorrow::Indexed {
-                state: &mut header.service,
-                seed: CallSeed {
-                    function,
-                    prefix: prefix.try_into().expect("four call-prefix slots"),
-                },
-            },
-            native: None,
-        }
+        header.service.view(function, prefix, runtime)
     }
 }
 

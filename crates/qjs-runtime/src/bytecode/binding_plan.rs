@@ -294,7 +294,10 @@ impl BindingPlan {
             debug_assert!(!binding.name.starts_with("\0\0"));
             debug_assert_eq!(
                 binding.mutable,
-                binding.strict_write == WritePolicy::Mutable
+                matches!(
+                    binding.strict_write,
+                    WritePolicy::Mutable | WritePolicy::InitializedMutable
+                )
             );
             debug_assert!(
                 !binding.deletable
