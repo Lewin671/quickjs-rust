@@ -440,7 +440,7 @@ impl Compiler {
         self.emit_close_unless_done(iterator.iterator_slot, iterator.done_slot, false);
         self.emit(Op::EndFinally);
         let done = self.code.len();
-        self.patch_jump(begin, done);
+        self.patch_finally_end(begin, done);
         self.patch_jump(normal_done, done);
         self.patch_loop_breaks(context, done);
         self.finish_try(enter, finally_target);

@@ -265,10 +265,8 @@ pub(super) struct ColdFrame {
     pub(super) sloppy_global_names: Vec<String>,
     pub(super) try_stack: Vec<TryFrame>,
     pub(super) finally_stack: Vec<super::vm_try::FinallyFrame>,
-    pub(super) pending_throw: Option<Value>,
-    pub(super) pending_return: Option<Value>,
-    /// Target IP for a break/continue routed through a finally block.
-    pub(super) pending_jump: Option<usize>,
+    /// Completion handed to the next BeginFinally; active finalizers own theirs.
+    pub(super) pending_abrupt: Option<super::vm_try::PendingAbrupt>,
     /// Staged resume for a generator body suspended inside `yield*`.
     pub(super) resume_mode: Option<ResumeMode>,
     /// Explicit prototype required only for arrays created in a synthetic
@@ -299,6 +297,9 @@ impl ColdFrame {
             )
             .saturating_add(self.sloppy_global_names.capacity() * size_of::<String>())
             .saturating_add(self.try_stack.capacity() * size_of::<TryFrame>())
+            .saturating_add(
+                self.finally_stack.capacity() * size_of::<super::vm_try::FinallyFrame>(),
+            )
             .saturating_add(self.with_stack.capacity() * size_of::<Value>())
             .saturating_add(
                 self.disposable_scopes.capacity()
@@ -317,9 +318,7 @@ impl ColdFrame {
         self.sloppy_global_names.clear();
         self.try_stack.clear();
         self.finally_stack.clear();
-        self.pending_throw = None;
-        self.pending_return = None;
-        self.pending_jump = None;
+        self.pending_abrupt = None;
         self.resume_mode = None;
         self.array_literal_prototype_override = None;
         self.with_stack.clear();
@@ -375,41 +374,10 @@ impl<'a> FrameState<'a> {
     }
 
     #[inline]
-    pub(super) fn take_pending_throw(&mut self) -> Option<Value> {
-        self.cold
-            .as_deref_mut()
-            .and_then(|cold| cold.pending_throw.take())
-    }
-
-    #[inline]
-    pub(super) fn take_pending_return(&mut self) -> Option<Value> {
-        self.cold
-            .as_deref_mut()
-            .and_then(|cold| cold.pending_return.take())
-    }
-
-    #[inline]
-    pub(super) fn take_pending_jump(&mut self) -> Option<usize> {
-        self.cold
-            .as_deref_mut()
-            .and_then(|cold| cold.pending_jump.take())
-    }
-
-    #[inline]
     pub(super) fn take_resume_mode(&mut self) -> Option<ResumeMode> {
         self.cold
             .as_deref_mut()
             .and_then(|cold| cold.resume_mode.take())
-    }
-
-    /// Drops every staged abrupt completion without materializing cold state.
-    #[inline]
-    pub(super) fn clear_pending_abrupt(&mut self) {
-        if let Some(cold) = self.cold.as_deref_mut() {
-            cold.pending_throw = None;
-            cold.pending_return = None;
-            cold.pending_jump = None;
-        }
     }
 }
 

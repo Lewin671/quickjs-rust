@@ -6,9 +6,20 @@ use crate::{RuntimeError, Value, error_value};
 use super::{ir::CatchScope, vm::Vm};
 
 #[derive(Clone)]
-pub(super) struct TryFrame {
+struct CodeRegion {
     start: usize,
     end: usize,
+}
+
+impl CodeRegion {
+    fn contains(&self, target: usize) -> bool {
+        self.start <= target && target < self.end
+    }
+}
+
+#[derive(Clone)]
+pub(super) struct TryFrame {
+    region: CodeRegion,
     catch: Option<usize>,
     finally: Option<usize>,
     catch_scope: Option<CatchScope>,
@@ -21,7 +32,7 @@ pub(super) struct TryFrame {
     class_depth: usize,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub(super) enum PendingAbrupt {
     Throw(Value),
     Return(Value),
@@ -30,8 +41,7 @@ pub(super) enum PendingAbrupt {
 
 #[derive(Clone)]
 pub(super) struct FinallyFrame {
-    start: usize,
-    end: usize,
+    region: CodeRegion,
     pub(super) completion: Option<PendingAbrupt>,
 }
 
@@ -44,14 +54,14 @@ impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
         catch_scope: Option<CatchScope>,
         cleanup_slots: Vec<usize>,
     ) {
+        debug_assert!(end != usize::MAX, "unpatched protected region");
         let start = self.ip;
         let stack_depth = self.stack.len();
         let cold = self.cold_mut();
         let with_depth = cold.with_stack.len();
         let class_depth = cold.class_regions.len();
         cold.try_stack.push(TryFrame {
-            start,
-            end,
+            region: CodeRegion { start, end },
             catch,
             finally,
             catch_scope,
@@ -73,7 +83,6 @@ impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
     pub(super) fn throw_value(&mut self, value: Value) -> Result<(), RuntimeError> {
         // Fresh abrupt state is staged separately from active finalizers;
         // only routing outside a finalizer discards its saved completion.
-        self.clear_pending_abrupt();
         if !self.try_stack_is_empty() {
             let (stack_depth, with_depth, class_depth, catch, cleanup_slots) = {
                 let frame = self
@@ -117,7 +126,7 @@ impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
             self.cleanup_slots(&frame.cleanup_slots)?;
             self.cleanup_catch_scope(frame.catch_scope_active, frame.catch_scope)?;
             if let Some(finally) = frame.finally {
-                self.cold_mut().pending_throw = Some(value);
+                self.cold_mut().pending_abrupt = Some(PendingAbrupt::Throw(value));
                 self.unwind_finalizers(finally);
                 self.ip = finally;
             } else {
@@ -133,7 +142,6 @@ impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
     }
 
     pub(super) fn return_value(&mut self, value: Value) -> Result<Option<Value>, RuntimeError> {
-        self.clear_pending_abrupt();
         while let Some(frame) = self
             .cold
             .as_deref_mut()
@@ -145,7 +153,7 @@ impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
             self.cleanup_slots(&frame.cleanup_slots)?;
             self.cleanup_catch_scope(frame.catch_scope_active, frame.catch_scope)?;
             if let Some(finally) = frame.finally {
-                self.cold_mut().pending_return = Some(value);
+                self.cold_mut().pending_abrupt = Some(PendingAbrupt::Return(value));
                 self.unwind_finalizers(finally);
                 self.ip = finally;
                 return Ok(None);
@@ -158,13 +166,12 @@ impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
     /// Resume jumps through every exited region, retaining enclosing regions
     /// whose body/catch still contains the target (e.g. a loop inside a try).
     pub(super) fn abrupt_jump(&mut self, target: usize) -> Result<(), RuntimeError> {
-        self.clear_pending_abrupt();
         loop {
             let exits = self
                 .cold
                 .as_deref()
                 .and_then(|cold| cold.try_stack.last())
-                .is_some_and(|frame| !(frame.start <= target && target < frame.end));
+                .is_some_and(|frame| !frame.region.contains(target));
             if !exits {
                 break;
             }
@@ -174,7 +181,7 @@ impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
             self.cleanup_slots(&frame.cleanup_slots)?;
             self.cleanup_catch_scope(frame.catch_scope_active, frame.catch_scope)?;
             if let Some(finally) = frame.finally {
-                self.cold_mut().pending_jump = Some(target);
+                self.cold_mut().pending_abrupt = Some(PendingAbrupt::Jump(target));
                 self.unwind_finalizers(finally);
                 self.ip = finally;
                 return Ok(());
@@ -190,7 +197,7 @@ impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
             while cold
                 .finally_stack
                 .last()
-                .is_some_and(|frame| !(frame.start <= target && target < frame.end))
+                .is_some_and(|frame| !frame.region.contains(target))
             {
                 cold.finally_stack.pop();
             }
@@ -198,17 +205,11 @@ impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
     }
 
     pub(super) fn begin_finally(&mut self, end: usize) {
-        let completion = if let Some(value) = self.take_pending_throw() {
-            Some(PendingAbrupt::Throw(value))
-        } else if let Some(value) = self.take_pending_return() {
-            Some(PendingAbrupt::Return(value))
-        } else {
-            self.take_pending_jump().map(PendingAbrupt::Jump)
-        };
+        debug_assert!(end != usize::MAX, "unpatched finalizer region");
+        let completion = self.cold_mut().pending_abrupt.take();
         let start = self.ip;
         self.cold_mut().finally_stack.push(FinallyFrame {
-            start,
-            end,
+            region: CodeRegion { start, end },
             completion,
         });
     }

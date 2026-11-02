@@ -204,7 +204,7 @@ impl Compiler {
         self.pop_try_result_slot();
         self.emit(Op::EndFinally);
         let end = self.code.len();
-        self.patch_jump(begin, end);
+        self.patch_finally_end(begin, end);
         target
     }
 
@@ -372,7 +372,7 @@ impl Compiler {
 
         self.emit(Op::EndFinally);
         let end = self.code.len();
-        self.patch_jump(begin, end);
+        self.patch_finally_end(begin, end);
         Ok(target)
     }
 }

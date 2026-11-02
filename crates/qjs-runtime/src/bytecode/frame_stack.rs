@@ -266,7 +266,7 @@ mod tests {
         // Park the caller inside a try whose catch is the end of its own code,
         // which is where an ordinary `try { f(); } catch {}` would leave it.
         let catch_target = outer.code.len() - 1;
-        vm.enter_try(Some(catch_target), None, usize::MAX, None, Vec::new());
+        vm.enter_try(Some(catch_target), None, catch_target + 1, None, Vec::new());
         let (mut inner_frame_services, inner_frame_activation) =
             crate::context::HostRoot::script().into_parts();
         let inner_frame = Vm::new(&inner, &mut inner_frame_services, inner_frame_activation)

@@ -767,10 +767,17 @@ impl Compiler {
             | Op::JumpIfFalse(dest)
             | Op::JumpIfTrue(dest)
             | Op::JumpIfNotNullish(dest)
-            | Op::AbruptJump(dest)
-            | Op::BeginFinally(dest) => *dest = target,
+            | Op::AbruptJump(dest) => *dest = target,
             _ => unreachable!("attempted to patch a non-jump instruction"),
         }
+    }
+
+    pub(super) fn patch_finally_end(&mut self, begin: usize, end: usize) {
+        self.highest_jump_target = self.highest_jump_target.max(end);
+        let Op::BeginFinally(target) = &mut self.code[begin] else {
+            unreachable!("expected finalizer entry");
+        };
+        *target = end;
     }
 
     pub(super) fn temp_local(&mut self, prefix: &str) -> usize {

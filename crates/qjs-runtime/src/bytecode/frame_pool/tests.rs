@@ -89,15 +89,23 @@ fn cold_reuse_releases_values_and_charges_inner_capacity() {
     let object = ObjectRef::new(Default::default(), root.activation.realm().atoms());
     let weak = object.downgrade();
     let mut cold = pool.take_cold();
-    cold.pending_return = Some(Value::Object(object.clone()));
+    cold.pending_abrupt = Some(super::super::vm_try::PendingAbrupt::Return(Value::Object(
+        object.clone(),
+    )));
     cold.with_stack.push(Value::Object(object));
     let address = &*cold as *const _;
     pool.put_cold(cold);
     assert!(weak.upgrade().is_none());
     let mut cold = pool.take_cold();
     assert_eq!(&*cold as *const _, address);
-    assert!(cold.pending_return.is_none() && cold.with_stack.is_empty());
+    assert!(cold.pending_abrupt.is_none() && cold.with_stack.is_empty());
     assert!(cold.retained_bytes() > size_of::<ColdFrame>());
+    let before = cold.retained_bytes();
+    cold.finally_stack.reserve(64);
+    assert_eq!(
+        cold.retained_bytes() - before,
+        cold.finally_stack.capacity() * size_of::<super::super::vm_try::FinallyFrame>()
+    );
     cold.with_stack.reserve(MAX_RECORD_BYTES);
     pool.put_cold(cold);
     assert_eq!(pool.count.get(), 0, "oversized inner storage is dropped");

@@ -423,7 +423,7 @@ impl Compiler {
         self.emit_close_unless_done(destructuring.iterator_slot, destructuring.done_slot, false);
         self.emit(Op::EndFinally);
         let end = self.code.len();
-        self.patch_jump(begin, end);
+        self.patch_finally_end(begin, end);
 
         let after = self.code.len();
         self.patch_jump(over_catch, after);

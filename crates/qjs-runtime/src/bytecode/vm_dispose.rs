@@ -117,19 +117,20 @@ impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
             .as_deref_mut()
             .and_then(|cold| cold.disposable_scopes.pop())
             .unwrap_or_default();
-        // Seed the accumulated completion with any throw the block raised (the
-        // finally was entered via throw_value, which stages pending_throw). A
-        // dispose failure then suppresses it.
-        let mut pending = self.cold_mut().finally_stack.last_mut().and_then(|frame| {
-            if matches!(frame.completion, Some(PendingAbrupt::Throw(_))) {
-                match frame.completion.take() {
-                    Some(PendingAbrupt::Throw(value)) => Some(value),
-                    _ => unreachable!(),
-                }
-            } else {
-                None
-            }
-        });
+        // The current finalizer owns the block's throw; disposal can suppress it.
+        let mut pending = self
+            .cold_mut()
+            .finally_stack
+            .last_mut()
+            .and_then(|frame| {
+                frame
+                    .completion
+                    .take_if(|completion| matches!(completion, PendingAbrupt::Throw(_)))
+            })
+            .and_then(|completion| match completion {
+                PendingAbrupt::Throw(value) => Some(value),
+                _ => None,
+            });
         let mut awaited = Value::Undefined;
         let mut did_await = false;
         for resource in resources.into_iter().rev() {

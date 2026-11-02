@@ -33,12 +33,10 @@ impl ParameterInfo {
             mapped_slots: bytecode
                 .parameter_slots()
                 .iter()
-                .enumerate()
-                .map(|(index, &slot)| {
+                .map(|&slot| {
                     (params.is_simple()
                         && !bytecode.locals[slot].compiler_temporary
-                        && !bytecode.locals[slot].name.is_empty()
-                        && !bytecode.parameter_slots()[index + 1..].contains(&slot))
+                        && !bytecode.locals[slot].name.is_empty())
                     .then_some(slot)
                 })
                 .collect(),

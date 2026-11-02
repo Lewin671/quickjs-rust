@@ -55,7 +55,12 @@ fn prepared() -> (
 fn every_suspension_kind_keeps_one_box_and_one_code_handle() {
     let (mut runtime, mut owner, code) = prepared();
     let address = &*owner.frame as *const _ as usize;
-    owner.frame.cold_mut().pending_return = Some(Value::Number(42.0));
+    let mut vm = owner.attach(&mut runtime);
+    vm.cold_mut().pending_abrupt = Some(super::super::vm_try::PendingAbrupt::Return(
+        Value::Number(42.0),
+    ));
+    vm.begin_finally(100);
+    owner = vm.into_record(SuspensionKind::Ordinary);
     for (completion, kind) in [
         (
             Completion::Yield(Value::Undefined),
@@ -96,8 +101,17 @@ fn every_suspension_kind_keeps_one_box_and_one_code_handle() {
             std::mem::discriminant(&kind)
         );
         assert_eq!(
-            record.frame.cold().unwrap().pending_return,
-            Some(Value::Number(42.0))
+            record
+                .frame
+                .cold()
+                .unwrap()
+                .finally_stack
+                .last()
+                .unwrap()
+                .completion,
+            Some(super::super::vm_try::PendingAbrupt::Return(Value::Number(
+                42.0
+            )))
         );
         assert_eq!(
             Rc::strong_count(&code),
@@ -179,11 +193,19 @@ fn segment_resume_clears_declines_without_losing_semantic_state() {
     .into_suspendable();
     vm.declined_typed_loop_programs = u128::MAX;
     vm.cold_mut().wide_handback = Some(Some(10));
-    vm.cold_mut().pending_return = Some(Value::Number(42.0));
+    vm.cold_mut().pending_abrupt = Some(super::super::vm_try::PendingAbrupt::Return(
+        Value::Number(42.0),
+    ));
+    vm.begin_finally(100);
     let address = &*vm.current as *const _ as usize;
     vm.reset_segment();
     assert_eq!(vm.declined_typed_loop_programs, 0);
     assert!(vm.cold().unwrap().wide_handback.is_none());
-    assert_eq!(vm.cold().unwrap().pending_return, Some(Value::Number(42.0)));
+    assert_eq!(
+        vm.cold().unwrap().finally_stack.last().unwrap().completion,
+        Some(super::super::vm_try::PendingAbrupt::Return(Value::Number(
+            42.0
+        )))
+    );
     assert_eq!(&*vm.current as *const _ as usize, address);
 }
