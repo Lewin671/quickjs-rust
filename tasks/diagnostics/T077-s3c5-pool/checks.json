@@ -1,0 +1,25 @@
+{
+  "source_parent": "cf8cb8f0",
+  "full_gate": {
+    "command": "./scripts/check.sh",
+    "exit": 0,
+    "runtime": 2753,
+    "curated_test262": 5174,
+    "log_sha256": "73aaadacdea87c2f3cf04378f55966edae8bd8a1e1e903c69206fc87d022573a"
+  },
+  "clippy": {
+    "command": "cargo clippy -p qjs-runtime --all-targets -- -D warnings",
+    "exit": 0,
+    "log_sha256": "2d0a3c99d85f8431a7d5f9157e98327b44816dcf913bd696b44e01c80937cff5"
+  },
+  "stress": "stress.json",
+  "ng": "compare.json",
+  "layouts": "layouts.json",
+  "depth": "depth.json",
+  "pending": [
+    "regenerated arm64 and x86 order",
+    "final full/stress/NG/public/four-profile fuzz/exact cached+IC-off matrix",
+    "source freeze and single final public86",
+    "lead formal/held-out/RSS/review"
+  ]
+}

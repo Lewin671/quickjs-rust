@@ -178,10 +178,6 @@ pub(in crate::bytecode) fn resume_direct_call_bytecode(
     if let Resumed::HandedBack { .. } | Resumed::LoopFinished { .. } = resumed {
         hand_back(&mut vm, registers);
     }
-    vm.recycle_binding_slots();
-    if let Some(cold) = vm.current.cold.take() {
-        bytecode.recycle_cold_frame(cold);
-    }
     resumed
 }
 

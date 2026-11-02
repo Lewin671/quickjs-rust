@@ -1,0 +1,102 @@
+{
+  "arm": {
+    "command": "RUSTC_BOOTSTRAP=1 cargo rustc -p qjs-runtime --target-dir <separate-target> -- -Zprint-type-sizes",
+    "types": {
+      "bytecode::ir::Bytecode": {
+        "bytes": 1232,
+        "alignment": 16
+      },
+      "bytecode::vm::FrameState<'_>": {
+        "bytes": 480,
+        "alignment": 16
+      },
+      "bytecode::vm::ColdFrame": {
+        "bytes": 288,
+        "alignment": 8
+      },
+      "bytecode::frame_pool::GeneralPool": {
+        "bytes": 120,
+        "alignment": 8
+      },
+      "context::activation::ActivationContext": {
+        "bytes": 120,
+        "alignment": 8
+      },
+      "bytecode::frame_bank::FrameHeader": {
+        "bytes": 64,
+        "alignment": 8
+      },
+      "bytecode::frame_bank::FrameStorage": {
+        "bytes": 56,
+        "alignment": 8
+      },
+      "context::facade::Context<'_>": {
+        "bytes": 40,
+        "alignment": 8
+      },
+      "bytecode::frame_bank::StackPool": {
+        "bytes": 32,
+        "alignment": 8
+      },
+      "bytecode::vm_generator::GeneratorState": {
+        "bytes": 24,
+        "alignment": 8
+      },
+      "bytecode::vm_generator::SuspendedActivation": {
+        "bytes": 16,
+        "alignment": 8
+      }
+    },
+    "log_sha256": "19dfd27b6756abc2f1929661fd0dbbdbc31b37a618f04194db024cd711fc3602"
+  },
+  "x86": {
+    "command": "RUSTC_BOOTSTRAP=1 cargo rustc -p qjs-runtime --target x86_64-apple-darwin --target-dir <separate-target> -- -Zprint-type-sizes",
+    "types": {
+      "bytecode::ir::Bytecode": {
+        "bytes": 1232,
+        "alignment": 16
+      },
+      "bytecode::vm::FrameState<'_>": {
+        "bytes": 480,
+        "alignment": 16
+      },
+      "bytecode::vm::ColdFrame": {
+        "bytes": 288,
+        "alignment": 8
+      },
+      "bytecode::frame_pool::GeneralPool": {
+        "bytes": 120,
+        "alignment": 8
+      },
+      "context::activation::ActivationContext": {
+        "bytes": 120,
+        "alignment": 8
+      },
+      "bytecode::frame_bank::FrameHeader": {
+        "bytes": 64,
+        "alignment": 8
+      },
+      "bytecode::frame_bank::FrameStorage": {
+        "bytes": 56,
+        "alignment": 8
+      },
+      "context::facade::Context<'_>": {
+        "bytes": 40,
+        "alignment": 8
+      },
+      "bytecode::frame_bank::StackPool": {
+        "bytes": 32,
+        "alignment": 8
+      },
+      "bytecode::vm_generator::GeneratorState": {
+        "bytes": 24,
+        "alignment": 8
+      },
+      "bytecode::vm_generator::SuspendedActivation": {
+        "bytes": 16,
+        "alignment": 8
+      }
+    },
+    "log_sha256": "5998a38aafd3b9db4e49774d4abfa1d97c435645172cb953bfd8b8c61e9fe352"
+  }
+}

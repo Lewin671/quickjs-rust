@@ -85,13 +85,14 @@ pub(crate) struct RuntimeServices {
 impl RuntimeServices {
     pub(crate) fn for_realm(realm: &Realm) -> Self {
         debug_assert!(realm.group().atoms().ptr_eq(realm.atoms()));
+        let binding_debug = crate::binding::BindingDebug::capture();
         Self {
             group: realm.group().clone(),
             host: HostServices,
-            binding_debug: crate::binding::BindingDebug::capture(),
+            binding_debug,
             #[cfg(feature = "agents")]
             agent: None,
-            frame_stacks: Default::default(),
+            frame_stacks: crate::bytecode::frame_bank::StackPool::new(binding_debug.poisoning()),
         }
     }
     /// Explicit retention for the host EvalOutcome Clone API. Internal calls
@@ -103,7 +104,9 @@ impl RuntimeServices {
             binding_debug: self.binding_debug,
             #[cfg(feature = "agents")]
             agent: self.agent.clone(),
-            frame_stacks: Default::default(),
+            frame_stacks: crate::bytecode::frame_bank::StackPool::new(
+                self.binding_debug.poisoning(),
+            ),
         }
     }
 }

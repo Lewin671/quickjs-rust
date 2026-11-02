@@ -100,14 +100,6 @@ impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
             }
         }
     }
-
-    /// Completed private vectors are not observable. Poison is retained in the
-    /// existing recycler until take clears it; live cells/leases are untouched.
-    pub(super) fn recycle_binding_slots(&mut self) {
-        let poison = self.runtime.binding_debug.poisoning();
-        let slots = std::mem::take(&mut self.current.locals);
-        self.bytecode.recycle_local_slots_with_poison(slots, poison);
-    }
 }
 
 /// Admission/counter unit tests explicitly exercise slot execution. Semantic
@@ -188,9 +180,10 @@ mod tests {
         let bytecode = function.bytecode.as_ref().unwrap();
         let slot = bytecode.local_slot("value").unwrap();
         let mut retained = Vec::new();
+        let initial = crate::function::enter_indexed_activation(&function);
+        let mut runtime = crate::context::RuntimeServices::for_realm(initial.realm());
         for force in [false, true, false, true] {
             let activation = crate::function::enter_indexed_activation(&function);
-            let mut runtime = crate::context::RuntimeServices::for_realm(activation.realm());
             runtime.binding_debug = crate::binding::BindingDebug {
                 verify: true,
                 force,
@@ -213,7 +206,7 @@ mod tests {
             let cell = vm.local_upvalue_cell(slot).unwrap().clone();
             assert!(cell.ptr_eq(&read.upvalues[0]));
             vm.verify_binding_authority();
-            vm.recycle_binding_slots();
+            drop(vm);
             retained.push(cell);
         }
         for cell in retained {

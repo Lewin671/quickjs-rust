@@ -90,11 +90,11 @@ The interpreter's own call instruction applies the same predicate
 `call_function_slice`. `new` on a plain function has a matching
 direct route (`try_construct_direct_leaf_function`).
 
-The compact tiers execute a whole body on registers without a `FrameState`.
-Both use the same RuntimeServices pool of cleared owning stacks and headers and
-re-enter `call_function` for everything else. The wide tier can also exit to
-an interpreter frame mid-body, and take a loop back from it
-(`bytecode/vm/wide_resume.rs`).
+The compact tiers run bodies on registers without FrameState. Their cleared
+stacks/headers and general operand/local/cold capacities share the
+[RuntimeServices pool](design/frame-storage-pool.md). Other calls re-enter
+`call_function`; the wide tier can hand off to the interpreter and take a loop
+back (`bytecode/vm/wide_resume.rs`).
 
 `bytecode/frame_stack.rs` is the driver every activation runs under
 (`run_completion`). Its ability to push a callee frame onto the same `Vm` is

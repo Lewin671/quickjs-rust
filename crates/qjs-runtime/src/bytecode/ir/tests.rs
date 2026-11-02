@@ -53,51 +53,6 @@ fn index_receiver_codec_round_trips_shared_ir_layout() {
 }
 
 #[test]
-fn operand_stack_pool_reuses_cleared_bounded_storage() {
-    let bytecode = Bytecode::new(Vec::new(), Vec::new(), Vec::new());
-    let recycler = bytecode.operand_stack_recycler();
-    let mut first = recycler.take();
-    first.push(Value::Number(1.0));
-    let allocation = first.as_ptr();
-
-    recycler.recycle(first);
-    let reused = recycler.take();
-
-    assert!(reused.is_empty());
-    assert_eq!(reused.as_ptr(), allocation);
-    recycler.recycle(reused);
-
-    let _active = recycler.take();
-    let oversized = Vec::with_capacity(OperandStackRecycler::MAX_RECYCLED_CAPACITY + 1);
-    recycler.recycle(oversized);
-    assert_eq!(recycler.pooled_len(), 0);
-
-    // Nested frames each get their own recycled stack, up to the bound.
-    let nested: Vec<_> = (0..OperandStackRecycler::MAX_POOLED + 2)
-        .map(|_| recycler.take())
-        .collect();
-    for stack in nested {
-        recycler.recycle(stack);
-    }
-    assert_eq!(recycler.pooled_len(), OperandStackRecycler::MAX_POOLED);
-}
-
-#[test]
-fn a_recycler_handle_outlives_the_bytecode_it_came_from() {
-    // This is the property the frame-stack migration needs: a frame can
-    // return its operand stack when it ends without having borrowed the
-    // bytecode for the frame's whole lifetime.
-    let recycler = {
-        let bytecode = Bytecode::new(Vec::new(), Vec::new(), Vec::new());
-        bytecode.operand_stack_recycler()
-    };
-    let mut stack = recycler.take();
-    stack.push(Value::Number(1.0));
-    recycler.recycle(stack);
-    assert_eq!(recycler.pooled_len(), 1);
-}
-
-#[test]
 fn direct_parameter_slots_preserve_duplicate_positions() {
     let locals = (0..8)
         .map(|slot| Local {

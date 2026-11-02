@@ -10,7 +10,7 @@ use super::DirectCallSlots;
 use super::frame_program::FrameBytecode;
 use super::ir::Bytecode;
 use super::operand_stack::OperandStack;
-use super::vm::{ColdFrame, FrameState, Slot, Vm};
+use super::vm::{FrameState, Slot, Vm};
 use crate::{RuntimeError, Value, function::BindingCell};
 
 impl<'a, 's> Vm<'a, 's> {
@@ -154,10 +154,13 @@ impl<'a, 's> Vm<'a, 's> {
             })
             .flatten();
         let is_direct_call = direct_call_slots.is_some();
+        let pool = runtime.frame_stacks.general();
+        #[cfg(debug_assertions)]
+        pool.set_poison(runtime.binding_debug.poisoning());
         let mut locals = if is_direct_call {
-            Self::initial_direct_call_slots(bytecode)
+            Self::initial_direct_call_slots(bytecode, &pool)
         } else {
-            Self::initial_slots(bytecode, &env)
+            Self::initial_slots(bytecode, &env, &pool)
         };
         if let Some(inputs) = call_inputs {
             Self::seed_call_inputs(bytecode.parameter_slots(), &mut locals, inputs.arguments);
@@ -265,15 +268,13 @@ impl<'a, 's> Vm<'a, 's> {
         // Keep cold virtual candidates allocation-free. Their first
         // initializer grows this bank only as far as the candidate needs.
         let virtual_values = Vec::new();
-        let stack = OperandStack::new(bytecode);
+        let stack = OperandStack::new(pool);
         let cold =
             (!with_stack.is_empty() || array_literal_prototype_override.is_some()).then(|| {
-                crate::diagnostics::count!(cold_frame_allocations);
-                Box::new(ColdFrame {
-                    with_stack,
-                    array_literal_prototype_override,
-                    ..ColdFrame::default()
-                })
+                let mut cold = stack.pool().take_cold();
+                cold.with_stack = with_stack;
+                cold.array_literal_prototype_override = array_literal_prototype_override;
+                cold
             });
         let (indexed_cell_slots, initialized_mutable_slots) = if env.has_global_binding_root() {
             (0, 0)
@@ -356,10 +357,13 @@ impl<'a, 's> Vm<'a, 's> {
         }
     }
 
-    pub(super) fn initial_direct_call_slots(bytecode: &Bytecode) -> Vec<Slot> {
+    pub(super) fn initial_direct_call_slots(
+        bytecode: &Bytecode,
+        pool: &super::frame_pool::GeneralPool,
+    ) -> Vec<Slot> {
         // Fill, then seed only the hoisted slots. Testing every local's flag
         // made frame setup scale with the local count.
-        let mut locals = bytecode.take_local_slots(bytecode.locals.len());
+        let mut locals = pool.take_locals(bytecode.locals.len());
         for &slot in bytecode.hoisted_slots() {
             locals[slot as usize] = Some(Value::Undefined);
         }

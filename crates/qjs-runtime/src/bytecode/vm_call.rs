@@ -785,21 +785,30 @@ fn fast_string_from_char_code_primitives(
 
 #[cfg(test)]
 mod tests {
-    use super::super::{compiler::compile_script, eval_bytecode};
+    use super::super::compiler::compile_script;
 
     #[test]
     fn native_argument_borrows_preserve_reusable_operand_capacity() {
         let script = qjs_parser::parse_script(&"Math.max(1, 2);".repeat(40)).unwrap();
         let code = compile_script(&script).unwrap();
+        let (mut runtime, activation) = crate::context::HostRoot::script().into_parts();
+        let creation = activation.creation_context();
         for _ in 0..2 {
-            assert_eq!(eval_bytecode(&code).unwrap(), crate::Value::Number(2.0));
-            let recycler = code.operand_stack_recycler();
-            let buffer = recycler.take();
+            let activation = crate::context::ActivationContext::new(
+                creation.clone(),
+                crate::context::ExecutionMode::Script,
+            );
+            let mut vm = super::super::vm::Vm::new(&code, &mut runtime, activation).unwrap();
+            assert_eq!(vm.run().unwrap(), crate::Value::Number(2.0));
+            drop(vm);
+            let pool = runtime.frame_stacks.general();
+            let buffer = pool.take_operands();
             assert!(
                 buffer.capacity() > 0,
                 "native return discarded the caller's reusable allocation"
             );
-            recycler.recycle(buffer);
+            assert!(buffer.is_empty());
+            pool.put_operands(buffer);
         }
     }
 }

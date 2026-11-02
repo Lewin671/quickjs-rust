@@ -106,6 +106,11 @@ impl SuspendedActivation {
         self,
         runtime: &'s mut crate::context::RuntimeServices,
     ) -> Vm<'static, 's, Box<super::vm::FrameState<'static>>> {
+        #[cfg(debug_assertions)]
+        self.frame
+            .stack
+            .pool()
+            .set_poison(runtime.binding_debug.poisoning());
         let mut vm = Vm {
             runtime,
             current: self.frame,

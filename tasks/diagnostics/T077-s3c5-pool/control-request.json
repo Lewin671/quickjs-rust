@@ -1,0 +1,23 @@
+{
+  "timing": false,
+  "ids": [
+    "external/sunspider-1.0/access-fannkuch",
+    "external/jetstream3-js-subset/hash-map",
+    "external/sunspider-1.0/date-format-tofte",
+    "broad/method_call",
+    "repro/method-call"
+  ],
+  "binary_sha256": {
+    "before": {
+      "default": "0f7a1cd066c140864a10f906ab9a09e54a13dbb344fb7bd30df671174e10f014",
+      "counters": "2df03648e9cc4ae692225573be389be29eecd5e9e6d748149c0a457128a3a775"
+    },
+    "after": {
+      "default": "cc9a3af81c9816150ea295fa407fa7229c880f95e9444db15f8fc6838747c8a3",
+      "counters": "73d5603541611d367a9e2b35e818065675fd0e00723a69c8389f0ca7ca5161b2"
+    }
+  },
+  "samples": 5,
+  "order": "before/after interleaved",
+  "base": "8322fc98"
+}

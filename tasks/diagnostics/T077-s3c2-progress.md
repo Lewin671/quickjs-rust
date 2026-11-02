@@ -121,3 +121,14 @@ nine-mode NG, all stress and both depth profiles pass. C5 must still retire
 per-body free pools under the [frozen plan](../proposals/T077-s3c-pool-retirement.md),
 then complete qualification and the frozen final public86. No final acceptance
 or origin push/main merge is claimed.
+
+## C5: free-pool retirement before final qualification
+
+The [storage cut](T077-s3c5-pool/README.md) removes all three per-body recyclers
+and returns general/register capacity under one counted budget. Cross-body,
+poison, nested teardown and teardown-with-retained-handle tests pass. Full gate,
+2,753 runtime tests, nine-mode NG, all stress and both depth profiles pass;
+arm64/x86 type layouts agree. Call slopes and hash-map/method controls preserve
+the required gains. Fannkuch's small excess stays visible for final recheck.
+Order regeneration and the complete final matrix are next, before source
+freeze and the single final public86. Formal/held-out/RSS remain lead-owned.

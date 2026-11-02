@@ -35,7 +35,6 @@ use crate::{
 use std::{
     cell::RefCell,
     ops::{Deref, DerefMut},
-    rc::Rc,
 };
 pub(super) type Slot = Option<Value>;
 
@@ -88,10 +87,6 @@ pub(super) fn eval_function_bytecode(
     vm.direct_eval_with_stack = direct_eval_with_stack;
     let value = vm.run();
     let bound_this = vm.env.derived_this_cell().and_then(|cell| cell.read().ok());
-    vm.recycle_binding_slots();
-    if let Some(cold) = vm.current.cold.take() {
-        bytecode.recycle_cold_frame(cold);
-    }
     FunctionBytecodeResult { value, bound_this }
 }
 
@@ -118,12 +113,7 @@ pub(super) fn eval_call_bytecode(
     );
     vm.persist_global_lexicals = true;
     vm.direct_eval_with_stack = direct_eval_with_stack;
-    let value = vm.run();
-    vm.recycle_binding_slots();
-    if let Some(cold) = vm.current.cold.take() {
-        bytecode.recycle_cold_frame(cold);
-    }
-    value
+    vm.run()
 }
 
 /// Runs a guarded direct call and drops its completed frame in place.
@@ -165,15 +155,7 @@ fn eval_direct_call_fallback(
         Vec::new(),
         Some(direct_call_slots),
     );
-    let value = vm.run();
-    // The direct-slot contract excludes closures over this frame's locals, so
-    // nothing outlives the call and the allocation can go back to the body's
-    // pool instead of being freed and rebuilt on the next invocation.
-    vm.recycle_binding_slots();
-    if let Some(cold) = vm.current.cold.take() {
-        bytecode.recycle_cold_frame(cold);
-    }
-    value
+    vm.run()
 }
 
 /// `FrameState::slow_flags` bits, set by every writer that changes what the
@@ -302,41 +284,27 @@ pub(super) struct ColdFrame {
     pub(super) wide_handback: Option<Option<usize>>,
 }
 
-/// A per-body pool of cleared [`ColdFrame`] boxes, shared like the operand
-/// stack recycler so a cloned `Bytecode` keeps handing out the same storage.
-// The pool exists to hand the same `Box` allocation back to the next frame,
-// so the boxes are the point, not an oversight.
-#[allow(clippy::vec_box)]
-#[derive(Clone, Default)]
-pub(super) struct ColdFramePool(Rc<RefCell<Vec<Box<ColdFrame>>>>);
-
-impl std::fmt::Debug for ColdFramePool {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("ColdFramePool")
-    }
-}
-
-impl ColdFramePool {
-    const MAX_POOLED: usize = 8;
-
-    pub(super) fn take(&self) -> Box<ColdFrame> {
-        crate::diagnostics::count!(cold_frame_pool_requests);
-        self.0.borrow_mut().pop().unwrap_or_else(|| {
-            crate::diagnostics::count!(cold_frame_allocations);
-            Box::default()
-        })
-    }
-
-    pub(super) fn recycle(&self, mut cold: Box<ColdFrame>) {
-        cold.reset();
-        let mut pooled = self.0.borrow_mut();
-        if pooled.len() < Self::MAX_POOLED {
-            pooled.push(cold);
-        }
-    }
-}
-
 impl ColdFrame {
+    pub(super) fn retained_bytes(&self) -> usize {
+        size_of::<Self>()
+            .saturating_add(
+                self.class_regions.capacity()
+                    * size_of::<super::vm_class_region::ClassKeyContinuation>(),
+            )
+            .saturating_add(self.active_reference_lifetimes.capacity() * size_of::<usize>())
+            .saturating_add(
+                self.resolved_bindings.capacity()
+                    * size_of::<Option<crate::binding::ResolvedReference>>(),
+            )
+            .saturating_add(self.sloppy_global_names.capacity() * size_of::<String>())
+            .saturating_add(self.try_stack.capacity() * size_of::<TryFrame>())
+            .saturating_add(self.with_stack.capacity() * size_of::<Value>())
+            .saturating_add(
+                self.disposable_scopes.capacity()
+                    * size_of::<Vec<super::vm_dispose::DisposeResource>>(),
+            )
+    }
+
     /// Clears every field so a pooled box starts the next frame empty. A
     /// frame that completed normally has already emptied its stacks, so this
     /// is a handful of length checks.
@@ -380,8 +348,7 @@ impl<'a> FrameState<'a> {
     #[cold]
     #[inline(never)]
     fn materialize_cold(&mut self) {
-        let bytecode: &Bytecode = &self.bytecode;
-        self.cold = Some(bytecode.take_cold_frame());
+        self.cold = Some(self.stack.pool().take_cold());
     }
 
     #[inline]

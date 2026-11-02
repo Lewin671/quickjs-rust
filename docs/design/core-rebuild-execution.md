@@ -53,6 +53,8 @@ Only suspended or exposed records can enter a directory; FrameIds are lazy.
 General synchronous VM state is owned directly by its driver, with no per-call
 boxing. Immutable root/eval code owners are retained once, never deep-copied per
 entry. Each resume resets segment declines/handback, preserving semantic state.
+Cleared register/header and general operand/local/cold allocations share one
+[bounded pool](frame-storage-pool.md); code bodies own no free-capacity state.
 
 **Hot addressing is `regs[r]`, never `store[base + r]`.** Bind a window once
 per non-reentrant segment. Calls end the borrow before stack/header growth;

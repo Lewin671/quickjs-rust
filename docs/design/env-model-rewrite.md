@@ -127,7 +127,7 @@ Tests: `context/call_owner.rs`, `function/call_activation_tests.rs`, `class_keys
 `context/creation.rs` owns shared realm, referrer, module routes, private context and
 explicit global selection. `context/activation.rs` owns logical variable identity
 (minted on first exposure), call owner, scope roots, mode and strictness. **Storage:**
-only cleared register/header capacity is pooled, under count/byte limits. Context, cells, closures, arguments, continuations, generators and eval holders
+only cleared capacity is pooled under the [common budget](frame-storage-pool.md). Context, cells, closures, arguments, continuations, generators and eval holders
 keep independent identities; none refer into a recyclable register stack. Prefix refs
 select one call-value authority, switching to Context on real demand. Metadata queries borrow creation facts without minting an activation. Dynamic creation is
 selected at entry; later property changes affect subsequent calls. Related realms

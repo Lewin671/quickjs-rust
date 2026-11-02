@@ -169,18 +169,39 @@ fn poison_value() -> Value {
 fn poisoned(value: &Value) -> bool {
     matches!(value, Value::Number(n) if n.to_bits() == 0x7ff8_0000_cafe_f00d)
 }
-#[derive(Default)]
 pub(crate) struct StackPool {
     stacks: Vec<FrameStorage>,
-    bytes: usize,
+    general: Rc<super::frame_pool::GeneralPool>,
+}
+impl Default for StackPool {
+    fn default() -> Self {
+        Self::new(false)
+    }
+}
+impl Drop for StackPool {
+    fn drop(&mut self) {
+        for storage in self.stacks.drain(..) {
+            self.general.release(storage.retained_bytes());
+        }
+        self.general.drain();
+    }
 }
 impl StackPool {
+    pub(crate) fn new(poison: bool) -> Self {
+        Self {
+            stacks: Vec::new(),
+            general: Rc::new(super::frame_pool::GeneralPool::new(poison)),
+        }
+    }
+    pub(super) fn general(&self) -> Rc<super::frame_pool::GeneralPool> {
+        self.general.clone()
+    }
     pub(crate) fn take(&mut self, poison: bool) -> FrameStorage {
         let mut storage = self
             .stacks
             .pop()
             .inspect(|s| {
-                self.bytes -= s.retained_bytes();
+                self.general.release(s.retained_bytes());
             })
             .unwrap_or_default();
         if cfg!(debug_assertions) && storage.poison {
@@ -201,11 +222,7 @@ impl StackPool {
             }
         }
         let bytes = storage.retained_bytes();
-        if bytes <= 16 * 1024
-            && self.bytes + bytes + 64 * std::mem::size_of::<FrameStorage>() <= 256 * 1024
-            && self.stacks.len() < 64
-        {
-            self.bytes += bytes;
+        if self.stacks.len() < super::frame_pool::MAX_RECORDS && self.general.reserve(bytes) {
             self.stacks.push(storage);
         }
     }
@@ -588,9 +605,7 @@ mod owner_tests {
             pool.put(storage);
         }
         assert!(pool.stacks.len() <= 64);
-        assert!(
-            pool.bytes + pool.stacks.capacity() * std::mem::size_of::<FrameStorage>() <= 256 * 1024
-        );
+        assert!(pool.general.retained_bytes() <= super::super::frame_pool::MAX_BYTES);
         assert!(pool.stacks.iter().all(|s| s.retained_bytes() <= 16 * 1024));
     }
 }
