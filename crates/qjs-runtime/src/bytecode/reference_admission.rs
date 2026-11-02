@@ -198,6 +198,25 @@ impl ReferencePlan {
         Ok(())
     }
 
+    /// Explicit tier cleanup; a boundary with no selected references never
+    /// materializes Context. Active references preserve their exact selected base.
+    pub(super) fn cleanup_checked(&self, pc: usize, env: &mut crate::context::Context<'_>) {
+        if !env.activation.has_saved_references() {
+            return;
+        }
+        crate::diagnostics::count!(reference_cleanup_boundaries);
+        let saved = &mut env.activation.saved_references;
+        if let Some(entries) = saved {
+            entries.retain(|(index, _)| {
+                let life = &self.lifetimes[*index];
+                pc >= life.start && pc < life.end
+            });
+            if entries.is_empty() {
+                *saved = None;
+            }
+        }
+    }
+
     /// Takes the reference a checkpoint saved for the site storing at
     /// `store_pc`, with that site's strictness.
     pub(super) fn take_saved_store(

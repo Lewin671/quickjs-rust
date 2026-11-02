@@ -77,3 +77,12 @@ C2 after removing the zero-write improvement. [The receipt](T077-s3c3-bindings/R
 owns source/binary identities, counts, policy exclusions and method coverage.
 Hash-map 1.003722 and broad/method_call 1.002384 remain open. Explicit boundary
 Ops/indexed cell routes and all remaining C3–C5 gates are not complete.
+
+## C3: explicit checkpoints and indexed own cells
+
+The [semantic cut](T077-s3c3-boundaries/README.md) removes per-op scope/reference
+polling and links indexed read/general write cells without a value projection.
+It passes the full gate, 2,740 runtime tests, nine-mode NG including modules,
+eight stress configurations, 2,000 global-store seeds with no new regression,
+x86 checking and all depth probes versus S3b. Method instruction fixes and the
+C3 corpus/runner checkpoint remain open; C4/C5 have not begun.

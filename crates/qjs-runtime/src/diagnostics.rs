@@ -104,6 +104,14 @@ declare_counters! {
     binding_cell_allocations,
     /// Statically selected capture routes validated while creating a closure.
     initialized_mutable_links,
+    initialized_mutable_frame_routes,
+    indexed_cell_reads,
+    /// Explicit checkpoint dispatches, including elided fast checkpoints.
+    binding_boundary_events,
+    binding_boundary_scope_changes,
+    reference_cleanup_boundaries,
+    reference_start_elisions,
+    dynamic_reference_selections,
     /// Captured assignments using a validated compiler capability.
     initialized_mutable_writes,
     /// Captured assignments retaining full dynamic/TDZ/write-policy checks.

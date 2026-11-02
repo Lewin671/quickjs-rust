@@ -9,7 +9,7 @@ ordinary calls must not copy a name-to-value environment. Paths are under
 compiler records declarations and parameter/body/block/catch/loop/class-name/with
 boundaries. Scope IDs and binding IDs belong to the retained metadata owner;
 descriptors contain names, declaration attributes and routes, never live values.
-The PC map identifies the active lexical chain after normal or abrupt control
+The [checkpoint PC map](env-model-checkpoints.md) identifies the active lexical chain after normal or abrupt control
 flow, including future TDZ declarations and excluding exited sibling scopes.
 
 Parameter inputs and capture inputs are positional. Capture linking follows the

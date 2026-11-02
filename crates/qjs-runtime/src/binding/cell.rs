@@ -94,6 +94,7 @@ impl BindingCell {
     pub(crate) fn validates_initialized_mutable(&self, name: &str) -> bool {
         let meta = self.metadata();
         meta.initialized_mutable
+            && !meta.deletable
             && meta.name == name
             && meta.mutable
             && meta.strict_write == WritePolicy::Mutable

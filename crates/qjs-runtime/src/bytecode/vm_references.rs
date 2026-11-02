@@ -8,6 +8,62 @@ use super::{
 use crate::{RuntimeError, Value, binding::ResolvedReference};
 
 impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
+    /// IP initially names the original operation after this checkpoint. A
+    /// scope promotion restarts at the checkpoint before any observable event;
+    /// a completed event restarts after its effects, never replaying selection.
+    #[inline(never)]
+    pub(super) fn run_binding_boundary(
+        &mut self,
+        program: &super::frame_program::FrameProgramView<'_>,
+        event: Option<usize>,
+        cleanup: bool,
+        authority: u128,
+    ) -> Result<Option<super::frame_stack::FrameExit>, RuntimeError> {
+        let boundary_pc = self.current.ip - 1;
+        let original_pc = self.current.ip;
+        let plan = &program.bytecode.binding_plan;
+        if let Some(active) = self.current.binding_scope
+            && plan
+                .pc_scopes
+                .get(boundary_pc)
+                .is_some_and(|scope| *scope != active)
+        {
+            crate::diagnostics::count!(binding_boundary_scope_changes);
+            self.update_binding_scope(boundary_pc);
+            if self.current.authoritative_slots != authority {
+                self.current.ip = boundary_pc;
+                return Ok(Some(super::frame_stack::FrameExit::RefreshBindings));
+            }
+        }
+        if self.current.reference_hooks {
+            let references = &plan.references;
+            if cleanup && self.current.active_reference_count != 0 {
+                crate::diagnostics::count!(reference_cleanup_boundaries);
+                self.prune_references(references, boundary_pc);
+            }
+            if let Some(index) = event {
+                let original =
+                    program
+                        .execution_code
+                        .get(original_pc)
+                        .ok_or_else(|| RuntimeError {
+                            thrown: None,
+                            message: "reference checkpoint has no operation".into(),
+                        })?;
+                self.current.ip = original_pc + 1;
+                let result =
+                    self.run_reference_event(references, &references.events[index], original);
+                if matches!(self.handle_runtime_result(result)?, Some(false)) {
+                    self.current.ip = original_pc;
+                }
+                if self.current.authoritative_slots != authority {
+                    return Ok(Some(super::frame_stack::FrameExit::RefreshBindings));
+                }
+            }
+        }
+        Ok(None)
+    }
+
     pub(super) fn save_reference(
         &mut self,
         bank: usize,
@@ -65,8 +121,10 @@ impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
     ) -> Result<bool, RuntimeError> {
         for index in &event.starts {
             if plan.start_elidable(*index, &self.env) {
+                crate::diagnostics::count!(reference_start_elisions);
                 continue;
             }
+            crate::diagnostics::count!(dynamic_reference_selections);
             let site = &plan.sites[*index];
             let life = &plan.lifetimes[site.lifetime];
             if self

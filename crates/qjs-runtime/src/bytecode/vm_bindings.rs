@@ -50,6 +50,20 @@ impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
     }
 
     pub(super) fn enter_function_body(&mut self) {
+        if !self.env.has_global_binding_root()
+            && !self.bytecode.parameter_slots().is_empty()
+            && self.bytecode.creates_capturing_closures()
+        {
+            let linked = self
+                .bytecode
+                .link_frame_write_capabilities(&self.local_upvalues);
+            #[cfg(feature = "perf-counters")]
+            crate::diagnostics::update(|c| {
+                c.initialized_mutable_frame_routes +=
+                    u64::from((linked & !self.initialized_mutable_slots).count_ones())
+            });
+            self.initialized_mutable_slots |= linked;
+        }
         if let Some((source, target)) = self.bytecode.binding_plan.arguments_body_copy {
             self.local_upvalue_cell(target)
                 .expect("body arguments cell")
@@ -350,6 +364,13 @@ impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
 
     #[inline(never)]
     fn load_local_slow(&mut self, slot: usize) -> Result<Value, RuntimeError> {
+        if slot < 128
+            && self.indexed_cell_slots & (1_u128 << slot) != 0
+            && let Some(cell) = self.local_upvalues.get(slot).and_then(Option::as_ref)
+        {
+            crate::diagnostics::count!(indexed_cell_reads);
+            return cell.read();
+        }
         if self.bytecode.locals[slot].sloppy_global_fallback {
             let name = self.bytecode.locals[slot].name.clone();
             return self.load_global(&name);
@@ -806,6 +827,13 @@ impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
 
     #[inline(never)]
     fn assign_local_slow(&mut self, slot: usize, value: Value) -> Result<(), RuntimeError> {
+        if slot < 128
+            && self.initialized_mutable_slots & (1_u128 << slot) != 0
+            && let Some(cell) = self.local_upvalues.get(slot).and_then(Option::as_ref)
+        {
+            cell.replace_initialized_mutable(value);
+            return Ok(());
+        }
         if self.slot_is_authoritative(slot)
             && self
                 .bytecode

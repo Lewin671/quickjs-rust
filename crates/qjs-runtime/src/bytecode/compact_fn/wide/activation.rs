@@ -199,7 +199,6 @@ enum Action {
 struct WideEntry<'a> {
     program: &'a WideProgram,
     upvalue_owner: Option<Function>,
-    upvalue_slots: u128,
 }
 
 /// Proves a body may run on this tier with the given upvalue source.
@@ -229,7 +228,6 @@ fn admit<'a>(
     Some(WideEntry {
         program,
         upvalue_owner,
-        upvalue_slots,
     })
 }
 
@@ -589,7 +587,6 @@ fn run_root(
         runtime,
         &mut activation,
         entry.upvalue_owner.as_ref(),
-        entry.upvalue_slots,
         root,
         &mut storage,
     );
@@ -617,7 +614,6 @@ fn run_frames(
     runtime: &mut crate::context::RuntimeServices,
     root_activation: &mut RootActivation<'_>,
     root_owner: Option<&Function>,
-    _root_slots: u128,
     root: RootExit<'_>,
     storage: &mut FrameStorage,
 ) -> Result<Value, RuntimeError> {
@@ -900,9 +896,9 @@ fn run_frames(
                         // driver's action type and its match stay exactly as they
                         // were: growing either re-rolls this loop's register
                         // allocation (docs/performance-knowledge.md, "Codegen").
-                        WideOp::ReferenceCheck { .. } => {
+                        WideOp::ReferenceBoundary { pc } => {
                             if let Err(error) =
-                                cold_ops::execute(op, program, &mut activation, window)
+                                cold_ops::reference_boundary(bytecode, pc as usize, activation.env)
                             {
                                 break Err(error);
                             }

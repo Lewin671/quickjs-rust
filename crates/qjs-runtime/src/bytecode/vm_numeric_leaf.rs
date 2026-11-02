@@ -175,7 +175,7 @@ impl NumericLeafPlan {
         let mut writes_received_upvalues = false;
         for op in &bytecode.code {
             match op {
-                Op::FunctionPrologueEnd => {}
+                Op::BindingBoundary { .. } | Op::FunctionPrologueEnd => {}
                 Op::LoadConst(index) => {
                     let value = FastValue::from_value(bytecode.constants.get(*index)?)?;
                     push_abstract(&mut stack, AbstractValue::Known(value))?;
@@ -997,7 +997,7 @@ fn try_eval_numeric_leaf_bytecode(
     let mut stack_len = 0;
     for op in &bytecode.code {
         match op {
-            Op::FunctionPrologueEnd => {}
+            Op::BindingBoundary { .. } | Op::FunctionPrologueEnd => {}
             Op::LoadConst(index) => {
                 let value = FastValue::from_value(bytecode.constants.get(*index)?)?;
                 push(&mut stack, &mut stack_len, value)?;

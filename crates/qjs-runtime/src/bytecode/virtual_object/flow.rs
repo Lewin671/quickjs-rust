@@ -653,7 +653,7 @@ impl<'a> Analyzer<'a> {
                     *value = AbstractValue::unknown();
                 }
             }
-            Op::FunctionPrologueEnd | Op::ThrowReferenceError(_) => {}
+            Op::BindingBoundary { .. } | Op::FunctionPrologueEnd | Op::ThrowReferenceError(_) => {}
             // Dynamic scope is rejected before the fixed-point walk. These
             // arms keep the match explicit if that policy is ever relaxed.
             Op::CallDirectEval { .. }

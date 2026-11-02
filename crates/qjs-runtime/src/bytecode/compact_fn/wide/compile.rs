@@ -432,16 +432,18 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
 
     for (ip, op) in code.iter().enumerate() {
         // The reference event whose checked global starts begin here.
-        let checkpoint = references
-            .events
-            .binary_search_by_key(&ip, |event| event.pc)
-            .ok()
-            .filter(|&event| {
-                references.events[event]
-                    .starts
-                    .iter()
-                    .any(|&site| references.sites[site].checked)
-            });
+        let checkpoint = match op {
+            Op::BindingBoundary { event, cleanup } => {
+                *cleanup && references.has_checked
+                    || event.is_some_and(|event| {
+                        references.events[event]
+                            .starts
+                            .iter()
+                            .any(|&site| references.sites[site].checked)
+                    })
+            }
+            _ => false,
+        };
         if jump_targets[ip] {
             materialize(&mut ops, &mut aliases, &register);
         }
@@ -470,9 +472,9 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
         }
         // After any header exit, so a backedge to `ip` checks again, and
         // before the instruction's own operations: the RHS starts here.
-        if let Some(event) = checkpoint {
-            ops.push(WideOp::ReferenceCheck {
-                event: u32::try_from(event).ok()?,
+        if checkpoint {
+            ops.push(WideOp::ReferenceBoundary {
+                pc: u32::try_from(ip).ok()?,
             });
         }
         if fused_pops[ip] {
@@ -616,7 +618,7 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
             _ => materialize(&mut ops, &mut aliases, &register),
         }
         match op {
-            Op::FunctionPrologueEnd | Op::FreshIterationScope(_) => {}
+            Op::BindingBoundary { .. } | Op::FunctionPrologueEnd | Op::FreshIterationScope(_) => {}
             // A constant loaded only to be discarded -- a statement's
             // completion value -- is not loaded at all.
             Op::Pop
@@ -1188,7 +1190,7 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
                     }
                 }
             }
-            WideOp::ReferenceCheck { .. }
+            WideOp::ReferenceBoundary { .. }
             | WideOp::StoreUpvalueLocal { .. }
             | WideOp::Drop { .. }
             | WideOp::JumpIfFalsy { .. }
@@ -1270,8 +1272,11 @@ fn global_store_stays_interpreted(
     {
         return Some("sloppy global store inside an accelerated loop");
     }
-    let value_end = match ip.checked_sub(1).map(|at| &code[at]) {
-        Some(Op::Dup) => ip - 1,
+    let previous = (0..ip)
+        .rev()
+        .find(|&at| !matches!(code[at], Op::BindingBoundary { .. }));
+    let value_end = match previous {
+        Some(at) if matches!(code[at], Op::Dup) => at,
         _ => ip,
     };
     // An append with its value kept (`Dup`) would copy the accumulator: the
@@ -1290,10 +1295,14 @@ fn global_store_stays_interpreted(
 /// global store of `g` right after it: that addition exits, and the exit
 /// extends the global string in place and continues past the store
 /// (`property::try_append_global_var`) rather than copying the accumulator.
+pub(super) fn next_operation(code: &[Op], start: usize) -> Option<usize> {
+    (start..code.len()).find(|&pc| !matches!(code[pc], Op::BindingBoundary { .. }))
+}
+
 fn appends_to_global(code: &[Op], ip: usize) -> bool {
     matches!(code.get(ip), Some(Op::Binary(BinaryOp::Add)))
         && matches!(
-            (code.get(ip + 1), expression_start(code, ip + 1).map(|start| &code[start])),
+            (next_operation(code, ip + 1).and_then(|next| code.get(next)), expression_start(code, ip + 1).map(|start| &code[start])),
             (Some(Op::StoreLocalOrGlobalSloppy { name, .. }), Some(Op::LoadGlobal(read)))
                 if read == name
         )
@@ -1619,7 +1628,10 @@ fn effect_of(op: &Op) -> Option<Effect> {
         falls_through: true,
     };
     let effect = match op {
-        Op::FunctionPrologueEnd | Op::ClearLocal(_) | Op::FreshIterationScope(_) => simple(0, 0),
+        Op::BindingBoundary { .. }
+        | Op::FunctionPrologueEnd
+        | Op::ClearLocal(_)
+        | Op::FreshIterationScope(_) => simple(0, 0),
         Op::LoadConst(_) | Op::LoadLocal(_) | Op::Dup | Op::LoadGlobal(_) => simple(0, 1),
         Op::GetPropIndex(encoded) => {
             if crate::bytecode::ir::decode_index_receiver(*encoded)

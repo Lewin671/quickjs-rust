@@ -27,6 +27,7 @@ fn initialized_mutable_requires_static_provenance_at_link() {
         "function make(){var x=0;return function(){eval('');x++;return x}} make()",
         "function make(){var x=0;with({}){return function(){x++;return x}}} make()",
         "var x=0; (function(){x++;return x})",
+        "function make(){return eval('var x=0; (function(){x++;return x})')} make()",
         "function make(){var f=0;return function f(){f=1;return f}} make()",
     ] {
         let f = closure(source);
@@ -85,4 +86,41 @@ fn proven_capture_writes_preserve_aliases_resources_and_checked_errors() {
         .unwrap(),
         Value::String("ReferenceError".into())
     );
+}
+
+#[test]
+fn indexed_own_cells_keep_tdz_and_dynamic_selection_rules() {
+    assert_eq!(
+        eval(
+            "function f(){eval('');var out;try{out=x}catch(e){out=e.name;}let x=3;return out+':'+x;}f()"
+        ),
+        Ok(Value::String("ReferenceError:3".into()))
+    );
+    assert_eq!(
+        eval("function f(){var x=1;eval('var y=2;delete x');return x+y;}f()"),
+        Ok(Value::Number(3.0))
+    );
+    assert_eq!(
+        eval("function f(){var x=1;eval('');var seen;with({x:8}){seen=x;}return seen+':'+x;}f()"),
+        Ok(Value::String("8:1".into()))
+    );
+}
+
+#[cfg(feature = "perf-counters")]
+#[test]
+fn general_frames_link_parameter_and_var_writes_once() {
+    crate::diagnostics::reset_counters();
+    assert_eq!(
+        eval(
+            "function f(p){var x=1;var keep=()=>p+x;try{x+=p;p+=1;return x+keep();}finally{}}f(2)"
+        ),
+        Ok(Value::Number(9.0))
+    );
+    let counters = crate::diagnostics::counters().unwrap();
+    assert!(
+        counters.initialized_mutable_frame_routes >= 2,
+        "{counters:?}"
+    );
+    assert!(counters.initialized_mutable_writes >= 2, "{counters:?}");
+    assert!(counters.indexed_cell_reads > 0, "{counters:?}");
 }

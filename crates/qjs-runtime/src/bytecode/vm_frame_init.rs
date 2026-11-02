@@ -275,6 +275,18 @@ impl<'a, 's> Vm<'a, 's> {
                     ..ColdFrame::default()
                 })
             });
+        let (indexed_cell_slots, initialized_mutable_slots) = if env.has_global_binding_root() {
+            (0, 0)
+        } else {
+            (
+                bytecode.binding_plan.indexed_cells,
+                bytecode.link_frame_write_capabilities(&local_upvalues),
+            )
+        };
+        #[cfg(feature = "perf-counters")]
+        crate::diagnostics::update(|c| {
+            c.initialized_mutable_frame_routes += u64::from(initialized_mutable_slots.count_ones())
+        });
         let mut vm = Self {
             runtime,
             current: super::vm::InlineFrame(FrameState {
@@ -291,6 +303,8 @@ impl<'a, 's> Vm<'a, 's> {
                 stack,
                 locals,
                 local_upvalues,
+                indexed_cell_slots,
+                initialized_mutable_slots,
                 direct_readonly_upvalue_owner,
                 direct_readonly_upvalue_slots,
                 authoritative_slots,

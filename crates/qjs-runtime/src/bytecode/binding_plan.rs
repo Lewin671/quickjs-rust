@@ -69,6 +69,8 @@ pub(super) struct BindingPlan {
     pub(super) exposure: crate::binding::EvalExposurePlan,
     pub(super) received: Box<[super::binding_captures::CaptureRoute]>,
     pub(super) received_writes: u128,
+    pub(super) initialized_mutable_cells: u128,
+    pub(super) indexed_cells: u128,
     pub(super) received_indices: Box<[Option<usize>]>,
     pub(super) initial_slots: Vec<InitialSlot>,
     pub(super) cell_slots: Vec<usize>,
@@ -149,6 +151,8 @@ impl BindingPlan {
             ]
             .into_boxed_slice(),
             received_writes: 0,
+            initialized_mutable_cells: 0,
+            indexed_cells: 0,
             received_indices: {
                 let mut indices = vec![None; bytecode.locals.len()];
                 for (index, &slot) in bytecode.received_upvalue_slots().iter().enumerate() {

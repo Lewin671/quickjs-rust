@@ -204,6 +204,10 @@ pub(super) struct FrameState<'a> {
     pub(super) stack: OperandStack,
     pub(super) locals: Vec<Slot>,
     pub(super) local_upvalues: Vec<Option<BindingCell>>,
+    /// Compiled own-cell routes, enabled once for this activation's environment.
+    pub(super) indexed_cell_slots: u128,
+    /// Validated initialized mutable own/received cell routes, indexed by slot.
+    pub(super) initialized_mutable_slots: u128,
     /// Direct frames that only read received cells retain the source function
     /// once and resolve cells by bytecode slot. This avoids rebuilding an
     /// owned local-sized option vector for every direct invocation while
@@ -570,63 +574,9 @@ impl<'a, 's, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, 's, F> {
         let code = program.execution_code;
         let constants: &[Value] = &program.bytecode.constants;
         let mut pc = self.current.ip;
-        let references = &program.bytecode.binding_plan.references;
-        let mut event_cursor = references.events.partition_point(|event| event.pc < pc);
-        let mut expected_pc = pc;
-        // Fixed for the activation (set only at frame entry and resume).
-        let reference_hooks = self.current.reference_hooks;
         'dispatch: loop {
             #[cfg(debug_assertions)]
             self.verify_dispatch_interval::<SLOW>(authority_at_entry);
-            if SLOW {
-                if let Some(active) = self.current.binding_scope
-                    && program
-                        .bytecode
-                        .binding_plan
-                        .pc_scopes
-                        .get(pc)
-                        .is_some_and(|scope| *scope != active)
-                {
-                    self.update_binding_scope(pc);
-                    if self.current.authoritative_slots != authority_at_entry {
-                        self.current.ip = pc;
-                        return Ok(FrameExit::RefreshBindings);
-                    }
-                }
-                if reference_hooks {
-                    if pc != expected_pc {
-                        event_cursor = references.events.partition_point(|event| event.pc < pc);
-                    }
-                    expected_pc = pc + 1;
-                    if self.current.active_reference_count != 0 {
-                        self.prune_references(references, pc);
-                    }
-                    if references
-                        .events
-                        .get(event_cursor)
-                        .is_some_and(|event| event.pc == pc)
-                    {
-                        let event = &references.events[event_cursor];
-                        event_cursor += 1;
-                        self.current.ip = pc + 1;
-                        let result = self.run_reference_event(references, event, &code[pc]);
-                        match self.handle_runtime_result(result)? {
-                            Some(false) => {}
-                            _ => {
-                                pc = self.current.ip;
-                                continue;
-                            }
-                        }
-                    }
-                }
-                // Every authority writer sets `SLOW_AUTHORITY`.
-                if self.current.slow_flags & SLOW_AUTHORITY != 0
-                    && self.current.authoritative_slots != authority_at_entry
-                {
-                    self.current.ip = pc;
-                    return Ok(FrameExit::RefreshBindings);
-                }
-            }
             let Some(op) = code.get(pc) else {
                 self.current.ip = pc;
                 return Err(RuntimeError {
@@ -639,6 +589,22 @@ impl<'a, 's, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, 's, F> {
             crate::diagnostics::update(|c| c.executed_ops += 1);
             'out_of_line: {
                 match op {
+                    Op::BindingBoundary { event, cleanup } => {
+                        crate::diagnostics::count!(binding_boundary_events);
+                        if SLOW {
+                            self.current.ip = pc;
+                            if let Some(exit) = self.run_binding_boundary(
+                                &program,
+                                *event,
+                                *cleanup,
+                                authority_at_entry,
+                            )? {
+                                return Ok(exit);
+                            }
+                            pc = self.current.ip;
+                        }
+                        continue 'dispatch;
+                    }
                     #[allow(clippy::collapsible_match)]
                     Op::LoadConst(index) => {
                         crate::diagnostics::count!(dispatched_load_const_ops);

@@ -1248,6 +1248,7 @@ impl<'a> Builder<'a> {
 
     fn compile_op(&mut self, op: &Op, ip: usize) -> Option<()> {
         match op {
+            Op::BindingBoundary { .. } => {}
             Op::LoadConst(index) => {
                 let constant = self.bytecode.constants.get(*index)?;
                 match Typed::from_value(constant) {

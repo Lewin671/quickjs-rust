@@ -40,6 +40,9 @@
 //! `named_property_cache.rs` and `enumerate_keys_cache.rs`;
 //! `vm_string_append.rs` appends in place to a uniquely held string.
 
+mod binding_boundaries;
+#[cfg(test)]
+mod binding_boundaries_tests;
 mod binding_captures;
 mod binding_metadata;
 mod binding_plan;

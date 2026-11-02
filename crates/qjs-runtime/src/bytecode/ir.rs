@@ -586,6 +586,12 @@ pub(super) enum Op {
         value: f64,
         skip: usize,
     },
+    /// Explicit scope/reference checkpoint. Side tables are read only here;
+    /// insertion and every PC-bearing map are relocated before tier lowering.
+    BindingBoundary {
+        event: Option<usize>,
+        cleanup: bool,
+    },
 }
 
 pub(super) use super::ir_class::{

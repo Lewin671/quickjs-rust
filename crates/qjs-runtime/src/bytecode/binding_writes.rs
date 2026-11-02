@@ -7,6 +7,7 @@ use std::rc::Rc;
 pub(super) fn finish(body: &mut Bytecode, params: Option<&qjs_ast::FunctionParams>) {
     if !body.creates_closures()
         || body.global_scope
+        || body.is_direct_eval_code()
         || body.binding_plan.dynamic_scope_tree
         || !params.is_none_or(qjs_ast::FunctionParams::is_simple)
     {
@@ -17,11 +18,22 @@ pub(super) fn finish(body: &mut Bytecode, params: Option<&qjs_ast::FunctionParam
         .arguments_body_copy
         .map(|(_, target)| target);
     for meta in Rc::make_mut(&mut body.binding_plan.bindings).0.iter_mut() {
-        meta.initialized_mutable = meta.mutable
+        meta.initialized_mutable = !meta.deletable
+            && meta.mutable
             && meta.strict_write == WritePolicy::Mutable
             && matches!(meta.kind, BindingKind::Var | BindingKind::Parameter)
             && copy_target != Some(meta.slot.0);
     }
+    body.binding_plan.initialized_mutable_cells = body
+        .binding_plan
+        .bindings
+        .iter()
+        .filter(|meta| {
+            meta.initialized_mutable
+                && meta.slot.0 < 128
+                && body.binding_plan.cell_slots.contains(&meta.slot.0)
+        })
+        .fold(0, |mask, meta| mask | (1_u128 << meta.slot.0));
     propagate(body);
 }
 
@@ -71,12 +83,43 @@ fn propagate(parent: &mut Bytecode) {
         if writes != child.binding_plan.received_writes {
             let child = Rc::make_mut(child);
             child.binding_plan.received_writes = writes;
+            let received_cells = child
+                .received_upvalue_slots()
+                .iter()
+                .take(128)
+                .enumerate()
+                .filter(|&(index, &slot)| slot < 128 && writes & (1_u128 << index) != 0)
+                .fold(0, |mask, (_, &slot)| mask | (1_u128 << slot));
+            child.binding_plan.initialized_mutable_cells |= received_cells;
             propagate(child);
         }
     });
 }
 
 impl Bytecode {
+    /// Activation-local links include own cells and positional received cells.
+    /// A scope/name lookup never establishes this capability; initialization
+    /// state merely validates the compiler's already selected route.
+    pub(super) fn link_frame_write_capabilities(&self, cells: &[Option<BindingCell>]) -> u128 {
+        let mut eligible = self.binding_plan.initialized_mutable_cells;
+        let mut mask = 0;
+        while eligible != 0 {
+            let slot = eligible.trailing_zeros() as usize;
+            eligible &= eligible - 1;
+            let Some(cell) = cells.get(slot).and_then(Option::as_ref) else {
+                continue;
+            };
+            let name = self.binding_plan.local_bindings[slot]
+                .map_or(self.locals[slot].name.as_str(), |id| {
+                    self.binding_plan.bindings[id.0].name.as_str()
+                });
+            if cell.validates_initialized_mutable(name) {
+                mask |= 1_u128 << slot;
+            }
+        }
+        mask
+    }
+
     /// A bounded, immutable capability mask belongs to this function instance,
     /// never to shared code. An unexpected link remains checked in all builds.
     pub(crate) fn link_write_capabilities(&self, cells: &[BindingCell]) -> u128 {

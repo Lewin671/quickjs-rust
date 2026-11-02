@@ -174,7 +174,7 @@ pub(super) fn compile(bytecode: &Bytecode) -> Option<CompactFunctionProgram> {
             continue;
         };
         match op {
-            Op::FunctionPrologueEnd => {}
+            Op::BindingBoundary { .. } | Op::FunctionPrologueEnd => {}
             Op::Pop => ops.push(CompactOp::Drop {
                 src: register(depth.checked_sub(1)?),
             }),
@@ -325,7 +325,7 @@ fn propagate_depths(code: &[Op]) -> Option<Vec<Option<u16>>> {
 
 fn effect_of(op: &Op) -> Option<Effect> {
     let effect = match op {
-        Op::FunctionPrologueEnd => Effect {
+        Op::BindingBoundary { .. } | Op::FunctionPrologueEnd => Effect {
             pops: 0,
             pushes: 0,
             target: None,

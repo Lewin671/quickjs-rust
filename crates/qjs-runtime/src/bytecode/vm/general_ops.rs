@@ -44,6 +44,14 @@ impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
     ) -> Result<Option<FrameExit>, RuntimeError> {
         let bytecode = program.bytecode;
         match op {
+            Op::BindingBoundary { event, cleanup } => {
+                return self.run_binding_boundary(
+                    program,
+                    *event,
+                    *cleanup,
+                    self.current.authoritative_slots,
+                );
+            }
             Op::LoadConst(index) => {
                 let Some(value) = bytecode.constants.get(*index) else {
                     return Err(RuntimeError {

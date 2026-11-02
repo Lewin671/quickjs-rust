@@ -43,8 +43,8 @@ enum WideOp {
     /// The checked global reference starts of a compiled reference event
     /// (`reference_admission`): each is elided or selected here, before any
     /// RHS effect, into the activation's saved references.
-    ReferenceCheck {
-        event: u32,
+    ReferenceBoundary {
+        pc: u32,
     },
     LoadConst {
         dst: u16,

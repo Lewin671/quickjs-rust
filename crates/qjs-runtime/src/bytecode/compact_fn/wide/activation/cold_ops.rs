@@ -98,20 +98,34 @@ pub(super) fn execute(
                 let value = crate::bytecode::vm_bindings::clone_local_value(&window[src as usize]);
                 execute::store(&mut window[dst as usize], value);
             }
-            WideOp::ReferenceCheck { event } => {
-                let references = &activation.bytecode.binding_plan.references;
-                let statically_elided = references.skips_indexed_entry()
-                    && activation.env.activation.scope_cursor().is_none();
-                if !statically_elided
-                    && !references.event_starts_elidable(event as usize, &activation.env.activation)
-                    && let Err(error) =
-                        references.select_checked_starts(event as usize, activation.env)
-                {
-                    break 'operation Err(error);
-                }
-            }
             _ => unreachable!("cold opcode family"),
         }
         Ok(())
     }
+}
+
+/// All reference side-table work stays at one explicit cold checkpoint.
+#[cold]
+#[inline(never)]
+pub(super) fn reference_boundary(
+    bytecode: &Bytecode,
+    pc: usize,
+    env: &mut crate::context::Context<'_>,
+) -> Result<(), RuntimeError> {
+    let Some(crate::bytecode::ir::Op::BindingBoundary { event, cleanup }) = bytecode.code.get(pc)
+    else {
+        return Err(execute::constant_out_of_bounds());
+    };
+    let references = &bytecode.binding_plan.references;
+    if *cleanup {
+        references.cleanup_checked(pc, env);
+    }
+    if let Some(event) = event {
+        let statically_elided =
+            references.skips_indexed_entry() && env.activation.scope_cursor().is_none();
+        if !statically_elided && !references.event_starts_elidable(*event, &env.activation) {
+            references.select_checked_starts(*event, env)?;
+        }
+    }
+    Ok(())
 }

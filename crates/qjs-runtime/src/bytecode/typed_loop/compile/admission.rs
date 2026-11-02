@@ -86,11 +86,14 @@ pub(in crate::bytecode::typed_loop) fn admitted_unary(op: UnaryOp) -> bool {
 /// A deferred region cannot run an observer or mutate binding identity. Scalar
 /// conversions decline before user coercion; branch/return exits merely hand
 /// control back to the interpreter, after the run wrapper publishes stores.
-/// Unknown operations deliberately disable deferral.
+/// Unknown operations deliberately disable deferral. Checkpoints are zero-effect
+/// only under the entry reference/scope proof; this is the compile-time candidate
+/// predicate, never a substitute for that runtime admission.
 pub(super) fn cannot_observe_a_binding(op: &Op) -> bool {
     matches!(
         op,
-        Op::LoadConst(_)
+        Op::BindingBoundary { .. }
+            | Op::LoadConst(_)
             | Op::LoadLocal(_)
             | Op::LoadGlobal(_)
             | Op::StoreLocal(_)
