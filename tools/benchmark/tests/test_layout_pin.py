@@ -1,9 +1,9 @@
 """Tests for the layout targets, selection, pinning and audit.
 
 The fixtures give a small engine with the same shape as the real one: the
-current build's closure spellings for the two executor instantiations, every
-pinned callee except the two the engine does not have, and an order file in an
-older build's spelling. Every test here is a property the tool has to hold for
+frozen build's closure spellings for the two executor instantiations, its
+pinned callees before S3c, and an order file in an older build's spelling.
+The fixture predates the shared user-call and frame-drop helpers. Every test here is a property the tool has to hold for
 the layout to mean anything -- raw staleness, ambiguity, and which names the
 head is allowed to write.
 
@@ -35,6 +35,11 @@ TAIL_DROP = layout_pin.TAIL_CALLEES[1]
 # target a rewrite may drop, the other is simply gone.
 BOXED_EQUALITY = f"{layout_pin.CALLEES[11]}"
 GET_NAMED = layout_pin.CALLEES[12]
+POST_FIXTURE_CALLEES = (
+    "qjs_runtime::bytecode::typed_loop::execute::user_calls::registers",
+    "qjs_runtime::bytecode::typed_loop::execute::user_calls::call",
+    "<qjs_runtime::bytecode::vm::FrameState as core::ops::drop::Drop>::drop",
+)
 
 
 def slot_position(head, symbols, name):
@@ -253,7 +258,7 @@ class FindingTests(unittest.TestCase):
         missing = [finding for finding in layout_pin.findings_for(symbols, fx.ENGINE_ORDER)
                    if finding.role == "callee" and not finding.in_binary]
         self.assertEqual([finding.target for finding in missing],
-                         [layout_pin.WIDE_EXECUTOR_FALLBACK, BOXED_EQUALITY])
+                         [layout_pin.WIDE_EXECUTOR_FALLBACK, BOXED_EQUALITY, *POST_FIXTURE_CALLEES])
         self.assertTrue(all(not finding.in_binary for finding in missing))
         # The order file names an old spelling of the first one; nothing names
         # the second at all. Either way the head may not write them.
@@ -507,7 +512,7 @@ class ReportTests(unittest.TestCase):
                 report = layout_pin.audit(Path("qjs"), order)
         self.assertEqual(report.summary(), report.summary())
         self.assertEqual(report.problems(), report.problems())
-        self.assertIn("callees 14/16 in the binary", report.summary())
+        self.assertIn(f"callees 14/{len(layout_pin.CALLEES)} in the binary", report.summary())
         self.assertEqual(report.ordered()[0].role, "wide executor")
         self.assertEqual(len(report.ordered()),
                          len(layout_pin.CALLEES) + len(layout_pin.TAIL_CALLEES) + 2)
