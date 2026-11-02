@@ -328,7 +328,18 @@ impl Compiler {
         let mut direct_parameter_slots = Vec::with_capacity(params.positional.len());
         for (index, element) in params.positional.iter().enumerate() {
             let binding_name = parameter_binding_name(&element.binding, index);
-            direct_parameter_slots.push(self.parameter_slot(&binding_name));
+            let slot = self.parameter_slot(&binding_name);
+            // Only the last occurrence may receive a visible binding value.
+            // Earlier inputs remain positional but go to private scratch slots:
+            // tiers may skip missing arguments after pre-seeding undefined.
+            let shadowed = params.positional[index + 1..].iter().any(|later| {
+                matches!(&later.binding, qjs_ast::BindingPattern::Identifier { name, .. } if name == &binding_name)
+            });
+            direct_parameter_slots.push(if shadowed {
+                self.temp_local("shadowed_parameter")
+            } else {
+                slot
+            });
         }
         if let Some(rest) = &params.rest {
             let binding_name = rest_parameter_binding_name(rest);

@@ -22,6 +22,7 @@ mod diagnostics;
 mod direct_construct;
 mod direct_eval;
 mod disposable_stacks;
+mod duplicate_parameter_bindings;
 mod errors;
 mod expressions;
 mod extensible_scope_closures;

@@ -36,6 +36,7 @@ impl ParameterInfo {
                 .enumerate()
                 .map(|(index, &slot)| {
                     (params.is_simple()
+                        && !bytecode.locals[slot].compiler_temporary
                         && !bytecode.locals[slot].name.is_empty()
                         && !bytecode.parameter_slots()[index + 1..].contains(&slot))
                     .then_some(slot)

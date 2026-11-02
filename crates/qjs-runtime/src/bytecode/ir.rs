@@ -700,8 +700,9 @@ pub struct Bytecode {
     /// directly: such a body has no observable effect besides its result.
     constant_return: Option<Value>,
     /// Compiled local slot for each positional parameter. Function bytecode
-    /// preserves duplicate parameter positions so direct-call seeding can use
-    /// this vector without repeating name-table lookups.
+    /// routes shadowed duplicate positions to hidden compiler temporaries;
+    /// only the last occurrence seeds the visible binding. Every executor uses
+    /// these positional routes without repeating name-table lookups.
     parameter_slots: Vec<usize>,
     /// Entry-only vectors stay out of the bytecode's hot payload. This one
     /// allocation belongs to the body, not to any of its activations.

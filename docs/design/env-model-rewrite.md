@@ -12,10 +12,10 @@ descriptors contain names, declaration attributes and routes, never live values.
 The [checkpoint PC map](env-model-checkpoints.md) identifies the active lexical chain after normal or abrupt control
 flow, including future TDZ declarations and excluding exited sibling scopes.
 
-Parameter inputs and capture inputs are positional. Capture linking follows the
-callee's received-slot order, using ParentLocal or ParentUpvalue routes ([write policy](env-model-cell-policy.md)). Compiler
-inputs and temporaries are excluded from exposed descriptors. Destructured
-parameter leaf bindings are parameters too; raw pattern inputs are not bindings.
+Parameter/capture inputs are positional. Shadowed duplicate parameters route to hidden inputs; only the last occurrence seeds the binding, including absent arguments.
+Capture links follow received-slot order via ParentLocal or ParentUpvalue routes ([write policy](env-model-cell-policy.md)).
+Compiler inputs and temporaries are excluded from descriptors and mapped arguments.
+Pattern leaf bindings are parameters too; raw pattern inputs are not bindings.
 
 ## Live locations and invariants
 

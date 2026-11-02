@@ -5179,3 +5179,4 @@ test/built-ins/Function/prototype/bind/get-fn-realm.js
 test/built-ins/Function/prototype/bind/get-fn-realm-recursive.js
 test/language/global-code/script-decl-lex.js
 cases/try-nested-finally-abrupt-jumps.js
+cases/duplicate-parameter-hot-missing-input.js
