@@ -17,6 +17,7 @@ parser.add_argument('--mode', choices=['cached', 'ic-off'], required=True)
 parser.add_argument('--binary', type=Path, required=True)
 parser.add_argument('--output', type=Path, required=True)
 parser.add_argument('--shards', type=int, default=6)
+parser.add_argument('--flavor', choices=['production', 'assertions'], required=True)
 args = parser.parse_args()
 args.output.mkdir(parents=True, exist_ok=False)
 root = Path.cwd()
@@ -27,7 +28,7 @@ env.update(QJS_AGENTS='1', QJS_CLI_PROFILE='release', QJS_CLI_BIN=str(args.binar
            TEST262_BASELINE_JOBS='1', TEST262_CASE_TIMEOUT_SECONDS='20', TEST262_TIMEOUT_RETRIES='1')
 if args.mode == 'ic-off': env['QJS_DISABLE_IC'] = '1'
 request = {'commit': subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),
-           'mode':args.mode, 'binary_sha256':sha(args.binary), 'runtime_source_sha256':source(),
+           'mode':args.mode, 'flavor':args.flavor, 'binary_sha256':sha(args.binary), 'runtime_source_sha256':source(),
            'shards':args.shards, 'environment':{k:v for k,v in env.items() if k.startswith(('QJS_', 'TEST262_'))},
            'test262_commit':subprocess.check_output(['git','-C','third_party/test262','rev-parse','HEAD'],text=True).strip(),
            'ng_commit':subprocess.check_output(['git','-C','third_party/quickjs-ng','rev-parse','HEAD'],text=True).strip()}
@@ -53,6 +54,7 @@ for index in range(1,args.shards+1):
 assert seen==expected,(len(seen),len(expected))
 assert request['binary_sha256']==sha(args.binary) and request['runtime_source_sha256']==source()
 result={'complete':True,'unique_cases':len(seen),'mode':args.mode,
+        'configured':sum(r['configured']for r in rows), 'rust_not_run':sum(r['rust_not_run']for r in rows),
         'rust':{key:sum(r['quickjs_rust'][key]for r in rows)for key in ['pass','fail','timeout','skipped']},
         'ng':{key:sum(r['quickjs_ng'][key]for r in rows)for key in ['pass','fail','timeout','skipped']},
         'comparison':{key:sum(r['comparison'][key]for r in rows)for key in rows[0]['comparison']}}
@@ -60,3 +62,4 @@ result={'complete':True,'unique_cases':len(seen),'mode':args.mode,
 print(json.dumps(result),flush=True)
 assert result['rust']['fail']==result['rust']['timeout']==0
 assert result['comparison']['quickjs_ng_pass_rust_nonpass']==0
+assert result['rust_not_run']==0 and result['rust']['pass']==result['configured']

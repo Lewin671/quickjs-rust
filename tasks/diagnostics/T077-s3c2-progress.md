@@ -154,3 +154,14 @@ call/method targets pass. Fannkuch's small local excess remains visible.
 Complete cached/IC-off scans run through exact harness shards, with full unique
 path coverage required before ledger records. The partial serial attempt is
 not recorded. The one final public86 and lead acceptance remain outstanding.
+
+## C5: complete diagnostic scan and production qualification recipe
+
+The [complete assertion-enabled cached scan](T077-s3c5-final/exact-diagnostic-cached/README.md)
+covers 53,572 paths, with 42,669 passes/3 timeouts and no Rust failures. Its
+burndown record is appended unchanged. The same three large typed-array
+detachment cases time out in a serial diagnostic recheck; production passes
+all six focused cases at the same 20-second budget. Complete production scans
+will establish cached/IC-off parity; the release IC-disable switch is active
+independently of assertions. No runtime change, exclusion or result substitution.
+The diagnostic IC-off scan remains in flight and will be recorded if complete.
