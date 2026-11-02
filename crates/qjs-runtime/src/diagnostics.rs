@@ -102,6 +102,12 @@ declare_counters! {
     binding_promotions,
     /// Actual Rc<CellStorage> allocations, including canonical object caches.
     binding_cell_allocations,
+    /// Statically selected capture routes validated while creating a closure.
+    initialized_mutable_links,
+    /// Captured assignments using a validated compiler capability.
+    initialized_mutable_writes,
+    /// Captured assignments retaining full dynamic/TDZ/write-policy checks.
+    checked_capture_writes,
     /// Actual Rc<ScopeLease> allocations; cached reuse does not increment.
     scope_lease_allocations,
     /// Function creations retaining a lexical scope, not lease allocations.

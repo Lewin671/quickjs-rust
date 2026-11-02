@@ -13,7 +13,7 @@ The PC map identifies the active lexical chain after normal or abrupt control
 flow, including future TDZ declarations and excluding exited sibling scopes.
 
 Parameter inputs and capture inputs are positional. Capture linking follows the
-callee's received-slot order, using ParentLocal or ParentUpvalue routes. Compiler
+callee's received-slot order, using ParentLocal or ParentUpvalue routes ([write policy](env-model-cell-policy.md)). Compiler
 inputs and temporaries are excluded from exposed descriptors. Destructured
 parameter leaf bindings are parameters too; raw pattern inputs are not bindings.
 

@@ -663,6 +663,8 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
                 let slot_bit = 1_u128 << *slot;
                 if upvalue_slots & slot_bit != 0 {
                     ops.push(WideOp::LoadUpvalueLocal {
+                        capture: u16::try_from(bytecode.cell_received_upvalue_index(*slot)?)
+                            .ok()?,
                         dst: register(depth),
                         slot: slot_index,
                     });
@@ -729,6 +731,8 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
                         let slot_bit = 1_u128 << slot;
                         if upvalue_slots & slot_bit != 0 {
                             ops.push(WideOp::LoadUpvalueLocal {
+                                capture: u16::try_from(bytecode.cell_received_upvalue_index(slot)?)
+                                    .ok()?,
                                 dst: register(depth),
                                 slot: u16::try_from(slot).ok()?,
                             });
@@ -799,6 +803,8 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
                         let slot_bit = 1_u128 << slot;
                         if upvalue_slots & slot_bit != 0 {
                             ops.push(WideOp::LoadUpvalueLocal {
+                                capture: u16::try_from(bytecode.cell_received_upvalue_index(slot)?)
+                                    .ok()?,
                                 dst: register(depth),
                                 slot: u16::try_from(slot).ok()?,
                             });
@@ -908,7 +914,7 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
                 if *slot < u128::BITS as usize && upvalue_slots & (1_u128 << *slot) != 0 =>
             {
                 ops.push(WideOp::StoreUpvalueLocal {
-                    slot: u16::try_from(*slot).ok()?,
+                    capture: u16::try_from(bytecode.cell_received_upvalue_index(*slot)?).ok()?,
                     src: register(depth.checked_sub(1)?),
                 });
             }

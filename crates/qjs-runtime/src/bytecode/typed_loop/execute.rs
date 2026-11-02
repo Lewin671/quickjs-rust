@@ -874,8 +874,8 @@ fn call_leaf<F: LoopFrame>(
         return None;
     }
     if arity & super::BOXED_ARGUMENTS != 0 {
-        return call_native_boxed(
-            &mut vm.loop_context(),
+        return call_native_boxed_for_frame(
+            vm,
             boxed,
             callee,
             &args,
@@ -890,6 +890,45 @@ fn call_leaf<F: LoopFrame>(
         &boxed[receiver as usize],
         &values[..usize::from(arity)],
     )
+}
+
+/// Native argument/facade temporaries must not enlarge a pure numeric call's
+/// frame. The ordinary table still decides admission and errors deoptimize.
+#[inline(never)]
+fn call_native_typed<F: LoopFrame>(
+    vm: &mut F,
+    callee: &Value,
+    receiver: &Value,
+    args: &[Typed],
+) -> Option<Value> {
+    let arity = args.len();
+    let arguments: [Value; super::helper_graph::MAX_HELPER_ARITY] = std::array::from_fn(|index| {
+        args.get(index)
+            .copied()
+            .unwrap_or(Typed::Undefined)
+            .to_value()
+    });
+    let arguments = arguments.get(..arity)?;
+    match super::super::vm_call::try_fast_global_native_call(
+        callee,
+        receiver,
+        arguments,
+        &mut vm.loop_context(),
+    ) {
+        Some(Ok(value)) => Some(value),
+        Some(Err(_)) | None => None,
+    }
+}
+
+#[inline(never)]
+fn call_native_boxed_for_frame<F: LoopFrame>(
+    vm: &mut F,
+    boxed: &[Value],
+    callee: u16,
+    args: &[u16; super::helper_graph::MAX_HELPER_ARITY],
+    arity: u8,
+) -> Option<Value> {
+    call_native_boxed(&mut vm.loop_context(), boxed, callee, args, arity)
 }
 
 /// A call through the fast native table with boxed arguments.
@@ -1114,23 +1153,7 @@ fn call_closed_form_leaf<F: LoopFrame>(
     // interpreter's call raises it; an arm the table does not have
     // deoptimizes the same way.
     if matches!(callee, Value::Function(function) if function.native.is_some()) {
-        let arguments: [Value; super::helper_graph::MAX_HELPER_ARITY] =
-            std::array::from_fn(|index| {
-                args.get(index)
-                    .copied()
-                    .unwrap_or(Typed::Undefined)
-                    .to_value()
-            });
-        let arguments = arguments.get(..usize::from(arity))?;
-        return match super::super::vm_call::try_fast_global_native_call(
-            callee,
-            receiver,
-            arguments,
-            &mut vm.loop_context(),
-        ) {
-            Some(Ok(value)) => Some(value),
-            Some(Err(_)) | None => None,
-        };
+        return call_native_typed(vm, callee, receiver, args);
     }
     // Before the closed-form evaluators, not after. Preparation already
     // refused to flatten any body they can answer, so a graph hit here is a

@@ -36,20 +36,13 @@ struct WideActivation<'a, 's> {
     bytecode: &'a Bytecode,
     /// Services and this callee's actual typed activation, borrowed per segment.
     env: &'a mut crate::context::Context<'s>,
+    upvalues: &'a [BindingCell],
+    indexed_receiver: Option<&'a Value>,
     upvalue_owner: Option<&'a Function>,
-    upvalue_slots: u128,
     strict: bool,
 }
 
 impl WideActivation<'_, '_> {
-    fn upvalue_cell(&self, slot: usize) -> Option<&BindingCell> {
-        let owner = self.upvalue_owner?;
-        let bit = (slot < u128::BITS as usize).then(|| 1_u128 << slot)?;
-        (self.upvalue_slots & bit != 0).then_some(())?;
-        let index = self.bytecode.cell_received_upvalue_index(slot)?;
-        owner.upvalues.get(index)
-    }
-
     #[cold]
     #[inline(never)]
     fn uninitialized_upvalue(&self, slot: usize) -> Result<Value, RuntimeError> {
@@ -624,7 +617,7 @@ fn run_frames(
     runtime: &mut crate::context::RuntimeServices,
     root_activation: &mut RootActivation<'_>,
     root_owner: Option<&Function>,
-    root_slots: u128,
+    _root_slots: u128,
     root: RootExit<'_>,
     storage: &mut FrameStorage,
 ) -> Result<Value, RuntimeError> {
@@ -640,23 +633,23 @@ fn run_frames(
             let prefix = &previous[current_base - PREFIX..current_base];
             let current_callee = &prefix[0];
             let bytecode = running_bytecode(current_callee, root_bytecode);
-            let (upvalue_owner, upvalue_slots) = match current_callee {
-                Value::Function(function) => (
-                    Some(function),
-                    bytecode.cell_received_upvalue_slots().unwrap_or(0),
-                ),
-                _ => (root_owner, root_slots),
+            let upvalue_owner = match current_callee {
+                Value::Function(function) => Some(function),
+                _ => root_owner,
             };
+            let upvalues = upvalue_owner.map_or(&[][..], |owner| &owner.upvalues[..]);
             let Some(program) = super::program_for(bytecode) else {
                 return Err(missing_program());
             };
+            let indexed_receiver = root_activation.indexed_receiver(prefix, depth == 1);
             let mut env = root_activation.view(runtime, header, prefix, depth == 1);
-            let strict = env.caller_strict();
+            let strict = env.activation.strict();
             let mut activation = WideActivation {
                 bytecode,
                 env: &mut env,
+                upvalues,
+                indexed_receiver,
                 upvalue_owner,
-                upvalue_slots,
                 strict,
             };
             let window = &mut registers[..current_len];

@@ -43,6 +43,9 @@
 mod binding_captures;
 mod binding_metadata;
 mod binding_plan;
+mod binding_writes;
+#[cfg(test)]
+mod binding_writes_tests;
 mod call_context;
 mod compact_fn;
 mod compiler;

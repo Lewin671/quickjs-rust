@@ -109,11 +109,10 @@ impl ActivationBorrow<'_> {
     pub(crate) fn initialized_receiver(&self) -> Option<&Value> {
         match self {
             Self::Full(value) => value.initialized_receiver(),
-            Self::Indexed { state, seed } => match state.owner.get() {
-                Some(context) => context.initialized_receiver(),
-                None if !seed.function.lexical_this => Some(&seed.prefix[1]),
-                None => self.ensure().initialized_receiver(),
-            },
+            Self::Indexed { state, seed } if state.routes.receiver.get() == CallSlotRef::PREFIX => {
+                Some(&seed.prefix[1])
+            }
+            Self::Indexed { .. } => self.ensure().initialized_receiver(),
         }
     }
     pub(crate) fn this_value(&self) -> Result<Value, crate::RuntimeError> {

@@ -38,9 +38,6 @@ impl Context<'_> {
     pub(crate) fn caller(&self) -> &ActivationContext {
         &self.activation
     }
-    pub(crate) fn caller_strict(&self) -> bool {
-        self.activation.strict()
-    }
     pub(crate) fn new_target(&self) -> Option<&Value> {
         self.native.as_ref().and_then(|site| site.target)
     }

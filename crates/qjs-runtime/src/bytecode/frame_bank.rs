@@ -216,6 +216,26 @@ pub(in crate::bytecode) enum RootActivation<'a> {
     Indexed { function: &'a Function },
 }
 impl RootActivation<'_> {
+    /// A non-lexical indexed receiver is the immutable owning prefix slot.
+    /// Full/lexical receivers remain selected through the semantic Context.
+    pub(in crate::bytecode) fn indexed_receiver<'p>(
+        &self,
+        prefix: &'p [Value],
+        root: bool,
+    ) -> Option<&'p Value> {
+        let function = if root {
+            match self {
+                Self::Indexed { function } => *function,
+                Self::Full(_) => return None,
+            }
+        } else {
+            match &prefix[0] {
+                Value::Function(f) => f,
+                _ => return None,
+            }
+        };
+        (!function.lexical_this).then_some(&prefix[1])
+    }
     pub(in crate::bytecode) fn view<'a>(
         &'a mut self,
         runtime: &'a mut RuntimeServices,
@@ -241,6 +261,13 @@ impl RootActivation<'_> {
                 _ => unreachable!("admitted callee"),
             }
         };
+        // The root has no owning callee prefix and does not pass install_callee.
+        // Its lexical routes must be established before the first metadata read.
+        if root && function.lexical_this && header.service.owner.get().is_none() {
+            header.service.routes.receiver.set(CallSlotRef::LEXICAL);
+            header.service.routes.target.set(CallSlotRef::LEXICAL);
+            header.service.routes.home.set(CallSlotRef::LEXICAL);
+        }
         Context {
             runtime,
             activation: ActivationBorrow::Indexed {
@@ -494,7 +521,7 @@ mod owner_tests {
             &storage.registers[base - PREFIX..base],
             true,
         );
-        assert!(context.activation.strict());
+        assert!(context.caller().strict);
         assert_eq!(context.activation.this_value(), Ok(Value::Undefined));
         assert_ne!(context.caller().variable_identity(), identity);
         assert_eq!(view.this_value(), Ok(Value::Number(1.0)));

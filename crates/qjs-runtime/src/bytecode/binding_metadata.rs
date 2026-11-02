@@ -39,6 +39,7 @@ impl Bytecode {
         }
         bytecode.binding_plan.references =
             super::reference_plan::ReferencePlan::compile(&bytecode, references);
+        super::binding_writes::finish(&mut bytecode, params);
         bytecode
     }
 
@@ -157,6 +158,7 @@ impl Bytecode {
                 name,
                 kind,
                 mutable: local.mutable,
+                initialized_mutable: false,
                 strict_write: if local.mutable {
                     WritePolicy::Mutable
                 } else {

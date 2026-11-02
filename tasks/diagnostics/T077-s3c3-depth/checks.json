@@ -1,0 +1,8 @@
+{
+  "revision": "098effa5",
+  "full_gate": "pass; 5174 curated Test262; workspace/tooling/agents/perf-counters checks",
+  "fast_gate": "pass; runtime 2733; 65 selected Test262",
+  "log_sha256": "40d8e2cfd50250a503ccbf4268537084cb43fddec4475b474b07187368080542",
+  "runtime_source_manifest": "source.json",
+  "note": "Full gate completed on the repair CLI before rebuilding that CLI; C3 started after all compilation/check stages."
+}

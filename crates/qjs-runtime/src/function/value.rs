@@ -115,7 +115,7 @@ pub(crate) struct PrivateFieldInit {
 pub struct Function(Rc<FunctionData>);
 
 #[cfg(target_pointer_width = "64")]
-const _: () = assert!(std::mem::size_of::<FunctionData>() <= 304);
+const _: () = assert!(std::mem::size_of::<FunctionData>() <= 240);
 
 /// A non-owning handle to a [`Function`], for caches that must not keep
 /// the function, or a cycle through its own code, alive.
@@ -213,6 +213,9 @@ pub struct FunctionData {
     /// The compact tier's counterpart: whether its admission proof, as far as
     /// it depends on the function alone, holds, and the register count.
     pub(crate) compact_inline_facts: Cell<u32>,
+    /// Capture-index capabilities, validated once against static declaration
+    /// provenance. Indices beyond this bounded mask retain checked assignment.
+    initialized_mutable_upvalues: Option<Box<u128>>,
     pub(crate) upvalues: Vec<BindingCell>,
     /// Received-upvalue slots backed by the function creation realm. The cells
     /// stay live; this mask only avoids rediscovering their identity by name on
@@ -404,6 +407,9 @@ impl fmt::Debug for Function {
 }
 
 impl Function {
+    pub(crate) fn initialized_mutable_upvalues(&self) -> &u128 {
+        self.initialized_mutable_upvalues.as_deref().unwrap_or(&0)
+    }
     pub(crate) fn native_captures(&self) -> &crate::function::NativeCaptures {
         self.native_captures
             .as_deref()
@@ -491,6 +497,8 @@ impl Function {
         } else {
             lexical_scope
         };
+        let mask = bytecode.link_write_capabilities(&upvalues);
+        let initialized_mutable_upvalues = (mask != 0).then(|| Box::new(mask));
         let needs_scope_proof = lexical_scope.is_some();
         let realm = &creation.realm;
         let realm_upvalue_slots = bytecode
@@ -522,6 +530,7 @@ impl Function {
             wide_inline_facts: Cell::new(0),
             compact_inline_facts: Cell::new(0),
             upvalues,
+            initialized_mutable_upvalues,
             realm_upvalue_slots,
             local_names,
             bytecode: Some(bytecode),
@@ -700,6 +709,7 @@ impl Function {
             wide_inline_facts: Cell::new(0),
             compact_inline_facts: Cell::new(0),
             upvalues: Vec::new(),
+            initialized_mutable_upvalues: None,
             realm_upvalue_slots: 0,
             local_names: Rc::new(Vec::new()),
             bytecode: None,
@@ -758,6 +768,7 @@ impl Function {
             wide_inline_facts: Cell::new(0),
             compact_inline_facts: Cell::new(0),
             upvalues: Vec::new(),
+            initialized_mutable_upvalues: None,
             realm_upvalue_slots: 0,
             local_names: Rc::new(Vec::new()),
             bytecode: None,

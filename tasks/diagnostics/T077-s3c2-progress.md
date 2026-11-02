@@ -67,3 +67,13 @@ numeric 4,016 (7,664), wide release 1,104 (1,264). Release per-call instruction
 cost is unchanged within count noise. The [repair receipt](T077-s3c3-depth/README.md)
 pins runtime source, binaries, depth traces and prologues. C3 captured writes,
 event boundaries/method attribution, C4 and C5 remain required.
+
+## C3: static captured writes (partial)
+
+The first C3 cut links compiler-proved write capabilities and compiled capture
+indices. All three deterministic calls now save >=70 versus S3b; the paired
+read/write improvement is about 88 instructions per added += operation versus
+C2 after removing the zero-write improvement. [The receipt](T077-s3c3-bindings/README.md)
+owns source/binary identities, counts, policy exclusions and method coverage.
+Hash-map 1.003722 and broad/method_call 1.002384 remain open. Explicit boundary
+Ops/indexed cell routes and all remaining C3–C5 gates are not complete.

@@ -24,8 +24,8 @@ pub(super) fn execute(
                 let value = crate::bytecode::vm_bindings::clone_local_value(&window[src as usize]);
                 execute::store(&mut window[dst as usize], value);
             }
-            WideOp::LoadUpvalueLocal { dst, slot } => {
-                let Some(cell) = activation.upvalue_cell(slot as usize) else {
+            WideOp::LoadUpvalueLocal { dst, slot, capture } => {
+                let Some(cell) = activation.upvalues.get(capture as usize) else {
                     break 'operation Err(execute::uninitialized_local());
                 };
                 // One state borrow; a dead-zone cell takes the
@@ -39,19 +39,31 @@ pub(super) fn execute(
                 };
                 execute::store(&mut window[dst as usize], value);
             }
-            WideOp::StoreUpvalueLocal { slot, src } => {
-                let Some(cell) = activation.upvalue_cell(slot as usize) else {
+            WideOp::StoreUpvalueLocal { src, capture } => {
+                let Some(cell) = activation.upvalues.get(capture as usize) else {
                     break 'operation Err(execute::uninitialized_local());
                 };
                 let value = std::mem::replace(&mut window[src as usize], Value::Undefined);
-                if let Err(error) = cell.assign(value, activation.strict) {
-                    break 'operation Err(error);
+                if capture < 128
+                    && activation.upvalue_owner.is_some_and(|owner| {
+                        *owner.initialized_mutable_upvalues() & (1_u128 << capture) != 0
+                    })
+                {
+                    cell.replace_initialized_mutable(value);
+                } else {
+                    crate::diagnostics::count!(checked_capture_writes);
+                    if let Err(error) = cell.assign(value, activation.strict) {
+                        break 'operation Err(error);
+                    }
                 }
             }
             WideOp::LoadThis { dst } => {
                 // Admission required a seeded receiver, so this never
                 // fabricates one.
-                let Some(value) = activation.env.activation.initialized_receiver() else {
+                let Some(value) = activation
+                    .indexed_receiver
+                    .or_else(|| activation.env.activation.initialized_receiver())
+                else {
                     break 'operation Err(execute::uninitialized_local());
                 };
                 execute::store(&mut window[dst as usize], value.clone());
@@ -59,7 +71,9 @@ pub(super) fn execute(
             WideOp::GetPropThis { dst, index } => {
                 let (Some(site), Some(receiver)) = (
                     program.named_reads.get(index as usize),
-                    activation.env.activation.initialized_receiver(),
+                    activation
+                        .indexed_receiver
+                        .or_else(|| activation.env.activation.initialized_receiver()),
                 ) else {
                     break 'operation Err(execute::uninitialized_local());
                 };
@@ -128,7 +142,9 @@ pub(super) fn execute(
             WideOp::SetPropThis { dst, value, index } => {
                 let (Some(site), Some(receiver)) = (
                     program.named_writes.get(index as usize),
-                    activation.env.activation.initialized_receiver(),
+                    activation
+                        .indexed_receiver
+                        .or_else(|| activation.env.activation.initialized_receiver()),
                 ) else {
                     break 'operation Err(execute::uninitialized_local());
                 };

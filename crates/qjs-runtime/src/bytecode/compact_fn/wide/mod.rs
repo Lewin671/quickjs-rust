@@ -58,12 +58,13 @@ enum WideOp {
     /// dead-zone check `AssignLocal` makes: the binding lives in the cell,
     /// shared with the frame that declared it.
     StoreUpvalueLocal {
-        slot: u16,
         src: u16,
+        capture: u16,
     },
     LoadUpvalueLocal {
         dst: u16,
         slot: u16,
+        capture: u16,
     },
     Drop {
         src: u16,
