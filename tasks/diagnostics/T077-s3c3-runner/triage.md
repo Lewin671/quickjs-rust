@@ -1,0 +1,94 @@
+Triage: likely loss (candidate/base; lower is faster).
+Diagnostic only: triage cannot promote anything, spend/reset a plan attempt, waive a required run, select an acceptance run to keep, or change an existing decision. Five-pair 95% bootstrap intervals are exploratory, unadjusted, and do not cover layout bias or unmeasured cases. Natural layout only; no formal precision or complete-portfolio claim.
+
+| case | wall ratio [95% exploratory interval] | instructions [95% exploratory interval] |
+| --- | ---: | ---: |
+| broad/array_allocation (target) | 1.0186 [0.8468, 1.0358] | 1.0178 [1.0177, 1.0179] |
+| broad/array_dynamic_read (target) | 0.9936 [0.9843, 1.0182] | 0.9840 [0.9840, 0.9842] |
+| broad/array_index_of (target) | 1.0365 [1.0043, 1.0503] | 1.0283 [1.0282, 1.0284] |
+| broad/array_read (target) | 1.0037 [0.9883, 1.0156] | 0.9965 [0.9965, 0.9967] |
+| broad/array_write (target) | 1.0475 [1.0329, 1.0841] | 1.0027 [1.0026, 1.0028] |
+| broad/branch_arithmetic (target) | 1.0029 [0.9983, 1.0327] | 1.0000 [0.9999, 1.0000] |
+| broad/captured_read (target) | 0.8761 [0.8707, 0.8921] | 0.9023 [0.9023, 0.9024] |
+| broad/captured_write (target) | 0.8485 [0.7404, 0.8779] | 0.8228 [0.8228, 0.8229] |
+| broad/closure_allocation_call (target) | 1.0048 [0.9220, 1.1520] | 1.0083 [1.0083, 1.0086] |
+| broad/dynamic_method_call (target) | 0.9333 [0.8840, 1.0202] | 0.9814 [0.9814, 0.9815] |
+| broad/empty_loop (target) | 1.0060 [0.9909, 1.0142] | 1.0000 [0.9999, 1.0000] |
+| broad/function_call_reordered (target) | 0.8875 [0.5270, 0.9084] | 0.9042 [0.9038, 0.9042] |
+| broad/function_call_two_args (target) | 0.8665 [0.8573, 0.8765] | 0.8840 [0.8840, 0.8840] |
+| broad/global_read (target) | 1.0105 [0.9951, 1.0231] | 1.0000 [1.0000, 1.0001] |
+| broad/local_read (target) | 1.0079 [0.9942, 1.0258] | 1.0000 [0.9999, 1.0001] |
+| broad/many_locals_call (target) | 0.8556 [0.8346, 1.2243] | 0.8647 [0.8647, 0.8649] |
+| broad/math_abs (target) | 0.9971 [0.9877, 1.0254] | 0.9999 [0.9999, 1.0001] |
+| broad/method_call (target) | 0.5084 [0.5014, 0.5322] | 0.5965 [0.5965, 0.5966] |
+| broad/object_allocation (target) | 1.0194 [0.9896, 1.0301] | 1.0183 [1.0182, 1.0184] |
+| broad/plain_function_call (target) | 0.8937 [0.8800, 0.8979] | 0.9041 [0.9041, 0.9042] |
+| broad/property_dynamic_read (target) | 0.9256 [0.9122, 0.9472] | 0.9012 [0.9011, 0.9012] |
+| broad/property_read (target) | 1.0118 [0.9973, 1.0251] | 0.9986 [0.9986, 0.9987] |
+| broad/property_write (target) | 1.0444 [0.9977, 1.0806] | 1.0021 [1.0021, 1.0022] |
+| broad/string_slice (target) | 0.9869 [0.9681, 1.1318] | 1.0180 [1.0180, 1.0181] |
+| broad/top_level_function_call (target) | 0.9392 [0.9178, 0.9531] | 0.9552 [0.9552, 0.9552] |
+| development/big.js/arith (target) | 0.9992 [0.9670, 1.0040] | 1.0009 [1.0009, 1.0009] |
+| development/diff/compare (target) | 0.9479 [0.9027, 0.9810] | 0.9902 [0.9902, 0.9902] |
+| development/graphlib/paths (target) | 0.9465 [0.9178, 0.9605] | 0.9724 [0.9723, 0.9724] |
+| development/immutable/persistent (target) | 0.9710 [0.9467, 0.9944] | 0.9852 [0.9851, 0.9852] |
+| development/js-yaml/document (target) | 0.9792 [0.9547, 1.0154] | 0.9821 [0.9820, 0.9821] |
+| development/lodash/transform (target) | 0.8398 [0.8339, 0.8566] | 0.9588 [0.9587, 0.9592] |
+| development/matter-js/simulate (target) | 1.0061 [0.9386, 1.0136] | 0.9948 [0.9948, 0.9948] |
+| development/meriyah/parse (target) | 0.9880 [0.9804, 0.9951] | 0.9920 [0.9919, 0.9922] |
+| development/moment/dates (target) | 0.9487 [0.9350, 0.9677] | 0.9868 [0.9867, 0.9868] |
+| development/papaparse/csv (target) | 0.9652 [0.9593, 0.9666] | 0.9559 [0.9558, 0.9565] |
+| external/jetstream3-js-subset/cdjs (target) | 0.9819 [0.9673, 0.9872] | 0.9771 [0.9767, 0.9773] |
+| external/jetstream3-js-subset/gaussian-blur (target) | 1.0047 [1.0014, 1.0090] | 1.0072 [1.0072, 1.0094] |
+| external/jetstream3-js-subset/hash-map (target) | 0.9460 [0.9299, 0.9700] | 0.9920 [0.9916, 0.9937] |
+| external/jetstream3-js-subset/raytrace-public-class-fields (target) | 0.9731 [0.9639, 0.9854] | 0.9550 [0.9550, 0.9551] |
+| external/jetstream3-js-subset/stanford-crypto-aes (target) | 1.0118 [1.0049, 1.0263] | 1.0036 [1.0035, 1.0037] |
+| external/kraken-1.1/ai-astar (target) | 1.0405 [1.0000, 1.0669] | 0.9991 [0.9991, 0.9992] |
+| external/kraken-1.1/audio-beat-detection (target) | 1.0053 [0.9904, 1.0187] | 1.0019 [0.9922, 1.0197] |
+| external/kraken-1.1/audio-dft (target) | 1.0178 [1.0130, 1.0673] | 0.9895 [0.9876, 0.9895] |
+| external/kraken-1.1/audio-fft (target) | 0.9978 [0.9927, 1.0014] | 1.0023 [1.0022, 1.0023] |
+| external/kraken-1.1/audio-oscillator (target) | 0.9754 [0.9740, 0.9847] | 1.0064 [1.0064, 1.0064] |
+| external/kraken-1.1/imaging-darkroom (target) | 1.0232 [0.9709, 1.0711] | 1.0198 [1.0184, 1.0219] |
+| external/kraken-1.1/imaging-desaturate (target) | 1.0226 [1.0065, 1.0618] | 1.0042 [1.0026, 1.0090] |
+| external/kraken-1.1/imaging-gaussian-blur (target) | 1.0345 [1.0343, 1.0553] | 1.0008 [1.0008, 1.0011] |
+| external/kraken-1.1/json-parse-financial (target) | 1.0269 [0.8292, 1.0790] | 0.9965 [0.9963, 0.9966] |
+| external/kraken-1.1/json-stringify-tinderbox (target) | 1.0112 [0.9597, 1.0548] | 0.9999 [0.9993, 1.0044] |
+| external/kraken-1.1/stanford-crypto-aes (target) | 1.0046 [0.9903, 1.0092] | 1.0038 [1.0035, 1.0039] |
+| external/kraken-1.1/stanford-crypto-ccm (target) | 1.0257 [1.0134, 1.0353] | 1.0040 [1.0037, 1.0040] |
+| external/kraken-1.1/stanford-crypto-pbkdf2 (target) | 0.9892 [0.9820, 1.0808] | 0.9974 [0.9973, 0.9974] |
+| external/kraken-1.1/stanford-crypto-sha256-iterative (target) | 0.9684 [0.9634, 0.9786] | 1.0019 [1.0019, 1.0020] |
+| external/sunspider-1.0/3d-cube (target) | 1.0134 [0.9539, 1.0241] | 0.9971 [0.9970, 0.9973] |
+| external/sunspider-1.0/3d-morph (target) | 0.9991 [0.9409, 1.0147] | 1.0022 [1.0020, 1.0022] |
+| external/sunspider-1.0/3d-raytrace (target) | 0.9894 [0.9639, 0.9960] | 0.9817 [0.9813, 0.9818] |
+| external/sunspider-1.0/access-binary-trees (target) | 0.9433 [0.9050, 0.9595] | 0.9802 [0.9802, 0.9804] |
+| external/sunspider-1.0/access-fannkuch (target) | 0.9779 [0.9338, 0.9955] | 1.0016 [1.0014, 1.0018] |
+| external/sunspider-1.0/access-nbody (target) | 1.0213 [0.9959, 1.0261] | 1.0093 [1.0089, 1.0093] |
+| external/sunspider-1.0/access-nsieve (target) | 0.9956 [0.9916, 1.0170] | 1.0104 [1.0102, 1.0106] |
+| external/sunspider-1.0/bitops-3bit-bits-in-byte (target) | 1.0562 [0.9767, 1.0831] | 1.0394 [1.0390, 1.0396] |
+| external/sunspider-1.0/bitops-bits-in-byte (target) | 0.9958 [0.9847, 1.0154] | 1.0085 [1.0084, 1.0086] |
+| external/sunspider-1.0/bitops-bitwise-and (target) | 0.9986 [0.9297, 1.0111] | 1.0009 [1.0007, 1.0010] |
+| external/sunspider-1.0/bitops-nsieve-bits (target) | 0.9885 [0.9742, 1.0011] | 0.9833 [0.9833, 0.9834] |
+| external/sunspider-1.0/controlflow-recursive (target) | 1.0284 [1.0103, 1.0660] | 1.0154 [1.0154, 1.0156] |
+| external/sunspider-1.0/crypto-aes (target) | 1.0164 [0.9752, 1.0206] | 1.0011 [1.0005, 1.0016] |
+| external/sunspider-1.0/crypto-md5 (target) | 0.9932 [0.9742, 1.0040] | 1.0077 [1.0075, 1.0078] |
+| external/sunspider-1.0/crypto-sha1 (target) | 1.0227 [0.9688, 1.0392] | 1.0396 [1.0389, 1.0397] |
+| external/sunspider-1.0/date-format-tofte (target) | 0.9177 [0.9144, 0.9415] | 0.9100 [0.9095, 0.9101] |
+| external/sunspider-1.0/date-format-xparb (target) | 0.9614 [0.9294, 0.9774] | 0.9823 [0.9821, 0.9826] |
+| external/sunspider-1.0/math-cordic (target) | 0.9681 [0.9202, 0.9731] | 0.9561 [0.9561, 0.9561] |
+| external/sunspider-1.0/math-partial-sums (target) | 1.0147 [0.9872, 1.0521] | 1.0010 [1.0009, 1.0011] |
+| external/sunspider-1.0/math-spectral-norm (target) | 1.0332 [0.9618, 1.0408] | 1.0409 [1.0407, 1.0411] |
+| external/sunspider-1.0/regexp-dna (target) | 1.0190 [1.0071, 1.0248] | 0.9999 [0.9998, 1.0007] |
+| external/sunspider-1.0/string-base64 (target) | 0.9289 [0.8977, 0.9435] | 0.9201 [0.9200, 0.9202] |
+| external/sunspider-1.0/string-fasta (target) | 1.0560 [1.0301, 1.0748] | 1.0238 [1.0237, 1.0239] |
+| external/sunspider-1.0/string-tagcloud (target) | 0.9598 [0.9389, 0.9623] | 0.9924 [0.9923, 0.9926] |
+| external/sunspider-1.0/string-unpack-code (target) | 0.8755 [0.8653, 0.8939] | 0.9627 [0.9596, 0.9629] |
+| external/sunspider-1.0/string-validate-input (target) | 1.0059 [0.9789, 1.0138] | 0.9961 [0.9959, 0.9961] |
+| sentinel/capturing_closure_call (target) | 0.8474 [0.8326, 0.8659] | 0.8333 [0.8333, 0.8334] |
+| sentinel/heterogeneous_property_read (target) | 1.0041 [0.9681, 1.0092] | 0.9999 [0.9999, 1.0000] |
+| sentinel/polymorphic_call_site (target) | 0.8206 [0.8039, 0.8651] | 0.8229 [0.8228, 0.8230] |
+| sentinel/prototype_method_call (target) | 1.1148 [1.0755, 1.1571] | 1.0770 [1.0770, 1.0770] |
+| sentinel/recursive_call_tree (target) | 0.9799 [0.9502, 0.9977] | 1.0012 [1.0010, 1.0012] |
+| sentinel/string_key_map_churn (target) | 1.0091 [0.9615, 1.0567] | 1.0146 [1.0144, 1.0147] |
+
+Stage seconds: {"analysis": 11.241916191065684, "build_base": 1.031847527017817, "build_candidate": 79.83222822099924, "build_quieting": 0.029565717093646526, "collection": 396.40831078914925, "command_total": 498.73901393217966, "end_to_end": 559.498587846756, "prepare_workloads": 0.32077250885777175, "queue_quieting": 60.80001902580261, "seal_and_replay": 8.104767241049558, "settle_and_launch": 1.4033419801853597, "validate_and_freeze": 0.15420870203524828}
+Budget met (includes queue quieting, excludes waiting behind jobs): True

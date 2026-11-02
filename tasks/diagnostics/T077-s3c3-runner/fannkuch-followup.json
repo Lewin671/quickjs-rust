@@ -1,0 +1,90 @@
+{
+  "interpretation": "Post-hoc diagnostic of the small fannkuch residual, not a replacement strict gate or runtime retry. All three sets use identical default binaries. Preserve the >1 observations; no rounding to a pass. No runtime tuning follows this check.",
+  "sets": [
+    {
+      "label": "target/s3c3/user-hoist-controls/controls.json",
+      "binary_sha256": {
+        "before": "0f7a1cd066c140864a10f906ab9a09e54a13dbb344fb7bd30df671174e10f014",
+        "after": "7f3468c79d7763307668a3bd7edefd0dedc5c415f08692df800d1182fa590cfa"
+      },
+      "source_sha256": "38154db08a420cacbb0101e53f194a0388a078fdb2df62d54f8a35015f15e15f",
+      "instructions": {
+        "before": [
+          637403365,
+          629662540,
+          629798903,
+          629793558,
+          629774978
+        ],
+        "after": [
+          638844450,
+          629587500,
+          629846345,
+          629679322,
+          629742830
+        ]
+      },
+      "ratio": 0.9999194529709686
+    },
+    {
+      "label": "target/s3c3/fixed-controls/controls.json",
+      "binary_sha256": {
+        "before": "0f7a1cd066c140864a10f906ab9a09e54a13dbb344fb7bd30df671174e10f014",
+        "after": "7f3468c79d7763307668a3bd7edefd0dedc5c415f08692df800d1182fa590cfa"
+      },
+      "source_sha256": "38154db08a420cacbb0101e53f194a0388a078fdb2df62d54f8a35015f15e15f",
+      "instructions": {
+        "before": [
+          630542189,
+          632932568,
+          630762171,
+          632419506,
+          630245906
+        ],
+        "after": [
+          638184189,
+          630337420,
+          631140362,
+          630430878,
+          631079502
+        ]
+      },
+      "ratio": 1.0005030913624653
+    },
+    {
+      "source_commit": "bc17ccea",
+      "reason": "Follow up the small fannkuch excess after the local correctness/build load ends; unchanged runtime, no tuning. Preserve both measurement sets.",
+      "base": "8322fc98",
+      "timing": false,
+      "samples": 5,
+      "order": "before/after interleaved; no warmup",
+      "binary_sha256": {
+        "before": "0f7a1cd066c140864a10f906ab9a09e54a13dbb344fb7bd30df671174e10f014",
+        "after": "7f3468c79d7763307668a3bd7edefd0dedc5c415f08692df800d1182fa590cfa"
+      },
+      "input_sha256": "38154db08a420cacbb0101e53f194a0388a078fdb2df62d54f8a35015f15e15f",
+      "instructions": {
+        "before": [
+          644519762,
+          628959350,
+          628937572,
+          628976085,
+          629135104
+        ],
+        "after": [
+          644848934,
+          629125653,
+          629124093,
+          629307584,
+          629466172
+        ]
+      },
+      "ratio": 1.0005270454758228
+    }
+  ],
+  "all_15_medians": {
+    "before": 629798903,
+    "after": 629846345,
+    "ratio": 1.0000753288069795
+  }
+}

@@ -100,3 +100,13 @@ local instruction limits. Fannkuch's small 1.000503 excess is retained with
 overlapping prior samples, without tuning or rounding. The source/binary-sealed
 receipt owns complete counts, method/receiver attribution and exact checks.
 The single C3 runner job is next; C4/C5 have not begun.
+
+## C3 runner gate
+
+Source **bc17ccea**, single job **20261102T054839Z-t077-s3c2-c3**: 430/430
+valid, no invalid/heavy samples. [The original result](T077-s3c3-runner/README.md)
+retains `likely loss`; external instructions **0.995818** meet decision 3's
+strict C3 gate. Every public lane wall geomean improves. Hash-map/method_call
+instructions meet <=1 on x86 too; fannkuch **1.001625** is carried for C5
+recheck without rounding or waiver. Final formal/held-out/RSS remain pending.
+C4 suspension ownership is next, then C5 under the unchanged contract.
