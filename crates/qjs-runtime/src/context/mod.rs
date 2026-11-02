@@ -31,7 +31,7 @@ pub(crate) use activation_borrow::{
     ActivationBorrow, CallRoutes, CallSeed, CallSlotRef, ContextOwner,
 };
 mod facade;
-pub(crate) use facade::Context;
+pub(crate) use facade::{Context, NativeSite};
 mod activation_api;
 mod capabilities;
 

@@ -26,6 +26,7 @@
 
 use crate::bytecode::frame_bank::{FrameStorage, PREFIX, RootActivation, clear_written};
 
+mod operand_ops;
 use qjs_ast::BinaryOp;
 
 use super::CompactOp;
@@ -152,6 +153,7 @@ fn running_bytecode<'a>(callee: &'a Value, root: &'a Bytecode) -> &'a Bytecode {
 
 /// What the driver needs to enter an admitted callee without borrowing it from
 /// the register that named it.
+#[derive(Clone, Copy)]
 struct InlineCallee {
     register_count: usize,
 }
@@ -372,69 +374,38 @@ fn run_frames(
                     #[cfg(feature = "perf-counters")]
                     crate::diagnostics::update(|c| c.compact_function_ops += 1);
                     match *op {
-                        CompactOp::LoadConst { dst, index } => {
-                            let Some(value) = activation.bytecode.constants.get(index as usize)
-                            else {
-                                break Err(execute::constant_out_of_bounds());
-                            };
-                            // `Value::clone` stays an out-of-line call; the
-                            // local-value clone inlines its primitive cases, which
-                            // is what a constant pool of numbers actually needs.
-                            execute::store(
-                                &mut window[dst as usize],
-                                crate::bytecode::vm_bindings::clone_local_value(value),
-                            );
+                        CompactOp::LoadConst { .. } => {
+                            if let Err(error) =
+                                operand_ops::execute(op, program, &mut activation, window)
+                            {
+                                break Err(error);
+                            }
                         }
-                        CompactOp::Move { dst, src } => {
-                            let value = crate::bytecode::vm_bindings::clone_local_value(
-                                &window[src as usize],
-                            );
-                            execute::store(&mut window[dst as usize], value);
+                        CompactOp::Move { .. } => {
+                            if let Err(error) =
+                                operand_ops::execute(op, program, &mut activation, window)
+                            {
+                                break Err(error);
+                            }
                         }
                         CompactOp::LoadUpvalueLocal { dst, slot } => {
-                            let Some(cell) = activation.upvalue_cell(slot as usize) else {
-                                break Err(execute::uninitialized_local());
-                            };
-                            let value = if !cell.is_initialized() {
-                                match activation.uninitialized_upvalue(slot as usize) {
-                                    Ok(value) => value,
-                                    Err(error) => break Err(error),
-                                }
-                            } else {
-                                match cell.read() {
-                                    Ok(value) => value,
-                                    Err(error) => break Err(error),
-                                }
-                            };
-                            execute::store(&mut window[dst as usize], value);
+                            if let Err(error) = load_upvalue(&activation, window, dst, slot) {
+                                break Err(error);
+                            }
                         }
-                        CompactOp::Binary {
-                            dst,
-                            op,
-                            left,
-                            right,
-                        } => {
-                            if let (Value::Number(left), Value::Number(right)) =
-                                (&window[left as usize], &window[right as usize])
-                                && let Some(value) =
-                                    crate::bytecode::vm_props::fast_number_binary_numbers(
-                                        *left, op, *right,
-                                    )
+                        CompactOp::Binary { .. } => {
+                            if let Err(error) =
+                                operand_ops::execute(op, program, &mut activation, window)
                             {
-                                execute::store(&mut window[dst as usize], value);
-                                continue;
-                            }
-                            let left =
-                                std::mem::replace(&mut window[left as usize], Value::Undefined);
-                            let right =
-                                std::mem::replace(&mut window[right as usize], Value::Undefined);
-                            match activation.eval_binary(left, op, right) {
-                                Ok(value) => execute::store(&mut window[dst as usize], value),
-                                Err(error) => break Err(error),
+                                break Err(error);
                             }
                         }
-                        CompactOp::Drop { src } => {
-                            execute::store(&mut window[src as usize], Value::Undefined);
+                        CompactOp::Drop { .. } => {
+                            if let Err(error) =
+                                operand_ops::execute(op, program, &mut activation, window)
+                            {
+                                break Err(error);
+                            }
                         }
                         CompactOp::JumpIfFalsy { cond, target } => {
                             // The general `is_truthy` consults the `[[IsHTMLDDA]]`
@@ -530,22 +501,9 @@ fn run_frames(
                 argc,
                 dst,
                 resume_pc,
-            } => {
-                storage.frames.last_mut().expect("caller header").pc = resume_pc as u32;
-                storage.push(
-                    Value::Undefined,
-                    Value::Undefined,
-                    None,
-                    inline.register_count,
-                    argc,
-                    dst,
-                    0,
-                )?;
-                storage.move_arguments(&callee, arguments, argc);
-                storage.install_callee(callee);
-                crate::diagnostics::count!(ordinary_call_attempts);
-                crate::diagnostics::count!(compact_direct_calls);
-            }
+            } => enter_boundary(
+                callee, inline, arguments, argc, dst, resume_pc, storage, runtime,
+            )?,
         }
     }
 }
@@ -721,4 +679,72 @@ pub(in crate::bytecode) fn try_run_indexed(
         ));
     }
     super::wide::try_run_indexed(function, receiver, target, arguments, runtime)
+}
+
+#[cold]
+#[inline(never)]
+fn binary_slow(
+    activation: &mut CompactActivation<'_, '_>,
+    window: &mut [Value],
+    dst: u16,
+    op: BinaryOp,
+    left: u16,
+    right: u16,
+) -> Result<(), RuntimeError> {
+    let left = std::mem::replace(&mut window[left as usize], Value::Undefined);
+    let right = std::mem::replace(&mut window[right as usize], Value::Undefined);
+    let value = activation.eval_binary(left, op, right)?;
+    execute::store(&mut window[dst as usize], value);
+    Ok(())
+}
+
+/// Entry-only owning preparation leaves the native driver before callbacks.
+#[cfg_attr(debug_assertions, inline(never))]
+#[cfg_attr(not(debug_assertions), inline(always))]
+#[allow(clippy::too_many_arguments)]
+fn enter_boundary(
+    callee: Value,
+    inline: InlineCallee,
+    arguments: usize,
+    argc: usize,
+    dst: u16,
+    resume_pc: usize,
+    storage: &mut FrameStorage,
+    _runtime: &mut crate::context::RuntimeServices,
+) -> Result<(), RuntimeError> {
+    storage.frames.last_mut().expect("caller header").pc = resume_pc as u32;
+    storage.push(
+        Value::Undefined,
+        Value::Undefined,
+        None,
+        inline.register_count,
+        argc,
+        dst,
+        0,
+    )?;
+    storage.move_arguments(&callee, arguments, argc);
+    storage.install_callee(callee);
+    crate::diagnostics::count!(ordinary_call_attempts);
+    crate::diagnostics::count!(compact_direct_calls);
+
+    Ok(())
+}
+
+#[cfg_attr(debug_assertions, inline(never))]
+#[cfg_attr(not(debug_assertions), inline(always))]
+fn load_upvalue(
+    activation: &CompactActivation<'_, '_>,
+    window: &mut [Value],
+    dst: u16,
+    slot: u16,
+) -> Result<(), RuntimeError> {
+    let cell = activation
+        .upvalue_cell(slot as usize)
+        .ok_or_else(execute::uninitialized_local)?;
+    let value = match cell.value_if_initialized() {
+        Some(value) => value,
+        None => activation.uninitialized_upvalue(slot as usize)?,
+    };
+    execute::store(&mut window[dst as usize], value);
+    Ok(())
 }

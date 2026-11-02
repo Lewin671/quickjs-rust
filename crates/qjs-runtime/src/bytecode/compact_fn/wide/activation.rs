@@ -21,7 +21,9 @@ use crate::function::{BindingCell, Function};
 use crate::{RuntimeError, Value};
 
 use crate::bytecode::frame_bank::{CONSTRUCT, FrameStorage, PREFIX, RootActivation, clear_written};
+mod cold_ops;
 mod exits;
+mod operand_ops;
 
 #[cfg(test)]
 #[path = "activation/owner_tests.rs"]
@@ -401,6 +403,7 @@ fn try_numeric_call(callee: &Value, arguments: &[Value]) -> Option<Value> {
 
 /// What the driver needs to enter an admitted callee in its own window. The
 /// callee's activation is built only once a numeric plan has not answered.
+#[derive(Clone, Copy)]
 struct InlineCallee {
     register_count: usize,
     requires_this: bool,
@@ -667,188 +670,74 @@ fn run_frames(
                     #[cfg(feature = "perf-counters")]
                     crate::diagnostics::update(|c| c.compact_function_ops += 1);
                     match *op {
-                        WideOp::LoadConst { dst, index } => {
-                            let Some(value) = activation.bytecode.constants.get(index as usize)
-                            else {
-                                break Err(execute::constant_out_of_bounds());
-                            };
-                            execute::store(
-                                &mut window[dst as usize],
-                                crate::bytecode::vm_bindings::clone_local_value(value),
-                            );
-                        }
-                        WideOp::Move { dst, src } | WideOp::Dup { src, dst } => {
-                            let value = crate::bytecode::vm_bindings::clone_local_value(
-                                &window[src as usize],
-                            );
-                            execute::store(&mut window[dst as usize], value);
-                        }
-                        WideOp::LoadUpvalueLocal { dst, slot } => {
-                            let Some(cell) = activation.upvalue_cell(slot as usize) else {
-                                break Err(execute::uninitialized_local());
-                            };
-                            // One state borrow; a dead-zone cell takes the
-                            // interpreter's diagnostic.
-                            let value = match cell.value_if_initialized() {
-                                Some(value) => value,
-                                None => match activation.uninitialized_upvalue(slot as usize) {
-                                    Ok(value) => value,
-                                    Err(error) => break Err(error),
-                                },
-                            };
-                            execute::store(&mut window[dst as usize], value);
-                        }
-                        WideOp::StoreUpvalueLocal { slot, src } => {
-                            let Some(cell) = activation.upvalue_cell(slot as usize) else {
-                                break Err(execute::uninitialized_local());
-                            };
-                            let value =
-                                std::mem::replace(&mut window[src as usize], Value::Undefined);
-                            if let Err(error) = cell.assign(value, activation.strict) {
+                        WideOp::LoadConst { .. } => {
+                            if let Err(error) =
+                                operand_ops::execute(op, program, &mut activation, window)
+                            {
                                 break Err(error);
                             }
                         }
-                        WideOp::LoadThis { dst } => {
-                            // Admission required a seeded receiver, so this never
-                            // fabricates one.
-                            let Some(value) = activation.env.activation.initialized_receiver()
-                            else {
-                                break Err(execute::uninitialized_local());
-                            };
-                            execute::store(&mut window[dst as usize], value.clone());
-                        }
-                        WideOp::GetPropThis { dst, index } => {
-                            let (Some(site), Some(receiver)) = (
-                                program.named_reads.get(index as usize),
-                                activation.env.activation.initialized_receiver(),
-                            ) else {
-                                break Err(execute::uninitialized_local());
-                            };
-                            if let Some(value) =
-                                property::get_prop_named_hot(receiver, &site.key, &site.cache)
+                        WideOp::Move { .. } | WideOp::Dup { .. } => {
+                            if let Err(error) =
+                                operand_ops::execute(op, program, &mut activation, window)
                             {
-                                execute::store(&mut window[dst as usize], value);
-                                continue;
-                            }
-                            let receiver = receiver.clone();
-                            match property::get_prop_named(
-                                &receiver,
-                                &site.key,
-                                &site.cache,
-                                activation.env,
-                            ) {
-                                Ok(value) => execute::store(&mut window[dst as usize], value),
-                                Err(error) => break Err(error),
+                                break Err(error);
                             }
                         }
-                        WideOp::GetPropNamed { dst, obj, index } => {
-                            let Some(site) = program.named_reads.get(index as usize) else {
-                                break Err(execute::constant_out_of_bounds());
-                            };
-                            // The receiver is borrowed: a fused site peeks its
-                            // local, and the plain form's result replaces it.
-                            if let Some(value) = property::get_prop_named_hot(
-                                &window[obj as usize],
-                                &site.key,
-                                &site.cache,
-                            ) {
-                                execute::store(&mut window[dst as usize], value);
-                                continue;
-                            }
-                            match property::get_prop_named(
-                                &window[obj as usize],
-                                &site.key,
-                                &site.cache,
-                                activation.env,
-                            ) {
-                                Ok(value) => execute::store(&mut window[dst as usize], value),
-                                Err(error) => break Err(error),
-                            }
-                        }
-                        WideOp::SetPropNamed { obj, value, index } => {
-                            let Some(site) = program.named_writes.get(index as usize) else {
-                                break Err(execute::constant_out_of_bounds());
-                            };
-                            let assigned =
-                                std::mem::replace(&mut window[value as usize], Value::Undefined);
-                            if property::set_prop_named_hot(
-                                &window[obj as usize],
-                                site.cache.as_ref(),
-                                &assigned,
-                                activation.env,
-                            ) {
-                                execute::store(&mut window[obj as usize], assigned);
-                                continue;
-                            }
-                            match property::set_prop_named(
-                                &window[obj as usize],
-                                &site.key,
-                                site.cache.as_ref(),
-                                site.is_strict,
-                                assigned,
-                                activation.env,
-                                Some(&site.creation),
-                            ) {
-                                // The assigned value stays in the object's
-                                // register, matching `SetPropNamed`'s stack effect.
-                                Ok(value) => execute::store(&mut window[obj as usize], value),
-                                Err(error) => break Err(error),
-                            }
-                        }
-                        WideOp::SetPropThis { dst, value, index } => {
-                            let (Some(site), Some(receiver)) = (
-                                program.named_writes.get(index as usize),
-                                activation.env.activation.initialized_receiver(),
-                            ) else {
-                                break Err(execute::uninitialized_local());
-                            };
-                            let assigned =
-                                std::mem::replace(&mut window[value as usize], Value::Undefined);
-                            if property::set_prop_named_hot(
-                                receiver,
-                                site.cache.as_ref(),
-                                &assigned,
-                                activation.env,
-                            ) {
-                                execute::store(&mut window[dst as usize], assigned);
-                                continue;
-                            }
-                            let receiver = receiver.clone();
-                            match property::set_prop_named(
-                                &receiver,
-                                &site.key,
-                                site.cache.as_ref(),
-                                site.is_strict,
-                                assigned,
-                                activation.env,
-                                Some(&site.creation),
-                            ) {
-                                Ok(value) => execute::store(&mut window[dst as usize], value),
-                                Err(error) => break Err(error),
-                            }
-                        }
-                        WideOp::Binary {
-                            dst,
-                            op,
-                            left,
-                            right,
-                        } => {
-                            if let (Value::Number(left), Value::Number(right)) =
-                                (&window[left as usize], &window[right as usize])
-                                && let Some(value) =
-                                    crate::bytecode::vm_props::fast_number_binary_numbers(
-                                        *left, op, *right,
-                                    )
+                        WideOp::LoadUpvalueLocal { .. } => {
+                            if let Err(error) =
+                                operand_ops::execute(op, program, &mut activation, window)
                             {
-                                execute::store(&mut window[dst as usize], value);
-                                continue;
+                                break Err(error);
                             }
-                            let locals = program.local_registers;
-                            let left = take_operand(window, left, dst, locals);
-                            let right = take_operand(window, right, dst, locals);
-                            match activation.eval_binary(left, op, right) {
-                                Ok(value) => execute::store(&mut window[dst as usize], value),
-                                Err(error) => break Err(error),
+                        }
+                        WideOp::StoreUpvalueLocal { .. } => {
+                            if let Err(error) =
+                                operand_ops::execute(op, program, &mut activation, window)
+                            {
+                                break Err(error);
+                            }
+                        }
+                        WideOp::LoadThis { .. } => {
+                            if let Err(error) =
+                                operand_ops::execute(op, program, &mut activation, window)
+                            {
+                                break Err(error);
+                            }
+                        }
+                        WideOp::GetPropThis { .. } => {
+                            if let Err(error) =
+                                operand_ops::execute(op, program, &mut activation, window)
+                            {
+                                break Err(error);
+                            }
+                        }
+                        WideOp::GetPropNamed { .. } => {
+                            if let Err(error) =
+                                operand_ops::execute(op, program, &mut activation, window)
+                            {
+                                break Err(error);
+                            }
+                        }
+                        WideOp::SetPropNamed { .. } => {
+                            if let Err(error) =
+                                operand_ops::execute(op, program, &mut activation, window)
+                            {
+                                break Err(error);
+                            }
+                        }
+                        WideOp::SetPropThis { .. } => {
+                            if let Err(error) =
+                                operand_ops::execute(op, program, &mut activation, window)
+                            {
+                                break Err(error);
+                            }
+                        }
+                        WideOp::Binary { .. } => {
+                            if let Err(error) =
+                                operand_ops::execute(op, program, &mut activation, window)
+                            {
+                                break Err(error);
                             }
                         }
                         WideOp::Drop { src } => {
@@ -878,18 +767,9 @@ fn run_frames(
                                 break Err(not_coercible());
                             }
                         }
-                        WideOp::ToPropertyKey { dst } => {
-                            let is_key = match &window[dst as usize] {
-                                Value::String(_) => true,
-                                Value::Number(number) => {
-                                    crate::bytecode::vm_props::array_index_from_number(*number)
-                                        .is_some()
-                                }
-                                _ => false,
-                            };
-                            if !is_key
-                                && let Err(error) =
-                                    to_property_key(&mut window[dst as usize], activation.env)
+                        WideOp::ToPropertyKey { .. } => {
+                            if let Err(error) =
+                                cold_ops::execute(op, program, &mut activation, window)
                             {
                                 break Err(error);
                             }
@@ -913,145 +793,82 @@ fn run_frames(
                                 pc = target as usize;
                             }
                         }
-                        WideOp::Unary { dst, op, src } => {
-                            let value =
-                                std::mem::replace(&mut window[src as usize], Value::Undefined);
-                            match eval_unary(op, value, activation.env) {
-                                Ok(value) => execute::store(&mut window[dst as usize], value),
-                                Err(error) => break Err(error),
-                            }
-                        }
-                        WideOp::Typeof { dst, src } => {
-                            let value =
-                                std::mem::replace(&mut window[src as usize], Value::Undefined);
-                            let name = crate::bytecode::util::typeof_value(value);
-                            execute::store(&mut window[dst as usize], Value::String(name));
-                        }
-                        WideOp::ToNumeric { dst } => {
-                            if !matches!(window[dst as usize], Value::Number(_)) {
-                                let value =
-                                    std::mem::replace(&mut window[dst as usize], Value::Undefined);
-                                match to_numeric(value, activation.env) {
-                                    Ok(value) => execute::store(&mut window[dst as usize], value),
-                                    Err(error) => break Err(error),
-                                }
-                            }
-                        }
-                        WideOp::Update { dst, op } => {
-                            if let Value::Number(number) = &mut window[dst as usize] {
-                                *number = match op {
-                                    UpdateOp::Increment => *number + 1.0,
-                                    UpdateOp::Decrement => *number - 1.0,
-                                };
-                            } else {
-                                let value =
-                                    std::mem::replace(&mut window[dst as usize], Value::Undefined);
-                                match update(op, value, activation.env) {
-                                    Ok(value) => execute::store(&mut window[dst as usize], value),
-                                    Err(error) => break Err(error),
-                                }
-                            }
-                        }
-                        WideOp::GetProp { dst, obj, key } => {
-                            // `v[i]` on a dense array: answered in place, the
-                            // number key left in its register.
-                            if let (Value::Array(elements), Value::Number(number)) =
-                                (&window[obj as usize], &window[key as usize])
-                                && let Some(index) =
-                                    crate::bytecode::vm_props::array_index_from_number(*number)
-                                && let Some(value) = elements.plain_dense_index_value(index)
+                        WideOp::Unary { .. } => {
+                            if let Err(error) =
+                                cold_ops::execute(op, program, &mut activation, window)
                             {
-                                execute::store(&mut window[dst as usize], value);
-                                continue;
-                            }
-                            if let Some(value) = property::get_prop_string_own(
-                                &window[obj as usize],
-                                &window[key as usize],
-                            ) {
-                                execute::store(&mut window[dst as usize], value);
-                                continue;
-                            }
-                            let key = take_operand(window, key, dst, program.local_registers);
-                            // A forwarded local receiver is read, not consumed.
-                            let result = if obj != dst && obj < program.local_registers {
-                                property::get_prop_element_of(
-                                    &window[obj as usize],
-                                    key,
-                                    activation.env,
-                                )
-                            } else {
-                                property::get_prop_element(
-                                    &mut window[obj as usize],
-                                    key,
-                                    activation.env,
-                                )
-                            };
-                            match result {
-                                Ok(value) => execute::store(&mut window[dst as usize], value),
-                                Err(error) => break Err(error),
+                                break Err(error);
                             }
                         }
-                        WideOp::GetPropIndex { dst, obj, index } => {
-                            if let Value::Array(elements) = &window[obj as usize]
-                                && let Some(value) =
-                                    elements.plain_dense_index_value(usize::from(index))
+                        WideOp::Typeof { .. } => {
+                            if let Err(error) =
+                                cold_ops::execute(op, program, &mut activation, window)
                             {
-                                execute::store(&mut window[dst as usize], value);
-                                continue;
-                            }
-                            match property::get_prop_index(
-                                &window[obj as usize],
-                                index,
-                                activation.env,
-                            ) {
-                                Ok(value) => execute::store(&mut window[dst as usize], value),
-                                Err(error) => break Err(error),
+                                break Err(error);
                             }
                         }
-                        WideOp::LoadGlobal { dst, index } => {
-                            let Some(name) = program.global_names.get(index as usize) else {
-                                break Err(execute::constant_out_of_bounds());
-                            };
-                            let site = &program.global_reads[index as usize];
-                            match property::load_global_cached(name, site, activation.env) {
-                                Ok(value) => execute::store(&mut window[dst as usize], value),
-                                Err(error) => break Err(error),
+                        WideOp::ToNumeric { .. } => {
+                            if let Err(error) =
+                                cold_ops::execute(op, program, &mut activation, window)
+                            {
+                                break Err(error);
                             }
                         }
-                        WideOp::NewArray { dst, base, count } => {
-                            let values: Vec<Value> = (0..count as usize)
-                                .map(|offset| {
-                                    std::mem::replace(
-                                        &mut window[base as usize + offset],
-                                        Value::Undefined,
-                                    )
-                                })
-                                .collect();
-                            execute::store(
-                                &mut window[dst as usize],
-                                Value::Array(crate::ArrayRef::new(activation.env.realm(), values)),
-                            );
-                        }
-                        WideOp::ClearLocal { slot } => {
-                            execute::store(&mut window[slot as usize], program.tdz_marker.clone());
-                        }
-                        WideOp::MoveChecked { dst, src } => {
-                            if window[src as usize].is_uninitialized_lexical_marker() {
-                                break Err(activation.uninitialized_lexical(src as usize));
+                        WideOp::Update { .. } => {
+                            if let Err(error) =
+                                cold_ops::execute(op, program, &mut activation, window)
+                            {
+                                break Err(error);
                             }
-                            let value = crate::bytecode::vm_bindings::clone_local_value(
-                                &window[src as usize],
-                            );
-                            execute::store(&mut window[dst as usize], value);
                         }
-                        WideOp::AssignChecked { dst, src } => {
-                            if window[dst as usize].is_uninitialized_lexical_marker() {
-                                break Err(activation.uninitialized_lexical(dst as usize));
+                        WideOp::GetProp { .. } => {
+                            if let Err(error) =
+                                operand_ops::execute(op, program, &mut activation, window)
+                            {
+                                break Err(error);
                             }
-                            let value = crate::bytecode::vm_bindings::clone_local_value(
-                                &window[src as usize],
-                            );
-                            execute::store(&mut window[dst as usize], value);
+                        }
+                        WideOp::GetPropIndex { .. } => {
+                            if let Err(error) =
+                                operand_ops::execute(op, program, &mut activation, window)
+                            {
+                                break Err(error);
+                            }
+                        }
+                        WideOp::LoadGlobal { .. } => {
+                            if let Err(error) =
+                                cold_ops::execute(op, program, &mut activation, window)
+                            {
+                                break Err(error);
+                            }
+                        }
+                        WideOp::NewArray { .. } => {
+                            if let Err(error) =
+                                cold_ops::execute(op, program, &mut activation, window)
+                            {
+                                break Err(error);
+                            }
+                        }
+                        WideOp::ClearLocal { .. } => {
+                            if let Err(error) =
+                                cold_ops::execute(op, program, &mut activation, window)
+                            {
+                                break Err(error);
+                            }
+                        }
+                        WideOp::MoveChecked { .. } => {
+                            if let Err(error) =
+                                cold_ops::execute(op, program, &mut activation, window)
+                            {
+                                break Err(error);
+                            }
+                        }
+                        WideOp::AssignChecked { .. } => {
+                            if let Err(error) =
+                                cold_ops::execute(op, program, &mut activation, window)
+                            {
+                                break Err(error);
+                            }
                         }
                         WideOp::New { dst, base, argc } => {
                             break Ok(Action::New {
@@ -1090,17 +907,9 @@ fn run_frames(
                         // driver's action type and its match stay exactly as they
                         // were: growing either re-rolls this loop's register
                         // allocation (docs/performance-knowledge.md, "Codegen").
-                        WideOp::ReferenceCheck { event } => {
-                            let references = &activation.bytecode.binding_plan.references;
-                            let statically_elided = references.skips_indexed_entry()
-                                && activation.env.activation.scope_cursor().is_none();
-                            if !statically_elided
-                                && !references.event_starts_elidable(
-                                    event as usize,
-                                    &activation.env.activation,
-                                )
-                                && let Err(error) =
-                                    references.select_checked_starts(event as usize, activation.env)
+                        WideOp::ReferenceCheck { .. } => {
+                            if let Err(error) =
+                                cold_ops::execute(op, program, &mut activation, window)
                             {
                                 break Err(error);
                             }
@@ -1152,10 +961,10 @@ fn run_frames(
                             }
                         }
                     }
-                    Ok(action) => action,
                     Err(error) => {
                         return Err(crate::error::capture_error_origin(error, activation.env));
                     }
+                    Ok(action) => action,
                 };
                 match action {
                     Action::Return(value) => {
@@ -1303,44 +1112,20 @@ fn run_frames(
                 dst,
                 resume_pc,
                 flags,
-            } => {
-                let receiver = if flags & CONSTRUCT != 0 {
-                    receiver
-                } else {
-                    let Value::Function(function) = &callee else {
-                        unreachable!("admitted callee");
-                    };
-                    crate::bytecode::frame_bank::receiver(
-                        function,
-                        Some(receiver),
-                        inline.requires_this,
-                        runtime,
-                    )
-                };
-                storage.frames.last_mut().expect("caller header").pc = resume_pc as u32;
-                storage.push(
-                    Value::Undefined,
-                    receiver,
-                    target,
-                    inline.register_count,
-                    argc,
-                    dst,
-                    flags,
-                )?;
-                storage.move_arguments(&callee, arguments, argc);
-                if inline.has_lexical_slots {
-                    let bytecode = running_bytecode(&callee, root_bytecode);
-                    let program = super::program_for(bytecode).expect("admitted lexical body");
-                    let base = storage.frames.last().expect("callee header").service.base as usize;
-                    seed_lexical_markers(
-                        program,
-                        &mut storage.registers[base..base + inline.register_count],
-                    );
-                }
-                storage.install_callee(callee);
-                crate::diagnostics::count!(ordinary_call_attempts);
-                crate::diagnostics::count!(compact_direct_calls);
-            }
+            } => enter_boundary(
+                callee,
+                receiver,
+                target,
+                inline,
+                arguments,
+                argc,
+                dst,
+                resume_pc,
+                flags,
+                storage,
+                runtime,
+                root_bytecode,
+            )?,
         }
     }
 }
@@ -1787,4 +1572,62 @@ pub(in crate::bytecode) fn try_run_indexed(
             realm_upvalue_slots: function.realm_upvalue_slots,
         },
     ))
+}
+
+/// Entry-only owning preparation leaves the native driver before callbacks.
+#[cfg_attr(debug_assertions, inline(never))]
+#[cfg_attr(not(debug_assertions), inline(always))]
+#[allow(clippy::too_many_arguments)]
+fn enter_boundary(
+    callee: Value,
+    receiver: Value,
+    target: Option<Value>,
+    inline: InlineCallee,
+    arguments: usize,
+    argc: usize,
+    dst: u16,
+    resume_pc: usize,
+    flags: u32,
+    storage: &mut FrameStorage,
+    runtime: &mut crate::context::RuntimeServices,
+    root_bytecode: &Bytecode,
+) -> Result<(), RuntimeError> {
+    let receiver = if flags & CONSTRUCT != 0 {
+        receiver
+    } else {
+        let Value::Function(function) = &callee else {
+            unreachable!("admitted callee");
+        };
+        crate::bytecode::frame_bank::receiver(
+            function,
+            Some(receiver),
+            inline.requires_this,
+            runtime,
+        )
+    };
+    storage.frames.last_mut().expect("caller header").pc = resume_pc as u32;
+    storage.push(
+        Value::Undefined,
+        receiver,
+        target,
+        inline.register_count,
+        argc,
+        dst,
+        flags,
+    )?;
+    storage.move_arguments(&callee, arguments, argc);
+    if inline.has_lexical_slots {
+        let bytecode = running_bytecode(&callee, root_bytecode);
+        let program = super::program_for(bytecode).expect("admitted lexical body");
+        let base = storage.frames.last().expect("callee header").service.base as usize;
+        seed_lexical_markers(
+            program,
+            &mut storage.registers[base..base + inline.register_count],
+        );
+    }
+    storage.install_callee(callee);
+    crate::diagnostics::count!(ordinary_call_attempts);
+    crate::diagnostics::count!(compact_direct_calls);
+
+    Ok(())
 }

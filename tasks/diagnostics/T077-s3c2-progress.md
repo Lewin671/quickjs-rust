@@ -56,3 +56,14 @@ likely loss. Development instructions 0.987267 pass, external 1.000115 miss.
 All public wall geomeans improve; none waive the local/depth/instruction gates.
 The receipt owns full lane ratios and originals. No runtime changes or C3–C5
 followed the misses; stop for lead review.
+
+## Round 3: depth prerequisite
+
+Lead decision 3 conditionally accepts C2 and authorizes C3–C5, carrying every
+miss forward. The first repair outlines debug operand/entry temporaries and
+borrows native-site metadata. All eight debug/release depth probes now meet
+S3b, without a stack-policy change. Wide debug frame is 8,816 bytes (C2 19,952),
+numeric 4,016 (7,664), wide release 1,104 (1,264). Release per-call instruction
+cost is unchanged within count noise. The [repair receipt](T077-s3c3-depth/README.md)
+pins runtime source, binaries, depth traces and prologues. C3 captured writes,
+event boundaries/method attribution, C4 and C5 remain required.

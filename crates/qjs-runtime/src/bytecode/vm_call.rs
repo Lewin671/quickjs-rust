@@ -394,7 +394,12 @@ pub(super) fn try_fast_global_native_call(
         this_value,
         is_construct: false,
     };
-    let mut site = context.with_native(&info, None, None);
+    let native_site = crate::context::NativeSite {
+        info: &info,
+        target: None,
+        direct_eval: None,
+    };
+    let mut site = context.with_native(&native_site);
     let context = &mut site;
     let result = match native {
         NativeFunction::DecodeUri

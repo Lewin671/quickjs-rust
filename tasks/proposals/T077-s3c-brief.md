@@ -353,3 +353,31 @@ N/2N slopes, not accepted as measured. Handling an already-native probed backedg
 inside its segment also removes repeated segment setup. Required checkpoint:
 all three call slopes at least 70 below `8322fc98`; the four named controls
 <=1.00 in instructions; public86 development/external instructions <1.00.
+
+
+## Lead decision 3 (2026-11-01): conditional C2 acceptance, C3–C5 authorized
+
+The lead accepts the revised C2 checkpoint with conditions, carried as required
+fixes rather than waived gates. Continue on `agent/t077-s3c-v2/codex` only.
+
+1. Restore debug depth >= `8322fc98` structurally, outlining cold arms and large
+   temporaries with inline-never helpers; preserve/improve release instructions.
+   Record debug/release prologues before/after. No CLI stack-policy change.
+2. C3 first implements InitializedMutable routes with link-time validation and
+   80–100 instructions saved per proven captured write. upw1/upw4 must each save
+   >=70 instructions/call vs S3b. Exclude merely observed initialized lexicals,
+   imports/NFE/object routes, default-parameter TDZ and extensible dynamic lookup.
+3. Attribute receiver/home/this/IC work with coverage vs S3b; hash-map and
+   broad/method_call instructions must each end <=1.00. Fannkuch's tiny excess
+   needs no separate action unless it grows.
+4. Complete C3, then C4, then C5 under the inventory gates. After C3 repeat the
+   deterministic call/corpus receipt and one public86 vs S3b (`t077-s3c2-c3`);
+   external instructions must be <1.00.
+5. C5: full/stress/poison/all-nine-mode NG/public checks; >=2000 fuzz seeds per
+   each of four profiles including global-store; exact cached+IC-off Test262
+   with burndown; both depth profiles >=S3b; regenerated x86 order; frozen final
+   public86 (`t077-s3c2-final`). Then report and stop. Lead owns independent
+   review and formal/held-out/RSS acceptance. Hard/target acceptance is unchanged.
+
+No timing between UTC 18:45 and 21:00. Only runner ref transport is allowed;
+no origin push or main merge.

@@ -91,7 +91,8 @@ impl FrameStorage {
         }
         Ok(())
     }
-    #[inline(always)]
+    #[cfg_attr(debug_assertions, inline(never))]
+    #[cfg_attr(not(debug_assertions), inline(always))]
     #[allow(clippy::too_many_arguments)]
     pub(in crate::bytecode) fn push(
         &mut self,

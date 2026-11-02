@@ -13,7 +13,7 @@ pub(crate) struct NativeSite<'a> {
 pub(crate) struct Context<'a> {
     pub(crate) runtime: &'a mut RuntimeServices,
     pub(crate) activation: ActivationBorrow<'a>,
-    pub(crate) native: Option<NativeSite<'a>>,
+    pub(crate) native: Option<&'a NativeSite<'a>>,
 }
 impl Context<'_> {
     pub(crate) fn reborrow(&mut self) -> Context<'_> {
@@ -44,20 +44,11 @@ impl Context<'_> {
     pub(crate) fn new_target(&self) -> Option<&Value> {
         self.native.as_ref().and_then(|site| site.target)
     }
-    pub(crate) fn with_native<'a>(
-        &'a mut self,
-        info: &'a CallInfo<'a>,
-        target: Option<&'a Value>,
-        direct_eval: Option<&'a DirectEvalSite<'a>>,
-    ) -> Context<'a> {
+    pub(crate) fn with_native<'a>(&'a mut self, site: &'a NativeSite<'a>) -> Context<'a> {
         Context {
             runtime: self.runtime,
             activation: self.activation.reborrow(),
-            native: Some(NativeSite {
-                info,
-                target,
-                direct_eval,
-            }),
+            native: Some(site),
         }
     }
 }

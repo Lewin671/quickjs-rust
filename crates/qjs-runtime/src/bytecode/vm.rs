@@ -40,6 +40,7 @@ use std::{
 pub(super) type Slot = Option<Value>;
 
 mod general_ops;
+mod inline_data;
 mod rare_ops;
 mod wide_resume;
 
@@ -575,12 +576,8 @@ impl<'a, 's, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, 's, F> {
         // Fixed for the activation (set only at frame entry and resume).
         let reference_hooks = self.current.reference_hooks;
         'dispatch: loop {
-            debug_assert!(
-                SLOW || (self.current.binding_scope.is_none()
-                    && !self.current.reference_hooks
-                    && self.current.authoritative_slots == authority_at_entry),
-                "the fast dispatch loop outlived a slow-path change"
-            );
+            #[cfg(debug_assertions)]
+            self.verify_dispatch_interval::<SLOW>(authority_at_entry);
             if SLOW {
                 if let Some(active) = self.current.binding_scope
                     && program
@@ -642,11 +639,10 @@ impl<'a, 's, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, 's, F> {
             crate::diagnostics::update(|c| c.executed_ops += 1);
             'out_of_line: {
                 match op {
+                    #[allow(clippy::collapsible_match)]
                     Op::LoadConst(index) => {
                         crate::diagnostics::count!(dispatched_load_const_ops);
-                        if let Some(value) = constants.get(*index) {
-                            let value = value.clone();
-                            self.current.stack.push(value);
+                        if self.try_constant(constants, *index) {
                             continue 'dispatch;
                         }
                     }
@@ -661,14 +657,7 @@ impl<'a, 's, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, 's, F> {
                         // round trips through memory to report a success that
                         // cannot fail. Answer the authoritative-slot case here
                         // instead, and leave everything else out of line.
-                        if !self.current.direct_eval_with_stack
-                            && *slot < u128::BITS as usize
-                            && self.current.authoritative_slots & (1_u128 << *slot) != 0
-                            && let Some(Some(value)) = self.current.locals.get(*slot)
-                        {
-                            let value = super::vm_bindings::clone_local_value(value);
-                            self.current.stack.push(value);
-                            crate::diagnostics::count!(authoritative_load_local_hits);
+                        if self.try_private_load(*slot) {
                             continue 'dispatch;
                         }
                         self.current.ip = pc;
@@ -684,18 +673,7 @@ impl<'a, 's, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, 's, F> {
                         // `Result` path. Falling through when the stack is empty is
                         // deliberate -- the general path raises the underflow.
                         let slot = *slot;
-                        if slot < u128::BITS as usize
-                            && self.current.authoritative_slots & (1_u128 << slot) != 0
-                            && self
-                                .current
-                                .bytecode
-                                .locals
-                                .get(slot)
-                                .is_some_and(|local| local.mutable)
-                            && let Some(value) = self.current.stack.pop()
-                        {
-                            self.current.locals[slot] = Some(value);
-                            crate::diagnostics::count!(authoritative_store_local_hits);
+                        if self.try_private_store(slot, false) {
                             continue 'dispatch;
                         }
                         self.current.ip = pc;
@@ -710,20 +688,7 @@ impl<'a, 's, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, 's, F> {
                         // to an initialized mutable slot never builds a `Result` to
                         // report that it succeeded.
                         let slot = *slot;
-                        if !self.current.direct_eval_with_stack
-                            && slot < u128::BITS as usize
-                            && self.current.authoritative_slots & (1_u128 << slot) != 0
-                            && self
-                                .current
-                                .bytecode
-                                .locals
-                                .get(slot)
-                                .is_some_and(|local| local.mutable)
-                            && self.current.locals.get(slot).is_some_and(Option::is_some)
-                            && let Some(value) = self.current.stack.pop()
-                        {
-                            self.current.locals[slot] = Some(value);
-                            crate::diagnostics::count!(authoritative_assign_local_hits);
+                        if self.try_private_store(slot, true) {
                             continue 'dispatch;
                         }
                         self.current.ip = pc;
@@ -848,15 +813,15 @@ impl<'a, 's, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, 's, F> {
                     Op::Return => {
                         crate::diagnostics::count!(dispatched_branch_return_ops);
                         self.current.ip = pc;
-                        if let Some(value) = self.op_return()? {
-                            return Ok(FrameExit::Completed(Completion::Return(value)));
+                        if let Some(exit) = self.inline_return()? {
+                            return Ok(exit);
                         }
                         pc = self.current.ip;
                         break 'out_of_line;
                     }
                     Op::Pop => {
                         crate::diagnostics::count!(dispatched_stack_ops);
-                        if self.current.stack.pop().is_some() {
+                        if self.try_pop() {
                             continue 'dispatch;
                         }
                         self.current.ip = pc;
@@ -864,14 +829,11 @@ impl<'a, 's, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, 's, F> {
                     }
                     Op::Dup => {
                         crate::diagnostics::count!(dispatched_stack_ops);
-                        let stack = &mut *self.current.stack;
-                        let Some(value) = stack.last() else {
-                            self.current.ip = pc;
-                            return Err(stack_underflow());
-                        };
-                        let value = super::vm_bindings::clone_local_value(value);
-                        stack.push(value);
-                        continue 'dispatch;
+                        if self.try_duplicate() {
+                            continue 'dispatch;
+                        }
+                        self.current.ip = pc;
+                        return Err(stack_underflow());
                     }
                     Op::ToNumeric => {
                         crate::diagnostics::count!(dispatched_numeric_ops);
@@ -908,16 +870,7 @@ impl<'a, 's, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, 's, F> {
                         // `Result`, which `handle_runtime_result` then rewraps --
                         // four values crossing a call boundary to add two floats
                         // that are already adjacent on the stack.
-                        let stack = &mut *self.current.stack;
-                        let len = stack.len();
-                        if len >= 2
-                            && let (Value::Number(left), Value::Number(right)) =
-                                (&stack[len - 2], &stack[len - 1])
-                            && let Some(value) =
-                                super::vm_props::fast_number_binary_numbers(*left, *op, *right)
-                        {
-                            stack.truncate(len - 1);
-                            stack[len - 2] = value;
+                        if self.try_number_binary(*op) {
                             continue 'dispatch;
                         }
                         self.current.ip = pc;
