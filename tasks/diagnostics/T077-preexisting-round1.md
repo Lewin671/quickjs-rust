@@ -30,3 +30,30 @@ For-await awaiting iterator return results and native-stack overflow remain
 outside this follow-up, owned by the existing scope/S3d records. NG differences
 on let-loop continue/finally and duplicate-parameter direct eval must not be
 copied into the implementation or expected fixture output.
+
+## Region-owned with exits and using-loop cleanup
+
+Quality refactor `ec4f7b59`: runtime 2,763 passes; commit fast gate passes,
+including 65 selected Test262 cases.
+
+With root cause: compiler-emitted ExitWith ran before intervening finalizers,
+so their binding checkpoints tried to materialize a with lease without its
+object. A synthetic protected region now surrounds each own with body; its
+unwinding restores the entering with depth after all inner finalizers. Normal
+flow still executes ExitWith. Captured with objects are never exited by a
+callee's return.
+
+For-using root cause: abrupt routing depended on the separately maintained
+try-result stack, which the head-disposal wrapper never registered. All
+break/continue sites now start as AbruptJump; a compiler finalization pass
+selects ordinary Jump only when emitted EnterTry/BeginFinally ranges prove no
+region is exited. Completion-value tracking no longer controls cleanup. The
+obsolete iterator/with exit bookkeeping is removed from loop contexts. This
+single region correction fixes both reported bugs as one semantic family.
+
+Coverage: region-routing unit test; four runtime tests for all with abrupt
+forms, nested scopes, suspension, immediate labeled disposal and 100,000
+repeated using exits; two NG fixtures. Review run.py passes all three original
+with/using reproducers in debug, combined stress and combined-off (nine runs),
+including growth reporting 100,000 disposals before return. No RSS/timing
+measurement was used to establish the repair.

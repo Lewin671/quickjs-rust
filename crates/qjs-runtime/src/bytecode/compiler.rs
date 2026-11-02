@@ -65,11 +65,11 @@ pub(super) struct Compiler {
     pub(super) global_hoisted: NameSet<String>,
     annex_b_blocked_function_names: Vec<Vec<String>>,
     /// Count of `with` scopes currently open around the code being compiled.
-    /// Break/continue/return that leave one or more of them emit `Op::ExitWith`
-    /// for each scope crossed, keeping the VM's with-object stack balanced.
+    /// Runtime protected regions own exits; this count selects lexical
+    /// identifier resolution while compiling their bodies.
     pub(super) with_depth: usize,
     /// `with` scopes captured from an enclosing function-creation environment;
-    /// present when the frame starts, so returns must not `ExitWith` them.
+    /// present when the frame starts and retained by its lexical owner.
     pub(super) with_base_depth: usize,
     /// Set when an invalid `/.../` regexp literal aborted compilation (a
     /// parse-phase error, not a generic early error).
@@ -122,10 +122,6 @@ pub(super) struct LoopContext {
     labels: Vec<String>,
     breaks: Vec<usize>,
     continues: Vec<usize>,
-    iterator: Option<LoopIterator>,
-    /// The compiler's `with_depth` when this loop was entered. A break or
-    /// continue targeting it must close every `with` scope opened since.
-    with_depth: usize,
 }
 
 /// Live iterator state for a `for-of` loop that must be closed when an
@@ -792,17 +788,8 @@ impl Compiler {
             result_slot,
             allows_continue: true,
             labels,
-            with_depth: self.with_depth,
             ..LoopContext::default()
         });
-    }
-
-    pub(super) fn push_loop_with_iterator(&mut self, result_slot: usize, iterator: LoopIterator) {
-        self.push_loop(result_slot);
-        self.loop_stack
-            .last_mut()
-            .expect("loop context should exist after push")
-            .iterator = Some(iterator);
     }
 
     pub(super) fn push_breakable(&mut self, result_slot: usize) {
@@ -811,7 +798,6 @@ impl Compiler {
             result_slot,
             allows_continue: false,
             labels,
-            with_depth: self.with_depth,
             ..LoopContext::default()
         });
     }
@@ -842,15 +828,9 @@ impl Compiler {
         };
         self.propagate_try_result_to_loop(index);
         self.propagate_current_completion_to(index);
-        self.emit_with_exits_above(self.loop_stack[index].with_depth);
         let result_slot = self.loop_stack[index].result_slot;
         self.emit(Op::LoadLocal(result_slot));
-        let crosses_finally = self.crosses_finally_boundary(index);
-        let jump = self.emit(if crosses_finally {
-            Op::AbruptJump(usize::MAX)
-        } else {
-            Op::Jump(usize::MAX)
-        });
+        let jump = self.emit(Op::AbruptJump(usize::MAX));
         self.loop_stack[index].breaks.push(jump);
         Ok(())
     }
@@ -867,13 +847,7 @@ impl Compiler {
         };
         self.propagate_try_result_to_loop(index);
         self.propagate_current_completion_to(index);
-        self.emit_with_exits_above(self.loop_stack[index].with_depth);
-        let crosses_finally = self.crosses_finally_boundary(index);
-        let jump = self.emit(if crosses_finally {
-            Op::AbruptJump(usize::MAX)
-        } else {
-            Op::Jump(usize::MAX)
-        });
+        let jump = self.emit(Op::AbruptJump(usize::MAX));
         self.loop_stack[index].continues.push(jump);
         Ok(())
     }
@@ -936,19 +910,6 @@ impl Compiler {
             self.emit(Op::LoadLocal(try_slot));
             self.emit(Op::StoreLocal(target_slot));
         }
-    }
-
-    /// Returns true if a break/continue targeting `target_loop_index` would
-    /// cross a try block boundary (the VM will check at runtime whether that
-    /// try has a finally and route through it if so).
-    fn crosses_finally_boundary(&self, target_loop_index: usize) -> bool {
-        self.try_result_slots
-            .iter()
-            .rev()
-            .any(|e| e.loop_depth > target_loop_index)
-            || self.loop_stack[target_loop_index..]
-                .iter()
-                .any(|context| context.iterator.is_some())
     }
 
     fn propagate_current_completion_to(&mut self, target_index: usize) {
@@ -1057,7 +1018,6 @@ impl Compiler {
                 } else {
                     self.emit_load_undefined();
                 }
-                self.emit_with_exits_above(self.with_base_depth);
                 self.emit(Op::Return);
                 Ok(())
             }

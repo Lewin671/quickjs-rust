@@ -1,9 +1,8 @@
 //! Lowering for `for`-`in`, `for`-`of`, `for await`, `switch` and `with`.
 //!
-//! An iterator loop records its iterator and done slots in the loop context
-//! (`LoopIterator`); its protected region closes it after inner finalizers
-//! on any abrupt exit. `with_depth` likewise makes every exit
-//! from a `with` body emit its `ExitWith`.
+//! An iterator loop records its iterator and done slots in `LoopIterator`; its protected region closes it after inner finalizers
+//! on any abrupt exit. Protected regions also unwind with objects after all
+//! inner finalizers, while normal exits emit ExitWith directly.
 
 use qjs_ast::{
     AssignmentTarget, BinaryOp, BindingPattern, Expr, ForInLeft, Stmt, SwitchCase, VarKind,
@@ -146,7 +145,7 @@ impl Compiler {
         let true_slot = self.const_slot(Value::Boolean(true));
         self.emit(Op::LoadConst(true_slot));
         self.emit(Op::StoreLocal(body_active_slot));
-        self.compile_for_of_iteration(left, value_slot, body, result_slot, iterator, &blocked)?;
+        self.compile_for_of_iteration(left, value_slot, body, result_slot, &blocked)?;
         let context = self.pop_loop();
 
         self.emit(Op::Jump(loop_start));
@@ -308,7 +307,7 @@ impl Compiler {
         let true_slot = self.const_slot(Value::Boolean(true));
         self.emit(Op::LoadConst(true_slot));
         self.emit(Op::StoreLocal(body_active_slot));
-        self.compile_for_of_iteration(left, value_slot, body, result_slot, iterator, &blocked)?;
+        self.compile_for_of_iteration(left, value_slot, body, result_slot, &blocked)?;
         let context = self.pop_loop();
 
         self.emit(Op::Jump(loop_start));
@@ -337,11 +336,10 @@ impl Compiler {
         value_slot: usize,
         body: &Stmt,
         result_slot: usize,
-        iterator: LoopIterator,
         blocked: &[String],
     ) -> Result<(), RuntimeError> {
         self.with_annex_b_blocked_function_names(blocked, |compiler| {
-            compiler.push_loop_with_iterator(result_slot, iterator);
+            compiler.push_loop(result_slot);
             if for_in_left_has_disposal(left) {
                 compiler.compile_for_of_iteration_with_disposal(
                     left,
@@ -672,6 +670,13 @@ impl Compiler {
     pub(super) fn compile_with(&mut self, object: &Expr, body: &Stmt) -> Result<(), RuntimeError> {
         // The completion value of a `with` is its body's completion value.
         self.compile_expr(object)?;
+        let enter = self.emit(Op::EnterTry {
+            catch: None,
+            finally: None,
+            end: usize::MAX,
+            catch_scope: None,
+            cleanup_slots: Vec::new(),
+        });
         self.emit(Op::EnterWith);
         self.scope_plan.enter(crate::binding::ScopeKind::With);
         self.with_depth += 1;
@@ -681,17 +686,9 @@ impl Compiler {
         self.scope_plan.exit();
         result?;
         self.emit(Op::ExitWith);
+        self.emit(Op::ExitTry);
+        self.finish_try(enter, self.code.len());
         Ok(())
-    }
-
-    /// Emits an `Op::ExitWith` for each `with` scope opened above `target_depth`,
-    /// keeping the VM's with-object stack balanced when control jumps out of one
-    /// or more `with` bodies. Does not change the compiler's own `with_depth`,
-    /// since the surrounding scope keeps compiling after the jump.
-    pub(super) fn emit_with_exits_above(&mut self, target_depth: usize) {
-        for _ in target_depth..self.with_depth {
-            self.emit(Op::ExitWith);
-        }
     }
 }
 

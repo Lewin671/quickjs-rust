@@ -47,6 +47,7 @@ mod parameters;
 mod private_names;
 mod promise_race;
 mod promises;
+mod protected_scope_exits;
 mod proxy;
 mod reflect;
 mod regexp;
