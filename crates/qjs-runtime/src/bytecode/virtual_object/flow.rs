@@ -670,8 +670,8 @@ impl<'a> Analyzer<'a> {
             | Op::AbruptJump(_)
             | Op::EnterTry { .. }
             | Op::ExitTry
+            | Op::BeginFinally(_)
             | Op::EndFinally
-            | Op::DiscardPendingAbrupt
             | Op::NewClass { .. }
             | Op::BeginClass
             | Op::DefineClassElement { .. }
@@ -972,8 +972,8 @@ pub(super) fn analyze(bytecode: &Bytecode) -> VirtualObjectAnalysis {
             Op::AbruptJump(_)
                 | Op::EnterTry { .. }
                 | Op::ExitTry
+                | Op::BeginFinally(_)
                 | Op::EndFinally
-                | Op::DiscardPendingAbrupt
         )
     }) {
         analyzer.mark_all(EscapeReason::UnsupportedInstruction { ip: 0 });

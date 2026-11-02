@@ -219,8 +219,8 @@ impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
             | Op::AbruptJump(_)
             | Op::EnterTry { .. }
             | Op::ExitTry
+            | Op::BeginFinally(_)
             | Op::EndFinally
-            | Op::DiscardPendingAbrupt
             | Op::Throw
             | Op::ThrowReferenceError(_)
             | Op::FunctionPrologueEnd

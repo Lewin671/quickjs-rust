@@ -11,7 +11,7 @@ use crate::{
     error::runtime_error_to_value, property_value_key, symbol,
 };
 
-use super::vm::Vm;
+use super::{vm::Vm, vm_try::PendingAbrupt};
 
 /// A resource registered by a `using` declaration: the value and disposal
 /// method resolved once at registration time.
@@ -120,7 +120,16 @@ impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
         // Seed the accumulated completion with any throw the block raised (the
         // finally was entered via throw_value, which stages pending_throw). A
         // dispose failure then suppresses it.
-        let mut pending = self.take_pending_throw();
+        let mut pending = self.cold_mut().finally_stack.last_mut().and_then(|frame| {
+            if matches!(frame.completion, Some(PendingAbrupt::Throw(_))) {
+                match frame.completion.take() {
+                    Some(PendingAbrupt::Throw(value)) => Some(value),
+                    _ => unreachable!(),
+                }
+            } else {
+                None
+            }
+        });
         let mut awaited = Value::Undefined;
         let mut did_await = false;
         for resource in resources.into_iter().rev() {
@@ -151,10 +160,11 @@ impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
         if let Some(error) = pending {
             // A throw (re-staged block throw or a dispose failure) overrides any
             // pending return/break that entered the finally.
-            let cold = self.cold_mut();
-            cold.pending_return = None;
-            cold.pending_jump = None;
-            cold.pending_throw = Some(error);
+            self.cold_mut()
+                .finally_stack
+                .last_mut()
+                .expect("disposal runs inside a finalizer")
+                .completion = Some(PendingAbrupt::Throw(error));
         }
         if await_async {
             self.stack.push(awaited);

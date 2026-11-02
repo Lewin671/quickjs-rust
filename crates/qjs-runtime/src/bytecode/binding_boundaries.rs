@@ -155,7 +155,14 @@ fn relocate_op(op: &mut Op, old_pc: usize, boundary: &[usize]) {
         | Op::JumpIfTrue(target)
         | Op::JumpIfNotNullish(target)
         | Op::AbruptJump(target) => *target = boundary[*target],
-        Op::EnterTry { catch, finally, .. } => {
+        Op::BeginFinally(end) => *end = boundary[*end],
+        Op::EnterTry {
+            catch,
+            finally,
+            end,
+            ..
+        } => {
+            *end = boundary[*end];
             *catch = catch.map(|pc| boundary[pc]);
             *finally = finally.map(|pc| boundary[pc]);
         }

@@ -34,6 +34,12 @@ pub(super) fn block_has_await_using(body: &[Stmt]) -> bool {
 }
 
 impl Compiler {
+    pub(super) fn finish_try(&mut self, enter: usize, region_end: usize) {
+        if let Op::EnterTry { end, .. } = &mut self.code[enter] {
+            *end = region_end;
+        }
+    }
+
     /// Compiles a block body in its own lexical scope, leaving the block's
     /// completion value on the stack. Shared by plain and disposable blocks.
     pub(super) fn compile_block_body(&mut self, body: &[Stmt]) -> Result<(), RuntimeError> {
@@ -106,11 +112,12 @@ impl Compiler {
         self.emit(Op::StoreLocal(result_slot));
 
         let loop_depth = self.loop_stack_depth();
-        self.push_try_result_slot(result_slot, loop_depth, false);
+        self.push_try_result_slot(result_slot, loop_depth);
 
         let enter = self.emit(Op::EnterTry {
             catch: None,
             finally: None,
+            end: usize::MAX,
             catch_scope: None,
             cleanup_slots: Vec::new(),
         });
@@ -129,6 +136,7 @@ impl Compiler {
             *finally = Some(finally_target);
         }
         self.patch_jump(normal_jump, finally_target);
+        self.finish_try(enter, finally_target);
         self.emit(Op::LoadLocal(result_slot));
         Ok(())
     }
@@ -143,10 +151,11 @@ impl Compiler {
         self.emit(Op::EnterDisposableScope);
         let result_slot = self.temp_local("body_using_result");
         let loop_depth = self.loop_stack_depth();
-        self.push_try_result_slot(result_slot, loop_depth, false);
+        self.push_try_result_slot(result_slot, loop_depth);
         let enter = self.emit(Op::EnterTry {
             catch: None,
             finally: None,
+            end: usize::MAX,
             catch_scope: None,
             cleanup_slots: Vec::new(),
         });
@@ -168,6 +177,7 @@ impl Compiler {
             *finally = Some(finally_target);
         }
         self.patch_jump(normal_jump, finally_target);
+        self.finish_try(enter, finally_target);
         Ok(())
     }
 
@@ -175,8 +185,9 @@ impl Compiler {
     pub(super) fn compile_dispose_finally(&mut self, await_async: bool) -> usize {
         let finally_result_slot = self.temp_local("dispose_result");
         let loop_depth = self.loop_stack_depth();
-        self.push_try_result_slot(finally_result_slot, loop_depth, true);
+        self.push_try_result_slot(finally_result_slot, loop_depth);
         let target = self.code.len();
+        let begin = self.emit(Op::BeginFinally(usize::MAX));
         self.emit(Op::DisposeScope { await_async });
         if await_async {
             let skip_await = self.emit(Op::JumpIfFalse(usize::MAX));
@@ -192,6 +203,8 @@ impl Compiler {
         }
         self.pop_try_result_slot();
         self.emit(Op::EndFinally);
+        let end = self.code.len();
+        self.patch_jump(begin, end);
         target
     }
 
@@ -206,11 +219,12 @@ impl Compiler {
         self.emit(Op::StoreLocal(result_slot));
 
         let loop_depth = self.loop_stack_depth();
-        self.push_try_result_slot(result_slot, loop_depth, false);
+        self.push_try_result_slot(result_slot, loop_depth);
 
         let enter = self.emit(Op::EnterTry {
             catch: None,
             finally: None,
+            end: usize::MAX,
             catch_scope: None,
             cleanup_slots: Vec::new(),
         });
@@ -247,6 +261,7 @@ impl Compiler {
             finally,
             catch_scope: scope,
             cleanup_slots: slots,
+            ..
         } = &mut self.code[enter]
         {
             *catch = catch_target;
@@ -255,6 +270,7 @@ impl Compiler {
             *slots = cleanup_slots;
         }
         self.patch_jump(normal_jump, finally_target.unwrap_or(after));
+        self.finish_try(enter, finally_target.unwrap_or(after));
         self.emit(Op::LoadLocal(result_slot));
         Ok(())
     }
@@ -339,9 +355,10 @@ impl Compiler {
         let finally_result_slot = self.temp_local("finally_result");
 
         let loop_depth = self.loop_stack_depth();
-        self.push_try_result_slot(finally_result_slot, loop_depth, true);
+        self.push_try_result_slot(finally_result_slot, loop_depth);
 
         let target = self.code.len();
+        let begin = self.emit(Op::BeginFinally(usize::MAX));
         // Initialize the finally result slot at the start of the finally block
         // (inside the target) so it's reset regardless of how finally is entered
         // (normal flow, exception, or abrupt completion from try/catch).
@@ -354,6 +371,8 @@ impl Compiler {
         self.pop_try_result_slot();
 
         self.emit(Op::EndFinally);
+        let end = self.code.len();
+        self.patch_jump(begin, end);
         Ok(target)
     }
 }

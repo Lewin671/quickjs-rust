@@ -247,6 +247,7 @@ impl Compiler {
         let enter = self.emit(Op::EnterTry {
             catch: None,
             finally: None,
+            end: usize::MAX,
             catch_scope: None,
             cleanup_slots: Vec::new(),
         });
@@ -294,6 +295,7 @@ impl Compiler {
             *finally = Some(finally_target);
         }
         self.patch_jump(normal_jump, finally_target);
+        self.finish_try(enter, finally_target);
         self.emit(Op::LoadLocal(result_slot));
         Ok(())
     }

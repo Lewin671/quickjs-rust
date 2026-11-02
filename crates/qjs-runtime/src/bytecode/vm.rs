@@ -264,6 +264,7 @@ pub(super) struct ColdFrame {
         Option<Vec<super::vm_numeric_mutation_loop::NumericMutationLoopPlan>>,
     pub(super) sloppy_global_names: Vec<String>,
     pub(super) try_stack: Vec<TryFrame>,
+    pub(super) finally_stack: Vec<super::vm_try::FinallyFrame>,
     pub(super) pending_throw: Option<Value>,
     pub(super) pending_return: Option<Value>,
     /// Target IP for a break/continue routed through a finally block.
@@ -315,6 +316,7 @@ impl ColdFrame {
         self.numeric_mutation_loop_plans = None;
         self.sloppy_global_names.clear();
         self.try_stack.clear();
+        self.finally_stack.clear();
         self.pending_throw = None;
         self.pending_return = None;
         self.pending_jump = None;

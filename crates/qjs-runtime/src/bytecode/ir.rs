@@ -414,19 +414,19 @@ pub(super) enum Op {
     /// independent copies of the listed slots, so each iteration has its own
     /// binding.
     FreshIterationScope(Vec<usize>),
-    /// Starts a try frame after loop setup.
+    /// Starts a protected region. `end` is exclusive and includes its catch
+    /// body; abrupt jumps retaining this region must not pop its handler.
     EnterTry {
         catch: Option<usize>,
         finally: Option<usize>,
+        end: usize,
         catch_scope: Option<CatchScope>,
         cleanup_slots: Vec<usize>,
     },
     ExitTry,
+    /// Opens a finalizer with its own pending completion, retained on suspension.
+    BeginFinally(usize),
     EndFinally,
-    /// Clears any pending throw or return when an abrupt completion (break,
-    /// continue, or return) exits a finally block. Without this the stale
-    /// pending state would be picked up by the next `EndFinally`.
-    DiscardPendingAbrupt,
     Return,
     Throw,
     /// Throws a `ReferenceError` with the given message at runtime, without

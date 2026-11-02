@@ -25,6 +25,7 @@ mod disposable_stacks;
 mod errors;
 mod expressions;
 mod extensible_scope_closures;
+mod finalizer_completions;
 mod frame_cold_state;
 mod functions;
 mod generators;

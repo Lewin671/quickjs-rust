@@ -94,7 +94,10 @@ if `draining` is set (`async_generators.rs::overlapping_next_calls_are_fifo`).
   (`return_value`): each enclosing `finally` runs, and with none the
   generator completes with `v` at once.
 - A `finally` may override the injected completion. A suspension inside it
-  keeps the pending completion in the record. The state becomes
+  keeps each active finalizer's pending completion in the record. Nested
+  finalizers own independent completions; a catch or jump within an outer
+  finalizer preserves its completion. The destination determines which
+  protected regions and finalizers an abrupt exit unwinds. The state becomes
   `Completed` only when the body returns or an error leaves it, and an error
   always completes the generator (`finish`).
 - Before the body starts, `return(v)` completes with `v` and `throw(v)`

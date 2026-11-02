@@ -1,8 +1,8 @@
 //! Lowering for `for`-`in`, `for`-`of`, `for await`, `switch` and `with`.
 //!
 //! An iterator loop records its iterator and done slots in the loop context
-//! (`LoopIterator`), so a `break`, `continue` or `return` that leaves the
-//! loop emits the iterator close. `with_depth` likewise makes every exit
+//! (`LoopIterator`); its protected region closes it after inner finalizers
+//! on any abrupt exit. `with_depth` likewise makes every exit
 //! from a `with` body emit its `ExitWith`.
 
 use qjs_ast::{
@@ -115,6 +115,7 @@ impl Compiler {
         let enter = self.emit(Op::EnterTry {
             catch: None,
             finally: None,
+            end: usize::MAX,
             catch_scope: None,
             cleanup_slots: Vec::new(),
         });
@@ -280,6 +281,7 @@ impl Compiler {
         let enter = self.emit(Op::EnterTry {
             catch: None,
             finally: None,
+            end: usize::MAX,
             catch_scope: None,
             cleanup_slots: Vec::new(),
         });
@@ -364,10 +366,11 @@ impl Compiler {
     ) -> Result<(), RuntimeError> {
         self.emit(Op::EnterDisposableScope);
         let loop_depth = self.loop_stack_depth();
-        self.push_try_result_slot(result_slot, loop_depth, false);
+        self.push_try_result_slot(result_slot, loop_depth);
         let enter = self.emit(Op::EnterTry {
             catch: None,
             finally: None,
+            end: usize::MAX,
             catch_scope: None,
             cleanup_slots: Vec::new(),
         });
@@ -387,6 +390,7 @@ impl Compiler {
             *finally = Some(finally_target);
         }
         self.patch_jump(normal_jump, finally_target);
+        self.finish_try(enter, finally_target);
         Ok(())
     }
 
@@ -409,14 +413,6 @@ impl Compiler {
         self.emit(Op::LoadLocal(result_slot));
         let normal_done = self.emit(Op::Jump(usize::MAX));
 
-        let break_cleanup = self.code.len();
-        self.emit(Op::ExitTry);
-        self.emit_close_unless_done(iterator.iterator_slot, iterator.done_slot, false);
-        for slot in cleanup_slots {
-            self.emit(Op::ClearLocal(*slot));
-        }
-        let break_done = self.emit(Op::Jump(usize::MAX));
-
         let catch_target = self.code.len();
         // Per ForIn/OfBodyEvaluation, IteratorClose runs only when the abrupt
         // completion comes from the binding/body region (step k). Abrupt
@@ -435,14 +431,22 @@ impl Compiler {
         self.emit(Op::Pop);
         let close_done = self.code.len();
         self.patch_jump(after_close, close_done);
+        self.emit(Op::ExitTry);
         self.emit(Op::Throw);
 
+        // Abrupt return/jump reaches close only after all inner finalizers.
+        let finally_target = self.code.len();
+        let begin = self.emit(Op::BeginFinally(usize::MAX));
+        self.emit_close_unless_done(iterator.iterator_slot, iterator.done_slot, false);
+        self.emit(Op::EndFinally);
         let done = self.code.len();
+        self.patch_jump(begin, done);
         self.patch_jump(normal_done, done);
-        self.patch_jump(break_done, done);
-        self.patch_loop_breaks(context, break_cleanup);
-        if let Op::EnterTry { catch, .. } = &mut self.code[enter] {
+        self.patch_loop_breaks(context, done);
+        self.finish_try(enter, finally_target);
+        if let Op::EnterTry { catch, finally, .. } = &mut self.code[enter] {
             *catch = Some(catch_target);
+            *finally = Some(finally_target);
         }
     }
 

@@ -113,10 +113,6 @@ pub(super) struct TryResultEntry {
     /// The loop stack depth when the try/finally block was entered. A
     /// break/continue targeting a loop below this depth propagates this slot.
     pub(super) loop_depth: usize,
-    /// Whether this entry is for a `finally` block. Break/continue inside
-    /// finally must emit `DiscardPendingAbrupt` to clear stale pending
-    /// throw/return state.
-    pub(super) is_finally: bool,
 }
 
 #[derive(Default)]
@@ -760,7 +756,8 @@ impl Compiler {
             | Op::JumpIfFalse(dest)
             | Op::JumpIfTrue(dest)
             | Op::JumpIfNotNullish(dest)
-            | Op::AbruptJump(dest) => *dest = target,
+            | Op::AbruptJump(dest)
+            | Op::BeginFinally(dest) => *dest = target,
             _ => unreachable!("attempted to patch a non-jump instruction"),
         }
     }
@@ -827,7 +824,6 @@ impl Compiler {
         };
         self.propagate_try_result_to_loop(index);
         self.propagate_current_completion_to(index);
-        self.emit_loop_iterator_closes_above(index);
         self.emit_with_exits_above(self.loop_stack[index].with_depth);
         let result_slot = self.loop_stack[index].result_slot;
         self.emit(Op::LoadLocal(result_slot));
@@ -853,7 +849,6 @@ impl Compiler {
         };
         self.propagate_try_result_to_loop(index);
         self.propagate_current_completion_to(index);
-        self.emit_loop_iterator_closes_above(index);
         self.emit_with_exits_above(self.loop_stack[index].with_depth);
         let crosses_finally = self.crosses_finally_boundary(index);
         let jump = self.emit(if crosses_finally {
@@ -863,34 +858,6 @@ impl Compiler {
         });
         self.loop_stack[index].continues.push(jump);
         Ok(())
-    }
-
-    /// Closes the live for-of iterators of every loop context nested inside
-    /// the target context, innermost first, exiting their protected regions.
-    /// Used when a labelled break or continue crosses for-of loops.
-    fn emit_loop_iterator_closes_above(&mut self, target_index: usize) {
-        let iterators: Vec<LoopIterator> = self.loop_stack[target_index + 1..]
-            .iter()
-            .filter_map(|context| context.iterator)
-            .collect();
-        for iterator in iterators.into_iter().rev() {
-            self.emit(Op::ExitTry);
-            self.emit_close_unless_done(iterator.iterator_slot, iterator.done_slot, false);
-        }
-    }
-
-    /// Closes every live for-of iterator before a `return` leaves the
-    /// function body, innermost first.
-    fn emit_loop_iterator_closes_for_return(&mut self) {
-        let iterators: Vec<LoopIterator> = self
-            .loop_stack
-            .iter()
-            .filter_map(|context| context.iterator)
-            .collect();
-        for iterator in iterators.into_iter().rev() {
-            self.emit(Op::ExitTry);
-            self.emit_close_unless_done(iterator.iterator_slot, iterator.done_slot, false);
-        }
     }
 
     fn break_context_index(&self, label: Option<&str>) -> Option<usize> {
@@ -918,16 +885,10 @@ impl Compiler {
 
     /// Pushes a try/finally result slot onto the tracking stack with the
     /// current loop nesting depth. Must be balanced with `pop_try_result_slot`.
-    pub(super) fn push_try_result_slot(
-        &mut self,
-        result_slot: usize,
-        loop_depth: usize,
-        is_finally: bool,
-    ) {
+    pub(super) fn push_try_result_slot(&mut self, result_slot: usize, loop_depth: usize) {
         self.try_result_slots.push(TryResultEntry {
             result_slot,
             loop_depth,
-            is_finally,
         });
     }
 
@@ -942,8 +903,6 @@ impl Compiler {
     /// propagate the innermost try result slot to the target loop's result
     /// slot. This implements the UpdateEmpty semantics for try statements:
     /// the try's accumulated completion value becomes the break's value.
-    /// Also emits `DiscardPendingAbrupt` when crossing a finally boundary
-    /// to clear any stale pending throw/return.
     fn propagate_try_result_to_loop(&mut self, target_loop_index: usize) {
         // The innermost try_result_slot whose loop_depth exceeds
         // target_loop_index was entered inside the target loop, so a
@@ -955,13 +914,9 @@ impl Compiler {
             .find(|e| e.loop_depth > target_loop_index)
         {
             let try_slot = entry.result_slot;
-            let is_finally = entry.is_finally;
             let target_slot = self.loop_stack[target_loop_index].result_slot;
             self.emit(Op::LoadLocal(try_slot));
             self.emit(Op::StoreLocal(target_slot));
-            if is_finally {
-                self.emit(Op::DiscardPendingAbrupt);
-            }
         }
     }
 
@@ -972,7 +927,10 @@ impl Compiler {
         self.try_result_slots
             .iter()
             .rev()
-            .any(|e| e.loop_depth > target_loop_index && !e.is_finally)
+            .any(|e| e.loop_depth > target_loop_index)
+            || self.loop_stack[target_loop_index..]
+                .iter()
+                .any(|context| context.iterator.is_some())
     }
 
     fn propagate_current_completion_to(&mut self, target_index: usize) {
@@ -1081,7 +1039,6 @@ impl Compiler {
                 } else {
                     self.emit_load_undefined();
                 }
-                self.emit_loop_iterator_closes_for_return();
                 self.emit_with_exits_above(self.with_base_depth);
                 self.emit(Op::Return);
                 Ok(())
@@ -1178,6 +1135,7 @@ impl Compiler {
         let enter = self.emit(Op::EnterTry {
             catch: None,
             finally: None,
+            end: usize::MAX,
             catch_scope: None,
             cleanup_slots: Vec::new(),
         });
@@ -1203,6 +1161,7 @@ impl Compiler {
             *finally = Some(finally_target);
         }
         self.patch_jump(normal_jump, finally_target);
+        self.finish_try(enter, finally_target);
         self.emit(Op::LoadLocal(result_slot));
         Ok(())
     }

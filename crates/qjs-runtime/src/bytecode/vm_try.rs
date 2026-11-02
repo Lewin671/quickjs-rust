@@ -1,9 +1,14 @@
+//! Abrupt completions unwind protected regions only when their destination exits
+//! the region. Each running finalizer owns a separate completion, so nested
+//! catches/finalizers and suspension cannot consume or overwrite an outer one.
 use crate::{RuntimeError, Value, error_value};
 
 use super::{ir::CatchScope, vm::Vm};
 
 #[derive(Clone)]
 pub(super) struct TryFrame {
+    start: usize,
+    end: usize,
     catch: Option<usize>,
     finally: Option<usize>,
     catch_scope: Option<CatchScope>,
@@ -16,19 +21,37 @@ pub(super) struct TryFrame {
     class_depth: usize,
 }
 
+#[derive(Clone)]
+pub(super) enum PendingAbrupt {
+    Throw(Value),
+    Return(Value),
+    Jump(usize),
+}
+
+#[derive(Clone)]
+pub(super) struct FinallyFrame {
+    start: usize,
+    end: usize,
+    pub(super) completion: Option<PendingAbrupt>,
+}
+
 impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
     pub(super) fn enter_try(
         &mut self,
         catch: Option<usize>,
         finally: Option<usize>,
+        end: usize,
         catch_scope: Option<CatchScope>,
         cleanup_slots: Vec<usize>,
     ) {
+        let start = self.ip;
         let stack_depth = self.stack.len();
         let cold = self.cold_mut();
         let with_depth = cold.with_stack.len();
         let class_depth = cold.class_regions.len();
         cold.try_stack.push(TryFrame {
+            start,
+            end,
             catch,
             finally,
             catch_scope,
@@ -48,10 +71,8 @@ impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
     }
 
     pub(super) fn throw_value(&mut self, value: Value) -> Result<(), RuntimeError> {
-        // A fresh throw supersedes any abrupt completion deferred by an
-        // in-flight finally (e.g. an inner `finally { throw }` overriding the
-        // exception/break/return it interrupted), so the stale pending
-        // completion must not be re-raised later by an enclosing EndFinally.
+        // Fresh abrupt state is staged separately from active finalizers;
+        // only routing outside a finalizer discards its saved completion.
         self.clear_pending_abrupt();
         if !self.try_stack_is_empty() {
             let (stack_depth, with_depth, class_depth, catch, cleanup_slots) = {
@@ -83,6 +104,7 @@ impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
                         .expect("catch frames must retain their cleanup slots"),
                 )?;
                 self.stack.push(value);
+                self.unwind_finalizers(catch);
                 self.ip = catch;
                 return Ok(());
             }
@@ -96,12 +118,14 @@ impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
             self.cleanup_catch_scope(frame.catch_scope_active, frame.catch_scope)?;
             if let Some(finally) = frame.finally {
                 self.cold_mut().pending_throw = Some(value);
+                self.unwind_finalizers(finally);
                 self.ip = finally;
             } else {
                 self.throw_value(value)?;
             }
             return Ok(());
         }
+        self.unwind_finalizers(usize::MAX);
         Err(RuntimeError {
             thrown: Some(Box::new(value.clone())),
             message: format!("throw statement executed: {}", error_value(value)),
@@ -109,6 +133,7 @@ impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
     }
 
     pub(super) fn return_value(&mut self, value: Value) -> Result<Option<Value>, RuntimeError> {
+        self.clear_pending_abrupt();
         while let Some(frame) = self
             .cold
             .as_deref_mut()
@@ -121,44 +146,84 @@ impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
             self.cleanup_catch_scope(frame.catch_scope_active, frame.catch_scope)?;
             if let Some(finally) = frame.finally {
                 self.cold_mut().pending_return = Some(value);
+                self.unwind_finalizers(finally);
                 self.ip = finally;
                 return Ok(None);
             }
         }
+        self.unwind_finalizers(usize::MAX);
         Ok(Some(value))
     }
 
-    /// Routes a break/continue jump through finally blocks. Pops the current
-    /// try frame and, if it has a finally clause, defers the jump until after
-    /// the finally block executes. Otherwise jumps directly.
-    /// Unlike throw/return, the operand stack is not truncated because the
-    /// break/continue target expects its completion value on top.
+    /// Resume jumps through every exited region, retaining enclosing regions
+    /// whose body/catch still contains the target (e.g. a loop inside a try).
     pub(super) fn abrupt_jump(&mut self, target: usize) -> Result<(), RuntimeError> {
-        if let Some(frame) = self
-            .cold
-            .as_deref_mut()
-            .and_then(|cold| cold.try_stack.pop())
-        {
+        self.clear_pending_abrupt();
+        loop {
+            let exits = self
+                .cold
+                .as_deref()
+                .and_then(|cold| cold.try_stack.last())
+                .is_some_and(|frame| !(frame.start <= target && target < frame.end));
+            if !exits {
+                break;
+            }
+            let frame = self.cold_mut().try_stack.pop().expect("exited region");
+            self.cold_mut().with_stack.truncate(frame.with_depth);
             self.restore_class_depth(frame.class_depth);
             self.cleanup_slots(&frame.cleanup_slots)?;
             self.cleanup_catch_scope(frame.catch_scope_active, frame.catch_scope)?;
             if let Some(finally) = frame.finally {
                 self.cold_mut().pending_jump = Some(target);
+                self.unwind_finalizers(finally);
                 self.ip = finally;
                 return Ok(());
             }
         }
+        self.unwind_finalizers(target);
         self.ip = target;
         Ok(())
     }
 
-    pub(super) fn end_finally(&mut self) -> Result<Option<Value>, RuntimeError> {
-        if let Some(value) = self.take_pending_throw() {
-            self.throw_value(value)?;
+    fn unwind_finalizers(&mut self, target: usize) {
+        if let Some(cold) = self.cold.as_deref_mut() {
+            while cold
+                .finally_stack
+                .last()
+                .is_some_and(|frame| !(frame.start <= target && target < frame.end))
+            {
+                cold.finally_stack.pop();
+            }
+        }
+    }
+
+    pub(super) fn begin_finally(&mut self, end: usize) {
+        let completion = if let Some(value) = self.take_pending_throw() {
+            Some(PendingAbrupt::Throw(value))
         } else if let Some(value) = self.take_pending_return() {
-            return self.return_value(value);
-        } else if let Some(target) = self.take_pending_jump() {
-            self.ip = target;
+            Some(PendingAbrupt::Return(value))
+        } else {
+            self.take_pending_jump().map(PendingAbrupt::Jump)
+        };
+        let start = self.ip;
+        self.cold_mut().finally_stack.push(FinallyFrame {
+            start,
+            end,
+            completion,
+        });
+    }
+
+    pub(super) fn end_finally(&mut self) -> Result<Option<Value>, RuntimeError> {
+        let completion = self
+            .cold_mut()
+            .finally_stack
+            .pop()
+            .and_then(|frame| frame.completion);
+        match completion {
+            Some(PendingAbrupt::Throw(value)) => self.throw_value(value)?,
+            Some(PendingAbrupt::Return(value)) => return self.return_value(value),
+            Some(PendingAbrupt::Jump(target)) => self.abrupt_jump(target)?,
+            None => {}
         }
         Ok(None)
     }
