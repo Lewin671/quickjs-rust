@@ -143,3 +143,14 @@ or held-out inputs. Runtime source remains exactly 2aa117b7. The profiler now
 reaps fast targets and bounds sampler waits; its regressions and tool gate pass.
 Final binaries and the complete C5 correctness/exact matrix are next, followed
 by the single frozen final public86.
+
+## C5: rebuilt final semantic matrix
+
+The [sealed semantic matrix](T077-s3c5-final/semantic/README.md), runtime content
+2aa117b7/orders476f1bea, passes full/5,174 curated, default2,753/counters2,805,
+all stress, NG322+10 in nine modes, public351 and all 8,000 fuzz seeds with
+7,191 MATCH/809 PRE, no new regression. Both depth profiles remain >=S3b;
+call/method targets pass. Fannkuch's small local excess remains visible.
+Complete cached/IC-off scans run through exact harness shards, with full unique
+path coverage required before ledger records. The partial serial attempt is
+not recorded. The one final public86 and lead acceptance remain outstanding.

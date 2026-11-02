@@ -1,0 +1,17 @@
+{
+  "binding": {
+    "PRE": 366,
+    "MATCH": 1634
+  },
+  "binding-simple": {
+    "PRE": 376,
+    "MATCH": 1624
+  },
+  "receiver": {
+    "MATCH": 2000
+  },
+  "global-store": {
+    "MATCH": 1933,
+    "PRE": 67
+  }
+}

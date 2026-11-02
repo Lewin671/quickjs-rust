@@ -1,0 +1,26 @@
+{
+  "full_gate": {
+    "exit": 0,
+    "runtime": 2753,
+    "curated_test262": 5174,
+    "log_sha256": "05251fddc01a301a4c238c900b2ca1236dca81b3716a40235436e2fe6e1754c0"
+  },
+  "full_perf_counters": {
+    "exit": 0,
+    "passed": 2805,
+    "log_sha256": "36851636562e18a41cdb7afa6bcc659274daef92b5e79a3638355bac11faaee6"
+  },
+  "x86_all_targets_agents_perf_counters": {
+    "exit": 0,
+    "log_sha256": "6c8988ca29ebe2d6af0f96100521067e812082b7e84cff3e877482a86b05d39b"
+  },
+  "stress": "stress.json",
+  "ng": "compare.json",
+  "public": "public-summary.json",
+  "fuzz": "fuzz-summary.json",
+  "depth": "depth.json",
+  "native_frames": "native-frames.json",
+  "controls": "controls.json",
+  "call_slopes": "call-cost.json",
+  "acceptance": false
+}
