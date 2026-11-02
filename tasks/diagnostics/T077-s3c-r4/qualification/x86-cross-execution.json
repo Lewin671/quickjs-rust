@@ -1,0 +1,23 @@
+{
+  "observations": [
+    {
+      "pid": 13661,
+      "elapsed": "00:48",
+      "command": "target/s3c-r4/after-x86/x86_64-apple-darwin/release/qjs --raw -e 1+2;"
+    },
+    {
+      "pid": 14047,
+      "elapsed": "00:26",
+      "command": "target/s3c-r4/after-x86/x86_64-apple-darwin/debug/qjs --raw -e 1+2;"
+    }
+  ],
+  "result": "Local cross-built CLIs did not complete a trivial expression. SIGTERM and SIGKILL were sent only to these own probe children, but ps still reports Us (uninterruptible wait). No execution-depth result is claimed; native x86 prologue proof is static disassembly.",
+  "cleanup": {
+    "sigterm_did_not_exit": [
+      13661,
+      14047
+    ],
+    "sigkill_sent_only_to_these_owned_probe_children": true,
+    "remaining_ps_state": "13661 Us; 14047 Us"
+  }
+}

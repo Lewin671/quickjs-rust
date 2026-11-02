@@ -39,7 +39,8 @@ zero losses. Representative maximum successful depths on this host:
 `+` means the 4,096 probe cap, not a measured ceiling. Native stack limits
 and the CLI entry are unchanged. Source, output, failure and binary hashes
 are in the complete receipts. The predecessor failed the six added paths
-[here](qualification/depth-before.json).
+[here](qualification/depth-before.json). The [three original reviewer files](qualification/reviewer-repros.json)
+abort on c80ac690 and produce the expected R lines on both S3b and the repair.
 
 
 Exact cached/IC-off Test262 is not repeated for this frame-layout-only repair:
@@ -65,7 +66,11 @@ owner driver shrinks 208 -> 112 / 184 -> 120 bytes. Full before/after prologues,
 including unchanged direct-leaf/construct/eval fallback entries and the newly
 outlined helper, are in qualification/native-*.json. A missing standalone
 symbol means inlining, not a zero-byte native frame. x86 counts exclude the
-8-byte return address consistently.
+8-byte return address consistently. The depth table is native arm64. The
+x86 prologues are static cross-build evidence; optional local cross-CLI
+smokes did not complete; both children remain in OS uninterruptible wait
+after SIGTERM/SIGKILL (PIDs13661/14047, recorded in qualification).
+No x86 execution-depth result is claimed.
 
 Two exploratory inlining layouts are retained as trial depth JSON. Inlining
 the direct-call fallback grew admitted-call paths; the complete conditional
