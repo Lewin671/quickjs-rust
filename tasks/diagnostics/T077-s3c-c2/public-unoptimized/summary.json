@@ -1,0 +1,47 @@
+{
+  "timing": false,
+  "complete": true,
+  "cases": 86,
+  "case_modes": 258,
+  "invocations": 351,
+  "passed": 344,
+  "failed": 7,
+  "failures": [
+    {
+      "mode": "ic-verify",
+      "id": "external/kraken-1.1/imaging-gaussian-blur",
+      "iterations": null
+    },
+    {
+      "mode": "ic-verify",
+      "id": "development/moment/dates",
+      "iterations": null
+    },
+    {
+      "mode": "ic-verify",
+      "id": "development/diff/compare",
+      "iterations": null
+    },
+    {
+      "mode": "ic-verify",
+      "id": "development/papaparse/csv",
+      "iterations": null
+    },
+    {
+      "mode": "ic-verify",
+      "id": "development/js-yaml/document",
+      "iterations": null
+    },
+    {
+      "mode": "ic-verify",
+      "id": "development/matter-js/simulate",
+      "iterations": null
+    },
+    {
+      "mode": "ic-verify",
+      "id": "development/graphlib/paths",
+      "iterations": null
+    }
+  ],
+  "request_sha256": "e9f0df2337beeba4cc1d935130f413142a1a4ac2236b0873e2baf320ec17152c"
+}

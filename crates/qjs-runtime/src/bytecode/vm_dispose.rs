@@ -27,7 +27,7 @@ enum DisposeHint {
     Async,
 }
 
-impl Vm<'_, '_> {
+impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
     /// Dispatches the three `using` disposal ops, routing register/dispose
     /// failures through the throw machinery so a `try` can catch them.
     pub(super) fn run_disposal_op(&mut self, op: &super::ir::Op) -> Result<(), RuntimeError> {

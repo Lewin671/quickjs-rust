@@ -61,7 +61,12 @@ pub(crate) fn call_native_function(
     direct_eval: Option<&crate::context::DirectEvalSite<'_>>,
     env: &mut crate::context::Context<'_>,
 ) -> Result<Value, RuntimeError> {
-    let mut native = env.with_native(&info, target, direct_eval);
+    let native_site = crate::context::NativeSite {
+        info: &info,
+        target,
+        direct_eval,
+    };
+    let mut native = env.with_native(&native_site);
     entry(&mut native, info, argument_values).map_err(|error| {
         // The private wide-register TDZ sentinel has no callable realm.
         // Its installed rejecting entry belongs to the active activation.

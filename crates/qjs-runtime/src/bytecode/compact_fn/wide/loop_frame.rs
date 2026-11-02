@@ -90,7 +90,7 @@ impl LoopFrame for WideLoopFrame<'_, '_> {
         self.env.reborrow()
     }
     fn loop_activation(&self) -> &crate::context::ActivationContext {
-        self.env.activation
+        &self.env.activation
     }
 
     fn direct_eval_with_stack(&self) -> bool {
@@ -136,7 +136,7 @@ impl LoopFrame for WideLoopFrame<'_, '_> {
         // The receiver is compiled as a read of the name `this`, which the
         // tier answers from the activation (`WideOp::LoadThis`).
         if name == "this" {
-            return self.env.caller().this_value();
+            return self.env.activation.this_value();
         }
         crate::bytecode::compact_fn::property::load_global(name, self.env)
     }

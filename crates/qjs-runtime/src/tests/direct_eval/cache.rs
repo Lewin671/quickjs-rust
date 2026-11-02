@@ -20,7 +20,12 @@ fn repeated_declaration_free_direct_eval_uses_fresh_cached_blueprints() {
         scope: None,
         private: None,
     };
-    let mut env = caller.with_native(&info, None, Some(&site));
+    let native_site = crate::context::NativeSite {
+        info: &info,
+        target: None,
+        direct_eval: Some(&site),
+    };
+    let mut env = caller.with_native(&native_site);
     env.insert_realm("value".to_owned(), Value::Number(1.0));
 
     assert_eq!(

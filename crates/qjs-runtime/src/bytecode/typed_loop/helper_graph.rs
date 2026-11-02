@@ -454,7 +454,13 @@ impl Preparation {
         depth: usize,
     ) -> Option<(Vec<HelperOp>, u8)> {
         let code = &bytecode.code;
-        if code.len() > MAX_OPS || !matches!(code.first(), Some(Op::FunctionPrologueEnd)) {
+        if code
+            .iter()
+            .filter(|op| !matches!(op, Op::BindingBoundary { .. }))
+            .count()
+            > MAX_OPS
+            || !matches!(code.first(), Some(Op::FunctionPrologueEnd))
+        {
             return None;
         }
         // Slots the body assigns get a register each, above the arguments, so
@@ -548,7 +554,7 @@ impl Preparation {
         depth: usize,
     ) -> Option<()> {
         match op {
-            Op::FunctionPrologueEnd => {}
+            Op::BindingBoundary { .. } | Op::FunctionPrologueEnd => {}
             Op::LoadConst(index) => {
                 let value = Typed::from_value(bytecode.constants.get(*index)?)?;
                 let dst = walk.push_register()?;

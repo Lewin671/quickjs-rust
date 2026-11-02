@@ -1,0 +1,26 @@
+{
+  "binary_sha256": "4d3bceb7541c8f5b93ff3cafa7f904180aff93c53cfd1da04a06329c623dc546",
+  "symbols": [
+    {
+      "symbol": "qjs_runtime::bytecode::compact_fn::wide::activation::run_root",
+      "address": "000000010018dac0",
+      "prologue": [
+        "10018dac0: 6db923e9    \tstp\td9, d8, [sp, #-0x70]!",
+        "10018dac4: a9016ffc    \tstp\tx28, x27, [sp, #0x10]",
+        "10018dac8: a90267fa    \tstp\tx26, x25, [sp, #0x20]",
+        "10018dacc: a9035ff8    \tstp\tx24, x23, [sp, #0x30]",
+        "10018dad0: a90457f6    \tstp\tx22, x21, [sp, #0x40]",
+        "10018dad4: a9054ff4    \tstp\tx20, x19, [sp, #0x50]",
+        "10018dad8: a9067bfd    \tstp\tx29, x30, [sp, #0x60]",
+        "10018dadc: 910183fd    \tadd\tx29, sp, #0x60",
+        "10018dae0: d11203ff    \tsub\tsp, sp, #0x480",
+        "10018dae4: f90003ff    \tstr\txzr, [sp]",
+        "10018dae8: aa0603fb    \tmov\tx27, x6",
+        "10018daec: aa0503f4    \tmov\tx20, x5"
+      ],
+      "memcpy_calls": [],
+      "directory_calls": []
+    }
+  ],
+  "interpretation": "Current-window slices are bound before the opcode loop; no directory lookup exists. Static call-site inventory does not by itself prove absence of every inline spill."
+}

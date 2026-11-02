@@ -34,7 +34,7 @@ pub(super) fn guarded_math_unary_hits() -> usize {
     GUARDED_MATH_UNARY_HITS.with(Cell::get)
 }
 
-impl Vm<'_, '_> {
+impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
     pub(super) fn require_callable(&self) -> Result<(), RuntimeError> {
         let callee = self.stack.last().ok_or_else(stack_underflow)?;
         if matches!(callee, Value::Function(_))
@@ -394,7 +394,12 @@ pub(super) fn try_fast_global_native_call(
         this_value,
         is_construct: false,
     };
-    let mut site = context.with_native(&info, None, None);
+    let native_site = crate::context::NativeSite {
+        info: &info,
+        target: None,
+        direct_eval: None,
+    };
+    let mut site = context.with_native(&native_site);
     let context = &mut site;
     let result = match native {
         NativeFunction::DecodeUri
@@ -780,21 +785,30 @@ fn fast_string_from_char_code_primitives(
 
 #[cfg(test)]
 mod tests {
-    use super::super::{compiler::compile_script, eval_bytecode};
+    use super::super::compiler::compile_script;
 
     #[test]
     fn native_argument_borrows_preserve_reusable_operand_capacity() {
         let script = qjs_parser::parse_script(&"Math.max(1, 2);".repeat(40)).unwrap();
         let code = compile_script(&script).unwrap();
+        let (mut runtime, activation) = crate::context::HostRoot::script().into_parts();
+        let creation = activation.creation_context();
         for _ in 0..2 {
-            assert_eq!(eval_bytecode(&code).unwrap(), crate::Value::Number(2.0));
-            let recycler = code.operand_stack_recycler();
-            let buffer = recycler.take();
+            let activation = crate::context::ActivationContext::new(
+                creation.clone(),
+                crate::context::ExecutionMode::Script,
+            );
+            let mut vm = super::super::vm::Vm::new(&code, &mut runtime, activation).unwrap();
+            assert_eq!(vm.run().unwrap(), crate::Value::Number(2.0));
+            drop(vm);
+            let pool = runtime.frame_stacks.general();
+            let buffer = pool.take_operands();
             assert!(
                 buffer.capacity() > 0,
                 "native return discarded the caller's reusable allocation"
             );
-            recycler.recycle(buffer);
+            assert!(buffer.is_empty());
+            pool.put_operands(buffer);
         }
     }
 }

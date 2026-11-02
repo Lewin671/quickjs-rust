@@ -40,9 +40,15 @@
 //! `named_property_cache.rs` and `enumerate_keys_cache.rs`;
 //! `vm_string_append.rs` appends in place to a uniquely held string.
 
+mod binding_boundaries;
+#[cfg(test)]
+mod binding_boundaries_tests;
 mod binding_captures;
 mod binding_metadata;
 mod binding_plan;
+mod binding_writes;
+#[cfg(test)]
+mod binding_writes_tests;
 mod call_context;
 mod compact_fn;
 mod compiler;
@@ -60,12 +66,14 @@ mod compiler_references;
 mod compiler_try;
 mod compiler_values;
 mod enumerate_keys_cache;
+pub(crate) mod frame_bank;
+mod frame_owner;
+mod frame_pool;
 mod frame_program;
 mod frame_stack;
 mod ir;
 mod ir_class;
 mod ir_names;
-mod ir_pools;
 mod linked_code;
 mod named_property_cache;
 mod operand_stack;
@@ -125,8 +133,8 @@ pub(crate) fn field_initializer_member_read(
 pub use ir::Bytecode;
 pub(crate) use vm_class::install_field_value;
 pub(crate) use vm_generator::{
-    GeneratorOutcome, GeneratorStart, GeneratorState, Resume, is_suspended_at_plain_yield,
-    resume_generator, start_suspended_at_body,
+    GeneratorOutcome, GeneratorState, Resume, SuspendedActivation, is_suspended_at_plain_yield,
+    prepare_suspended_start, resume_generator, start_suspended_at_body,
 };
 pub(crate) use vm_iter::sync_iterator_for_value;
 pub(crate) use vm_numeric_leaf::try_eval_numeric_leaf;
@@ -468,7 +476,7 @@ pub(crate) fn eval_prelude_script(
 /// Evaluates a module body against the shared graph realm seeded with the
 /// module's canonical cells. See [`vm_module::eval_module_body`].
 pub(crate) fn eval_module_body(
-    bytecode: &Bytecode,
+    bytecode: &std::rc::Rc<Bytecode>,
     realm: &ModuleRealm,
     host: Option<crate::module::ModuleHostRef>,
     module_bindings: ModuleBindings,
@@ -542,4 +550,13 @@ pub(crate) fn eval_bytecode_with_env_ephemeral_global_lexicals(
     )
 }
 
-pub(crate) use vm_generator::start_with_call_inputs;
+#[inline(always)]
+pub(crate) fn try_eval_indexed_call(
+    function: &crate::Function,
+    receiver: &mut Option<Value>,
+    target: &mut Option<Value>,
+    arguments: &[Value],
+    runtime: &mut crate::context::RuntimeServices,
+) -> Option<Result<Value, RuntimeError>> {
+    compact_fn::try_run_indexed(function, receiver, target, arguments, runtime)
+}

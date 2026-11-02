@@ -1,0 +1,15 @@
+{
+  "candidate": "63b2347fce60d615acd37b674941f1ecffba27b1",
+  "base": "8322fc983da20800ce612ad148781aea30e28d08",
+  "runtime_source_tree_sha256": "a0e9be45f1e2fb1a7f537b32195cb9b9620b3a9ed27c3b1934227abcfb81304a",
+  "requests_started_before_commit": [
+    "fuzz-request.json",
+    "public/request.json"
+  ],
+  "source_binding": "Both requests record parent HEAD plus exact Rust input hashes. Those hashes match the committed C2 source, as do the final census/depth binaries. The unoptimized attempt is separately preserved.",
+  "new_dependencies": false,
+  "unsafe_added": false,
+  "origin_push_or_main_merge": false,
+  "imac_job": "20261101T210008Z-t077-s3c-c2",
+  "runner_ref_transfer_only": true
+}

@@ -28,33 +28,35 @@ never freed.
 
 ## What a suspended frame owns
 
-`GeneratorSnapshot` owns the `Rc<Bytecode>`, `ip`, operand stack, `locals`,
-`local_upvalues`, received `upvalues`, owned ActivationContext/creation and lexical owner,
-retained scope instances/holders,
-selected binding references, partial class-definition regions/private overlays,
-active own `with_stack`, function-name cells in leases, the try stack, disposable scopes,
-the pending
-throw/return/jump of an in-flight `finally`, and the suspension kind. Resume
-borrows RuntimeServices, builds a `Vm` over the held bytecode, restores state, and recomputes
-the derived slot masks (`refresh_authoritative_slots`).
+`prepare_suspended_start` builds the complete boxed `FrameState` for generator,
+async function, async generator and TLA entries. Both SuspendedStart and
+SuspendedYield consume that same `SuspendedActivation`. Its frame owns the sole
+retained code handle, PC, operands/locals, cells, Context, scope
+instances, selected references, partial classes/private overlays, with-stack,
+try/disposal stacks and pending completion. The continuation adds only its
+suspension kind. There is no separate start metadata owner, duplicate code Rc,
+late frame construction or call-input resume API. Resume reattaches
+RuntimeServices and resets segment declines and wide handback; it neither
+reconstructs fields nor copies Bytecode. Ordinary
+VM records are values; storage selection is static, without an enum test per op.
 
-1. **Cell identity survives.** The snapshot holds the same `BindingCell` cells
+1. **Cell identity survives.** The record holds the same `BindingCell` cells
    as the closures and declaring frames. Suspend and resume copy no binding
-   value, run no refresh or write-back, and do not consult the resuming
+   value, run no value refresh or write-back, and do not consult the resuming
    caller's environment ([env-model-rewrite.md](env-model-rewrite.md)). Tests:
    `generators.rs::suspended_generator_keeps_parameter_and_var_capture_cells`,
    `async_functions.rs::await_resume_observes_sibling_closure_capture_writes`.
 2. **Try state survives.** Test:
    `frame_cold_state.rs::a_generator_carries_its_try_state_across_suspension`.
 3. **Class keys suspend the enclosing frame.** Computed keys are ordinary IR,
-   including private-name keys. The snapshot moves each partial class and its
+   including private-name keys. The record moves each partial class and its
    lexical cell/private environment; no key function call is reconstructed.
    Abrupt handlers truncate regions to their saved class depth. Tests:
    `class_keys.rs::private_key_yield_resumes_the_enclosing_generator`,
    `::private_key_await_resumes_the_enclosing_async_function`.
 4. **Nothing scalar-replaced crosses a suspension.** Virtual-object lowering
    treats a suspension point as an escape (`EscapeReason::Suspension`,
-   `bytecode/virtual_object.rs`), so a snapshot carries no virtual state.
+   `bytecode/virtual_object.rs`), so a record carries no virtual state.
 
 ## Start
 
@@ -64,7 +66,13 @@ synchronously (`start_suspended_at_body`) and stops at
 before the object exists, and the body has not run. An async function is
 stored as `SuspendedStart` and driven at once to its first `await` or
 completion; every error, including a parameter-binding error, rejects the
-returned promise. Tests:
+returned promise. The prepared frame consumes borrowed arguments into slots
+and owned recipes before publication; preparation does not execute parameter
+initializers. A completed synchronous prologue remains SuspendedStart, so the
+first next ignores its argument without injecting a synthetic yield value.
+Early return/throw and dropping an unresumed owner release that frame. Ownership
+tests in `bytecode/vm_generator/owner_tests.rs` prove stable box/code ownership
+through all seven suspension kinds and release of private values. Tests:
 `generators.rs::calling_a_generator_runs_the_parameter_prologue`,
 `async_functions.rs::parameter_binding_error_rejects`.
 
@@ -86,7 +94,7 @@ if `draining` is set (`async_generators.rs::overlapping_next_calls_are_fifo`).
   (`return_value`): each enclosing `finally` runs, and with none the
   generator completes with `v` at once.
 - A `finally` may override the injected completion. A suspension inside it
-  keeps the pending completion in the snapshot. The state becomes
+  keeps the pending completion in the record. The state becomes
   `Completed` only when the body returns or an error leaves it, and an error
   always completes the generator (`finish`).
 - Before the body starts, `return(v)` completes with `v` and `throw(v)`

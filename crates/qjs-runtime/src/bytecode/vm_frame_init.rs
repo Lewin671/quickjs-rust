@@ -10,7 +10,7 @@ use super::DirectCallSlots;
 use super::frame_program::FrameBytecode;
 use super::ir::Bytecode;
 use super::operand_stack::OperandStack;
-use super::vm::{ColdFrame, FrameState, Slot, Vm};
+use super::vm::{FrameState, Slot, Vm};
 use crate::{RuntimeError, Value, function::BindingCell};
 
 impl<'a, 's> Vm<'a, 's> {
@@ -148,16 +148,19 @@ impl<'a, 's> Vm<'a, 's> {
             .then(|| {
                 crate::array_prototype(&crate::context::Context {
                     runtime,
-                    activation: &mut env,
+                    activation: (&mut env).into(),
                     native: None,
                 })
             })
             .flatten();
         let is_direct_call = direct_call_slots.is_some();
+        let pool = runtime.frame_stacks.general();
+        #[cfg(debug_assertions)]
+        pool.set_poison(runtime.binding_debug.poisoning());
         let mut locals = if is_direct_call {
-            Self::initial_direct_call_slots(bytecode)
+            Self::initial_direct_call_slots(bytecode, &pool)
         } else {
-            Self::initial_slots(bytecode, &env)
+            Self::initial_slots(bytecode, &env, &pool)
         };
         if let Some(inputs) = call_inputs {
             Self::seed_call_inputs(bytecode.parameter_slots(), &mut locals, inputs.arguments);
@@ -174,7 +177,7 @@ impl<'a, 's> Vm<'a, 's> {
                 if env.has_dynamic_function_realm_global()
                     && let Some(prototype) = crate::array_prototype(&crate::context::Context {
                         runtime,
-                        activation: &mut env,
+                        activation: (&mut env).into(),
                         native: None,
                     })
                 {
@@ -234,7 +237,7 @@ impl<'a, 's> Vm<'a, 's> {
                 &mut local_upvalues,
                 &crate::context::Context {
                     runtime,
-                    activation: &mut env,
+                    activation: (&mut env).into(),
                     native: None,
                 },
             );
@@ -265,19 +268,29 @@ impl<'a, 's> Vm<'a, 's> {
         // Keep cold virtual candidates allocation-free. Their first
         // initializer grows this bank only as far as the candidate needs.
         let virtual_values = Vec::new();
-        let stack = OperandStack::new(bytecode);
+        let stack = OperandStack::new(pool);
         let cold =
             (!with_stack.is_empty() || array_literal_prototype_override.is_some()).then(|| {
-                crate::diagnostics::count!(cold_frame_allocations);
-                Box::new(ColdFrame {
-                    with_stack,
-                    array_literal_prototype_override,
-                    ..ColdFrame::default()
-                })
+                let mut cold = stack.pool().take_cold();
+                cold.with_stack = with_stack;
+                cold.array_literal_prototype_override = array_literal_prototype_override;
+                cold
             });
+        let (indexed_cell_slots, initialized_mutable_slots) = if env.has_global_binding_root() {
+            (0, 0)
+        } else {
+            (
+                bytecode.binding_plan.indexed_cells,
+                bytecode.link_frame_write_capabilities(&local_upvalues),
+            )
+        };
+        #[cfg(feature = "perf-counters")]
+        crate::diagnostics::update(|c| {
+            c.initialized_mutable_frame_routes += u64::from(initialized_mutable_slots.count_ones())
+        });
         let mut vm = Self {
             runtime,
-            current: FrameState {
+            current: super::vm::InlineFrame(FrameState {
                 slow_flags: 0,
                 reference_hooks: !handle.binding_plan.references.can_skip(&env),
                 active_reference_count: 0,
@@ -291,6 +304,8 @@ impl<'a, 's> Vm<'a, 's> {
                 stack,
                 locals,
                 local_upvalues,
+                indexed_cell_slots,
+                initialized_mutable_slots,
                 direct_readonly_upvalue_owner,
                 direct_readonly_upvalue_slots,
                 authoritative_slots,
@@ -307,7 +322,8 @@ impl<'a, 's> Vm<'a, 's> {
                 cold,
                 direct_eval_with_stack: false,
                 persist_global_lexicals: true,
-            },
+            }),
+            frame_lifetime: std::marker::PhantomData,
             callers: Vec::new(),
             pending_frame_entry: None,
         };
@@ -341,10 +357,13 @@ impl<'a, 's> Vm<'a, 's> {
         }
     }
 
-    pub(super) fn initial_direct_call_slots(bytecode: &Bytecode) -> Vec<Slot> {
+    pub(super) fn initial_direct_call_slots(
+        bytecode: &Bytecode,
+        pool: &super::frame_pool::GeneralPool,
+    ) -> Vec<Slot> {
         // Fill, then seed only the hoisted slots. Testing every local's flag
         // made frame setup scale with the local count.
-        let mut locals = bytecode.take_local_slots(bytecode.locals.len());
+        let mut locals = pool.take_locals(bytecode.locals.len());
         for &slot in bytecode.hoisted_slots() {
             locals[slot as usize] = Some(Value::Undefined);
         }
@@ -390,12 +409,21 @@ mod tests {
         let env = empty_env();
 
         let (local_upvalues, realm_binding_slots) =
-            Vm::initial_direct_local_upvalues(&bytecode, &[], 0, &env);
+            Vm::<crate::bytecode::vm::InlineFrame<'_>>::initial_direct_local_upvalues(
+                &bytecode,
+                &[],
+                0,
+                &env,
+            );
 
         assert!(local_upvalues.is_empty());
         assert_eq!(realm_binding_slots, Some(0));
         assert_eq!(
-            Vm::initial_authoritative_slots(&bytecode, &local_upvalues, &env),
+            Vm::<crate::bytecode::vm::InlineFrame<'_>>::initial_authoritative_slots(
+                &bytecode,
+                &local_upvalues,
+                &env
+            ),
             1
         );
     }
@@ -407,7 +435,12 @@ mod tests {
         let captured = BindingCell::new(Value::Number(42.0));
 
         let (local_upvalues, realm_binding_slots) =
-            Vm::initial_direct_local_upvalues(&bytecode, std::slice::from_ref(&captured), 0, &env);
+            Vm::<crate::bytecode::vm::InlineFrame<'_>>::initial_direct_local_upvalues(
+                &bytecode,
+                std::slice::from_ref(&captured),
+                0,
+                &env,
+            );
 
         assert_eq!(local_upvalues.len(), 1);
         assert_eq!(realm_binding_slots, Some(0));
@@ -432,7 +465,12 @@ mod tests {
         let captured = env.realm_binding_cell("captured").unwrap();
 
         let (local_upvalues, realm_binding_slots) =
-            Vm::initial_direct_local_upvalues(&bytecode, std::slice::from_ref(&captured), 1, &env);
+            Vm::<crate::bytecode::vm::InlineFrame<'_>>::initial_direct_local_upvalues(
+                &bytecode,
+                std::slice::from_ref(&captured),
+                1,
+                &env,
+            );
 
         assert_eq!(realm_binding_slots, Some(1));
         assert!(
@@ -460,7 +498,7 @@ mod tests {
             .expect("function should receive captured cell");
         let activation = empty_env();
         let mut runtime = crate::context::RuntimeServices::for_realm(activation.realm());
-        let mut vm = Vm::new_with_globals_upvalues_with_stack_and_direct_call_slots(
+        let mut vm = Vm::<crate::bytecode::vm::InlineFrame<'_>>::new_with_globals_upvalues_with_stack_and_direct_call_slots(
             bytecode,
             &mut runtime,
             activation,
@@ -501,7 +539,12 @@ mod tests {
         );
 
         let (local_upvalues, realm_binding_slots) =
-            Vm::initial_direct_local_upvalues(&bytecode, &[], 0, &env);
+            Vm::<crate::bytecode::vm::InlineFrame<'_>>::initial_direct_local_upvalues(
+                &bytecode,
+                &[],
+                0,
+                &env,
+            );
 
         assert_eq!(local_upvalues.len(), 1);
         assert_eq!(realm_binding_slots, Some(0));
@@ -523,13 +566,23 @@ mod tests {
         parameter.parameter = true;
         for own in [local("name", false), parameter] {
             let bytecode = Bytecode::new(Vec::new(), vec![own], Vec::new());
-            let (cells, _) = Vm::initial_direct_local_upvalues(&bytecode, &[], 0, &env);
+            let (cells, _) =
+                Vm::<crate::bytecode::vm::InlineFrame<'_>>::initial_direct_local_upvalues(
+                    &bytecode,
+                    &[],
+                    0,
+                    &env,
+                );
             assert!(cells[0].is_none(), "own binding cannot become an import");
         }
         let bytecode = Bytecode::new(Vec::new(), vec![local("name", true)], Vec::new());
         let captured = BindingCell::new(Value::Number(42.0));
-        let (cells, _) =
-            Vm::initial_direct_local_upvalues(&bytecode, std::slice::from_ref(&captured), 0, &env);
+        let (cells, _) = Vm::<crate::bytecode::vm::InlineFrame<'_>>::initial_direct_local_upvalues(
+            &bytecode,
+            std::slice::from_ref(&captured),
+            0,
+            &env,
+        );
         assert!(cells[0].as_ref().unwrap().ptr_eq(&captured));
     }
 
@@ -548,8 +601,12 @@ mod tests {
                 .all(|name| !name.starts_with("\0\0"))
         );
         let (mut vm_services, vm_activation) = crate::context::HostRoot::script().into_parts();
-        let vm = Vm::new(&bytecode, &mut vm_services, vm_activation)
-            .expect("top-level VM should initialize");
+        let vm = Vm::<crate::bytecode::vm::InlineFrame<'_>>::new(
+            &bytecode,
+            &mut vm_services,
+            vm_activation,
+        )
+        .expect("top-level VM should initialize");
         for (slot, local) in bytecode.locals.iter().enumerate() {
             if !local.compiler_temporary {
                 continue;

@@ -36,7 +36,12 @@ fn native_borrow_preserves_derived_cell_and_does_not_inherit_construct_target() 
     };
     let mut caller = root.context();
     {
-        let child = caller.with_native(&info, None, None);
+        let native_site = crate::context::NativeSite {
+            info: &info,
+            target: None,
+            direct_eval: None,
+        };
+        let child = caller.with_native(&native_site);
         assert!(child.caller().derived_this_cell().unwrap().ptr_eq(&cell));
         assert!(child.new_target().is_none());
         assert!(child.caller().this_value().is_err());
@@ -72,7 +77,12 @@ fn initialized_undefined_receiver_never_becomes_derived_on_native_entry() {
         is_construct: false,
     };
     let mut caller = root.context();
-    let child = caller.with_native(&info, None, None);
+    let native_site = crate::context::NativeSite {
+        info: &info,
+        target: None,
+        direct_eval: None,
+    };
+    let child = caller.with_native(&native_site);
     assert!(child.caller().derived_this_cell().is_none());
     assert_eq!(child.caller().this_value(), Ok(Value::Undefined));
     assert_eq!(child.owner_kind(), Some(OwnerKind::Module));
@@ -222,7 +232,12 @@ fn native_realm_target_and_parked_caller_are_distinct_borrows() {
     let creation_owners = Rc::strong_count(native.creation_context());
     let mut caller = root.context();
     {
-        let site = caller.with_native(&info, Some(&target), None);
+        let native_site = crate::context::NativeSite {
+            info: &info,
+            target: Some(&target),
+            direct_eval: None,
+        };
+        let site = caller.with_native(&native_site);
         assert!(Rc::ptr_eq(site.realm(), &native_realm));
         assert!(Rc::ptr_eq(site.caller().realm(), &caller_realm));
         assert!(site.new_target().unwrap().same_value(&target));

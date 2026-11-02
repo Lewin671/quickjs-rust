@@ -31,7 +31,7 @@ mod peephole;
 #[cfg(test)]
 mod tests;
 
-pub(in crate::bytecode) use activation::try_run_standalone;
+pub(in crate::bytecode) use activation::{try_run_indexed, try_run_standalone};
 
 /// Register-addressed form of the subset of `Op` this tier admits.
 ///
@@ -43,8 +43,8 @@ enum WideOp {
     /// The checked global reference starts of a compiled reference event
     /// (`reference_admission`): each is elided or selected here, before any
     /// RHS effect, into the activation's saved references.
-    ReferenceCheck {
-        event: u32,
+    ReferenceBoundary {
+        pc: u32,
     },
     LoadConst {
         dst: u16,
@@ -58,12 +58,13 @@ enum WideOp {
     /// dead-zone check `AssignLocal` makes: the binding lives in the cell,
     /// shared with the frame that declared it.
     StoreUpvalueLocal {
-        slot: u16,
         src: u16,
+        capture: u16,
     },
     LoadUpvalueLocal {
         dst: u16,
         slot: u16,
+        capture: u16,
     },
     Drop {
         src: u16,
@@ -271,6 +272,7 @@ pub(in crate::bytecode) struct WideProgram {
     named_writes: Vec<NamedWriteSite>,
     /// Total register file width: locals followed by former stack slots.
     register_count: usize,
+    written: Box<[std::ops::Range<u16>]>,
     /// Locals this body reads through indexed storage. Entry declines unless
     /// the frame reports every one of them as authoritative.
     required_authoritative_slots: u128,

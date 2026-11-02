@@ -1,7 +1,7 @@
 //! The wide tier's VM-free activation and frame driver.
 //!
 //! This is the numeric tier's driver (`compact_fn::activation`) with three
-//! additions: every frame owns its canonical call owner, a resolved call takes
+//! additions: every frame owns its call inputs (Context is lazy), a resolved call takes
 //! its receiver from the register below the callee, and the dispatch loop
 //! answers the named-property operations through the shared cached fast
 //! paths in `compact_fn::property`. The numeric driver is deliberately not
@@ -20,8 +20,10 @@ use crate::bytecode::vm::{ResumeFrom, Resumed};
 use crate::function::{BindingCell, Function};
 use crate::{RuntimeError, Value};
 
-mod entry;
+use crate::bytecode::frame_bank::{CONSTRUCT, FrameStorage, PREFIX, RootActivation, clear_written};
+mod cold_ops;
 mod exits;
+mod operand_ops;
 
 #[cfg(test)]
 #[path = "activation/owner_tests.rs"]
@@ -34,19 +36,13 @@ struct WideActivation<'a, 's> {
     bytecode: &'a Bytecode,
     /// Services and this callee's actual typed activation, borrowed per segment.
     env: &'a mut crate::context::Context<'s>,
+    upvalues: &'a [BindingCell],
+    indexed_receiver: Option<&'a Value>,
     upvalue_owner: Option<&'a Function>,
-    upvalue_slots: u128,
+    strict: bool,
 }
 
 impl WideActivation<'_, '_> {
-    fn upvalue_cell(&self, slot: usize) -> Option<&BindingCell> {
-        let owner = self.upvalue_owner?;
-        let bit = (slot < u128::BITS as usize).then(|| 1_u128 << slot)?;
-        (self.upvalue_slots & bit != 0).then_some(())?;
-        let index = self.bytecode.cell_received_upvalue_index(slot)?;
-        owner.upvalues.get(index)
-    }
-
     #[cold]
     #[inline(never)]
     fn uninitialized_upvalue(&self, slot: usize) -> Result<Value, RuntimeError> {
@@ -203,7 +199,6 @@ enum Action {
 struct WideEntry<'a> {
     program: &'a WideProgram,
     upvalue_owner: Option<Function>,
-    upvalue_slots: u128,
 }
 
 /// Proves a body may run on this tier with the given upvalue source.
@@ -233,7 +228,6 @@ fn admit<'a>(
     Some(WideEntry {
         program,
         upvalue_owner,
-        upvalue_slots,
     })
 }
 
@@ -336,40 +330,7 @@ fn compute_fixed_inline_facts(callee: &Value, function: &Function, bytecode: &By
     facts
 }
 
-/// One suspended wide activation.
-struct WideFrame {
-    callee: Value,
-    base: usize,
-    len: usize,
-    resume_pc: usize,
-    dst: u16,
-    /// Whether the activation above this one was entered by `new`: its
-    /// return value is replaced by its receiver unless it is an object.
-    constructs: bool,
-}
-
-#[derive(Default)]
-struct FrameStorage {
-    registers: Vec<Value>,
-    frames: Vec<WideFrame>,
-    /// Suspended caller activations, one per frame, and released ones above.
-    activations: crate::bytecode::compact_fn::activation_stack::ActivationStack,
-}
-
-thread_local! {
-    static FRAME_STORAGE: std::cell::RefCell<FrameStorage> =
-        std::cell::RefCell::new(FrameStorage::default());
-}
-
 const MAX_FRAMES: usize = 200_000;
-const MAX_POOLED_REGISTERS: usize = 4096;
-
-#[inline]
-fn reserve_registers(registers: &mut Vec<Value>, needed: usize) {
-    if registers.len() < needed {
-        registers.resize(needed, Value::Undefined);
-    }
-}
 
 #[inline(always)]
 fn release(value: Value) {
@@ -392,17 +353,6 @@ fn running_bytecode<'a>(callee: &'a Value, root: &'a Bytecode) -> &'a Bytecode {
     }
 }
 
-#[inline(always)]
-fn callee_parameter_slots(callee: &Value) -> &[usize] {
-    match callee {
-        Value::Function(function) => match function.bytecode.as_deref() {
-            Some(bytecode) => bytecode.parameter_slots(),
-            None => &[],
-        },
-        _ => &[],
-    }
-}
-
 /// An operand of an operation that consumes it: a stack register's value is
 /// moved out, but a local's -- a forwarded operand (`compile`'s `aliases`)
 /// -- is copied, unless the operation writes its result back there.
@@ -412,18 +362,6 @@ fn take_operand(window: &mut [Value], register: u16, dst: u16, locals: u16) -> V
         std::mem::replace(&mut window[register as usize], Value::Undefined)
     } else {
         crate::bytecode::vm_bindings::clone_local_value(&window[register as usize])
-    }
-}
-
-#[inline]
-fn clear_window(window: &mut [Value]) {
-    // Most of a returning window is already empty -- the operations that
-    // consumed its operands moved them out -- and an empty register needs no
-    // write at all.
-    for slot in window {
-        if !matches!(slot, Value::Undefined) {
-            execute::store(slot, Value::Undefined);
-        }
     }
 }
 
@@ -456,10 +394,10 @@ fn try_numeric_call(callee: &Value, arguments: &[Value]) -> Option<Value> {
 
 /// What the driver needs to enter an admitted callee in its own window. The
 /// callee's activation is built only once a numeric plan has not answered.
+#[derive(Clone, Copy)]
 struct InlineCallee {
     register_count: usize,
     requires_this: bool,
-    is_strict: bool,
     /// Whether the callee's window starts with dead-zone markers to seed.
     has_lexical_slots: bool,
     /// Whether the callee has a numeric plan to try first.
@@ -495,7 +433,6 @@ fn inline_entry(callee: &Value) -> Option<(InlineCallee, bool)> {
         InlineCallee {
             register_count: (facts >> FACTS_REGISTER_SHIFT) as usize,
             requires_this: facts & FACTS_REQUIRES_THIS != 0,
-            is_strict: facts & FACTS_STRICT != 0,
             has_lexical_slots: facts & FACTS_LEXICAL_SLOTS != 0,
             numeric: facts & FACTS_NUMERIC_PLAN != 0,
         },
@@ -550,74 +487,9 @@ fn admit_constructor(
     Ok(Some((inline, receiver)))
 }
 
-/// Enters an admitted constructor (`admit_constructor`) as a frame of this
-/// driver, with its fresh receiver as `this`.
-#[inline(never)]
-#[allow(clippy::too_many_arguments)]
-fn push_constructor_frame(
-    callee: Value,
-    inline: InlineCallee,
-    receiver: crate::ObjectRef,
-    root_bytecode: &Bytecode,
-    runtime: &mut crate::context::RuntimeServices,
-    registers: &mut Vec<Value>,
-    frames: &mut Vec<WideFrame>,
-    activations: &mut crate::bytecode::compact_fn::activation_stack::ActivationStack,
-    current_callee: &mut Value,
-    current_base: &mut usize,
-    current_len: &mut usize,
-    argument_index: usize,
-    argc: u8,
-    dst: u16,
-    resume_pc: usize,
-) {
-    crate::diagnostics::count!(ordinary_call_attempts);
-    crate::diagnostics::count!(compact_direct_calls);
-    let callee_base = *current_base + *current_len;
-    let callee_len = inline.register_count;
-    reserve_registers(registers, callee_base + callee_len);
-    {
-        let parameter_slots = callee_parameter_slots(&callee);
-        let (caller_side, callee_side) = registers.split_at_mut(callee_base);
-        for index in 0..argc as usize {
-            let value =
-                std::mem::replace(&mut caller_side[argument_index + index], Value::Undefined);
-            match parameter_slots.get(index) {
-                Some(&slot) if slot < callee_len => callee_side[slot] = value,
-                _ => release(value),
-            }
-        }
-    }
-    if inline.has_lexical_slots
-        && let Some(program) = super::program_for(running_bytecode(&callee, root_bytecode))
-    {
-        seed_lexical_markers(
-            program,
-            &mut registers[callee_base..callee_base + callee_len],
-        );
-    }
-    let Value::Function(function) = &callee else {
-        unreachable!("admitted indexed constructor")
-    };
-    crate::function::bind_indexed_call_owner(
-        function,
-        activations.callee_slot(frames.len(), function, runtime),
-        Value::Object(receiver),
-        Some(callee.clone()),
-    );
-    frames.push(WideFrame {
-        callee: std::mem::replace(current_callee, callee),
-        base: std::mem::replace(current_base, callee_base),
-        len: std::mem::replace(current_len, callee_len),
-        resume_pc,
-        dst,
-        constructs: true,
-    });
-}
-
 /// A constructor's result: the returned value when it is an object, else
 /// the receiver, as the general construct path decides.
-fn constructed(value: Value, activation: &crate::context::ActivationContext) -> Value {
+fn constructed(value: Value, env: &crate::context::Context<'_>) -> Value {
     match value {
         Value::Array(_)
         | Value::Function(_)
@@ -627,7 +499,7 @@ fn constructed(value: Value, activation: &crate::context::ActivationContext) -> 
         | Value::Proxy(_) => value,
         other => {
             release(other);
-            activation.receiver_seed().unwrap_or(Value::Undefined)
+            env.activation.receiver_seed().unwrap_or(Value::Undefined)
         }
     }
 }
@@ -660,744 +532,603 @@ fn run(
     arguments: &[Value],
     root: RootExit<'_>,
 ) -> Result<Value, RuntimeError> {
-    crate::diagnostics::count!(compact_standalone_activations);
-    let mut storage = FRAME_STORAGE.with(|cell| cell.take());
-    let result = run_frames(
+    run_root(
         bytecode,
+        RootActivation::Full(activation),
+        Value::Undefined,
+        None,
         runtime,
-        activation,
         entry,
         parameter_slots,
         arguments,
         root,
+    )
+}
+#[allow(clippy::too_many_arguments)]
+fn run_root(
+    bytecode: &Bytecode,
+    mut activation: RootActivation<'_>,
+    receiver: Value,
+    target: Option<Value>,
+    runtime: &mut crate::context::RuntimeServices,
+    entry: WideEntry<'_>,
+    parameter_slots: &[usize],
+    arguments: &[Value],
+    root: RootExit<'_>,
+) -> Result<Value, RuntimeError> {
+    crate::diagnostics::count!(compact_standalone_activations);
+    let poison = runtime.binding_debug.poisoning_activations() || runtime.binding_debug.poisoning();
+    let mut storage = runtime.frame_stacks.take(poison);
+    storage.push(
+        Value::Undefined,
+        receiver,
+        target,
+        entry.program.register_count,
+        arguments.len(),
+        0,
+        0,
+    )?;
+    for (index, &slot) in parameter_slots.iter().enumerate() {
+        if slot < entry.program.register_count
+            && let Some(value) = arguments.get(index)
+        {
+            execute::store(
+                &mut storage.registers[PREFIX + slot],
+                crate::bytecode::vm_bindings::clone_local_value(value),
+            );
+        }
+    }
+    seed_lexical_markers(
+        entry.program,
+        &mut storage.registers[PREFIX..PREFIX + entry.program.register_count],
+    );
+    let result = run_frames(
+        bytecode,
+        runtime,
+        &mut activation,
+        entry.upvalue_owner.as_ref(),
+        root,
         &mut storage,
     );
-    storage.frames.clear();
-    // No callee activation outlives its run except as a released one.
-    storage.activations.finish(runtime, result.is_ok());
-    if storage.registers.len() > MAX_POOLED_REGISTERS {
-        storage.registers.truncate(MAX_POOLED_REGISTERS);
-        storage.registers.shrink_to_fit();
-    }
-    FRAME_STORAGE.with(|cell| cell.replace(storage));
+    runtime.frame_stacks.put(storage);
     result
 }
-
-/// The frame-stack driver. Exactly one frame is "current", and its fields are
-/// loop locals; a call pushes it and a return pops. The root body runs in
-/// `root_activation`, every inline callee in its own slot of `activations`;
-/// `env` borrows the current one and is rebuilt only when the depth changes. Inlined into
-/// `run`, as it always was before exits enlarged it: the split changed the
-/// dispatch loop's register allocation (docs/performance-knowledge.md,
-/// "Codegen").
+enum Boundary {
+    Return(Value),
+    Call {
+        callee: Value,
+        receiver: Value,
+        target: Option<Value>,
+        inline: InlineCallee,
+        arguments: usize,
+        argc: usize,
+        dst: u16,
+        resume_pc: usize,
+        flags: u32,
+    },
+}
 #[inline(always)]
 #[allow(clippy::too_many_arguments)]
 fn run_frames(
     root_bytecode: &Bytecode,
     runtime: &mut crate::context::RuntimeServices,
-    root_activation: &mut crate::context::ActivationContext,
-    entry: WideEntry<'_>,
-    parameter_slots: &[usize],
-    arguments: &[Value],
+    root_activation: &mut RootActivation<'_>,
+    root_owner: Option<&Function>,
     root: RootExit<'_>,
     storage: &mut FrameStorage,
 ) -> Result<Value, RuntimeError> {
-    let registers = &mut storage.registers;
-    let frames = &mut storage.frames;
-    let activations = &mut storage.activations;
-    debug_assert!(frames.is_empty(), "a root activation starts its own stack");
-    activations.begin(runtime);
-
-    let mut current_callee = Value::Undefined;
-    // The root body's upvalue owner; a callee entered on this driver owns
-    // its own upvalues, and its read-only slots are its bytecode's.
-    let root_owner = entry.upvalue_owner;
-    let root_slots = entry.upvalue_slots;
-    let mut current_base = 0_usize;
-    let mut current_len = entry.program.register_count;
-    let mut pc = 0_usize;
-    // The services and the current frame's activation. Entry and return
-    // need the stack itself, so they end this borrow and rebind it.
-    let mut env = crate::context::Context {
-        runtime: &mut *runtime,
-        activation: &mut *root_activation,
-        native: None,
-    };
-    macro_rules! rebind_env {
-        () => {
-            env = crate::context::Context {
-                runtime: &mut *runtime,
-                activation: activations.current(&mut *root_activation, frames.len()),
-                native: None,
-            }
-        };
-    }
-    // Terminal error: attribute it to the current frame, then release
-    // every window. The root activation is never displaced.
-    macro_rules! fail {
-        ($error:expr) => {{
-            let error = crate::error::capture_error_origin($error, &env);
-            unwind(registers, frames, current_base + current_len);
-            return Err(error);
-        }};
-    }
-
-    reserve_registers(registers, current_len);
-    for (index, &slot) in parameter_slots.iter().enumerate() {
-        if slot >= current_len {
-            continue;
-        }
-        let Some(argument) = arguments.get(index) else {
-            break;
-        };
-        registers[slot] = crate::bytecode::vm_bindings::clone_local_value(argument);
-    }
-    seed_lexical_markers(entry.program, &mut registers[..current_len]);
-
     loop {
-        let outcome = {
-            let bytecode: &Bytecode = running_bytecode(&current_callee, root_bytecode);
+        let depth = storage.frames.len();
+        let boundary = {
+            let header = storage.frames.last_mut().expect("current indexed header");
+            let current_base = header.service.base as usize;
+            let current_len = header.width as usize;
+            let constructs = header.flags & CONSTRUCT != 0;
+            let mut pc = header.pc as usize;
+            let (previous, registers) = storage.registers.split_at_mut(current_base);
+            let prefix = &previous[current_base - PREFIX..current_base];
+            let current_callee = &prefix[0];
+            let function = match current_callee {
+                Value::Function(f) => Some(f),
+                _ => None,
+            };
+            let bytecode = function
+                .and_then(|f| f.bytecode.as_deref())
+                .unwrap_or(root_bytecode);
+            let upvalue_owner = function.or(root_owner);
+            let upvalues = upvalue_owner.map_or(&[][..], |owner| &owner.upvalues[..]);
             let Some(program) = super::program_for(bytecode) else {
-                unwind(registers, frames, current_base + current_len);
                 return Err(missing_program());
             };
-            let (upvalue_owner, upvalue_slots) = match &current_callee {
-                Value::Function(function) => (
-                    Some(function),
-                    bytecode.cell_received_upvalue_slots().unwrap_or(0),
-                ),
-                _ => (root_owner.as_ref(), root_slots),
+            debug_assert!(depth == 1 || function.is_some(), "admitted inline callee");
+            let inline = if depth == 1 { None } else { function };
+            let indexed_receiver = match inline {
+                Some(f) => (!f.lexical_this).then_some(&prefix[1]),
+                None => root_activation.indexed_receiver(prefix, true),
             };
+            let mut env = match inline {
+                Some(f) => header.service.view(f, prefix, runtime),
+                None => root_activation.view(runtime, header, prefix, true),
+            };
+            // Admitted inline code cannot enter eval/class-key mode. Strictness
+            // is the callee's immutable syntax fact; full roots keep their mode.
+            let strict = inline.map_or_else(|| env.activation.strict(), |f| f.is_strict);
+            debug_assert_eq!(strict, env.activation.strict());
             let mut activation = WideActivation {
                 bytecode,
                 env: &mut env,
+                upvalues,
+                indexed_receiver,
                 upvalue_owner,
-                upvalue_slots,
+                strict,
             };
+            let window = &mut registers[..current_len];
             let ops = &program.ops[..];
-            let window = &mut registers[current_base..current_base + current_len];
             loop {
-                let Some(op) = ops.get(pc) else {
-                    break Ok(Action::Return(Value::Undefined));
-                };
-                pc += 1;
-                #[cfg(feature = "perf-counters")]
-                crate::diagnostics::update(|c| c.compact_function_ops += 1);
-                match *op {
-                    WideOp::LoadConst { dst, index } => {
-                        let Some(value) = activation.bytecode.constants.get(index as usize) else {
-                            break Err(execute::constant_out_of_bounds());
-                        };
-                        execute::store(
-                            &mut window[dst as usize],
-                            crate::bytecode::vm_bindings::clone_local_value(value),
-                        );
-                    }
-                    WideOp::Move { dst, src } | WideOp::Dup { src, dst } => {
-                        let value =
-                            crate::bytecode::vm_bindings::clone_local_value(&window[src as usize]);
-                        execute::store(&mut window[dst as usize], value);
-                    }
-                    WideOp::LoadUpvalueLocal { dst, slot } => {
-                        let Some(cell) = activation.upvalue_cell(slot as usize) else {
-                            break Err(execute::uninitialized_local());
-                        };
-                        // One state borrow; a dead-zone cell takes the
-                        // interpreter's diagnostic.
-                        let value = match cell.value_if_initialized() {
-                            Some(value) => value,
-                            None => match activation.uninitialized_upvalue(slot as usize) {
-                                Ok(value) => value,
-                                Err(error) => break Err(error),
-                            },
-                        };
-                        execute::store(&mut window[dst as usize], value);
-                    }
-                    WideOp::StoreUpvalueLocal { slot, src } => {
-                        let Some(cell) = activation.upvalue_cell(slot as usize) else {
-                            break Err(execute::uninitialized_local());
-                        };
-                        let value = std::mem::replace(&mut window[src as usize], Value::Undefined);
-                        if let Err(error) = cell.assign(value, activation.env.caller().strict) {
-                            break Err(error);
-                        }
-                    }
-                    WideOp::LoadThis { dst } => {
-                        // Admission required a seeded receiver, so this never
-                        // fabricates one.
-                        let Some(value) = activation.env.caller().initialized_receiver() else {
-                            break Err(execute::uninitialized_local());
-                        };
-                        execute::store(&mut window[dst as usize], value.clone());
-                    }
-                    WideOp::GetPropThis { dst, index } => {
-                        let (Some(site), Some(receiver)) = (
-                            program.named_reads.get(index as usize),
-                            activation.env.caller().initialized_receiver(),
-                        ) else {
-                            break Err(execute::uninitialized_local());
-                        };
-                        if let Some(value) =
-                            property::get_prop_named_hot(receiver, &site.key, &site.cache)
-                        {
-                            execute::store(&mut window[dst as usize], value);
-                            continue;
-                        }
-                        let receiver = receiver.clone();
-                        match property::get_prop_named(
-                            &receiver,
-                            &site.key,
-                            &site.cache,
-                            activation.env,
-                        ) {
-                            Ok(value) => execute::store(&mut window[dst as usize], value),
-                            Err(error) => break Err(error),
-                        }
-                    }
-                    WideOp::GetPropNamed { dst, obj, index } => {
-                        let Some(site) = program.named_reads.get(index as usize) else {
-                            break Err(execute::constant_out_of_bounds());
-                        };
-                        // The receiver is borrowed: a fused site peeks its
-                        // local, and the plain form's result replaces it.
-                        if let Some(value) = property::get_prop_named_hot(
-                            &window[obj as usize],
-                            &site.key,
-                            &site.cache,
-                        ) {
-                            execute::store(&mut window[dst as usize], value);
-                            continue;
-                        }
-                        match property::get_prop_named(
-                            &window[obj as usize],
-                            &site.key,
-                            &site.cache,
-                            activation.env,
-                        ) {
-                            Ok(value) => execute::store(&mut window[dst as usize], value),
-                            Err(error) => break Err(error),
-                        }
-                    }
-                    WideOp::SetPropNamed { obj, value, index } => {
-                        let Some(site) = program.named_writes.get(index as usize) else {
-                            break Err(execute::constant_out_of_bounds());
-                        };
-                        let assigned =
-                            std::mem::replace(&mut window[value as usize], Value::Undefined);
-                        if property::set_prop_named_hot(
-                            &window[obj as usize],
-                            site.cache.as_ref(),
-                            &assigned,
-                            activation.env,
-                        ) {
-                            execute::store(&mut window[obj as usize], assigned);
-                            continue;
-                        }
-                        match property::set_prop_named(
-                            &window[obj as usize],
-                            &site.key,
-                            site.cache.as_ref(),
-                            site.is_strict,
-                            assigned,
-                            activation.env,
-                            Some(&site.creation),
-                        ) {
-                            // The assigned value stays in the object's
-                            // register, matching `SetPropNamed`'s stack effect.
-                            Ok(value) => execute::store(&mut window[obj as usize], value),
-                            Err(error) => break Err(error),
-                        }
-                    }
-                    WideOp::SetPropThis { dst, value, index } => {
-                        let (Some(site), Some(receiver)) = (
-                            program.named_writes.get(index as usize),
-                            activation.env.caller().initialized_receiver(),
-                        ) else {
-                            break Err(execute::uninitialized_local());
-                        };
-                        let assigned =
-                            std::mem::replace(&mut window[value as usize], Value::Undefined);
-                        if property::set_prop_named_hot(
-                            receiver,
-                            site.cache.as_ref(),
-                            &assigned,
-                            activation.env,
-                        ) {
-                            execute::store(&mut window[dst as usize], assigned);
-                            continue;
-                        }
-                        let receiver = receiver.clone();
-                        match property::set_prop_named(
-                            &receiver,
-                            &site.key,
-                            site.cache.as_ref(),
-                            site.is_strict,
-                            assigned,
-                            activation.env,
-                            Some(&site.creation),
-                        ) {
-                            Ok(value) => execute::store(&mut window[dst as usize], value),
-                            Err(error) => break Err(error),
-                        }
-                    }
-                    WideOp::Binary {
-                        dst,
-                        op,
-                        left,
-                        right,
-                    } => {
-                        if let (Value::Number(left), Value::Number(right)) =
-                            (&window[left as usize], &window[right as usize])
-                            && let Some(value) =
-                                crate::bytecode::vm_props::fast_number_binary_numbers(
-                                    *left, op, *right,
-                                )
-                        {
-                            execute::store(&mut window[dst as usize], value);
-                            continue;
-                        }
-                        let locals = program.local_registers;
-                        let left = take_operand(window, left, dst, locals);
-                        let right = take_operand(window, right, dst, locals);
-                        match activation.eval_binary(left, op, right) {
-                            Ok(value) => execute::store(&mut window[dst as usize], value),
-                            Err(error) => break Err(error),
-                        }
-                    }
-                    WideOp::Drop { src } => {
-                        execute::store(&mut window[src as usize], Value::Undefined);
-                    }
-                    WideOp::JumpIfFalsy { cond, target } => {
-                        let falsy = match &window[cond as usize] {
-                            Value::Number(number) => *number == 0.0 || number.is_nan(),
-                            other => !crate::is_truthy(other),
-                        };
-                        if falsy {
-                            pc = target as usize;
-                        }
-                    }
-                    WideOp::JumpIfTruthy { cond, target } => {
-                        let truthy = match &window[cond as usize] {
-                            Value::Number(number) => !(*number == 0.0 || number.is_nan()),
-                            other => crate::is_truthy(other),
-                        };
-                        if truthy {
-                            pc = target as usize;
-                        }
-                    }
-                    WideOp::Jump { target } => pc = target as usize,
-                    WideOp::CheckCoercible { src } => {
-                        if matches!(window[src as usize], Value::Undefined | Value::Null) {
-                            break Err(not_coercible());
-                        }
-                    }
-                    WideOp::ToPropertyKey { dst } => {
-                        let is_key = match &window[dst as usize] {
-                            Value::String(_) => true,
-                            Value::Number(number) => {
-                                crate::bytecode::vm_props::array_index_from_number(*number)
-                                    .is_some()
-                            }
-                            _ => false,
-                        };
-                        if !is_key
-                            && let Err(error) =
-                                to_property_key(&mut window[dst as usize], activation.env)
-                        {
-                            break Err(error);
-                        }
-                    }
-                    WideOp::CompareJump {
-                        op,
-                        left,
-                        right,
-                        target,
-                    } => {
-                        let holds = match (&window[left as usize], &window[right as usize]) {
-                            (Value::Number(left), Value::Number(right)) => {
-                                compare_numbers(*left, op, *right)
-                            }
-                            (left, right) => match activation.compare(left, op, right) {
-                                Ok(holds) => holds,
-                                Err(error) => break Err(error),
-                            },
-                        };
-                        if !holds {
-                            pc = target as usize;
-                        }
-                    }
-                    WideOp::Unary { dst, op, src } => {
-                        let value = std::mem::replace(&mut window[src as usize], Value::Undefined);
-                        match eval_unary(op, value, activation.env) {
-                            Ok(value) => execute::store(&mut window[dst as usize], value),
-                            Err(error) => break Err(error),
-                        }
-                    }
-                    WideOp::Typeof { dst, src } => {
-                        let value = std::mem::replace(&mut window[src as usize], Value::Undefined);
-                        let name = crate::bytecode::util::typeof_value(value);
-                        execute::store(&mut window[dst as usize], Value::String(name));
-                    }
-                    WideOp::ToNumeric { dst } => {
-                        if !matches!(window[dst as usize], Value::Number(_)) {
-                            let value =
-                                std::mem::replace(&mut window[dst as usize], Value::Undefined);
-                            match to_numeric(value, activation.env) {
-                                Ok(value) => execute::store(&mut window[dst as usize], value),
-                                Err(error) => break Err(error),
+                let outcome = loop {
+                    let Some(op) = ops.get(pc) else {
+                        break Ok(Action::Return(Value::Undefined));
+                    };
+                    pc += 1;
+                    #[cfg(feature = "perf-counters")]
+                    crate::diagnostics::update(|c| c.compact_function_ops += 1);
+                    match *op {
+                        WideOp::LoadConst { .. } => {
+                            if let Err(error) =
+                                operand_ops::execute(op, program, &mut activation, window)
+                            {
+                                break Err(error);
                             }
                         }
-                    }
-                    WideOp::Update { dst, op } => {
-                        if let Value::Number(number) = &mut window[dst as usize] {
-                            *number = match op {
-                                UpdateOp::Increment => *number + 1.0,
-                                UpdateOp::Decrement => *number - 1.0,
+                        WideOp::Move { .. } | WideOp::Dup { .. } => {
+                            if let Err(error) =
+                                operand_ops::execute(op, program, &mut activation, window)
+                            {
+                                break Err(error);
+                            }
+                        }
+                        WideOp::LoadUpvalueLocal { .. } => {
+                            if let Err(error) =
+                                operand_ops::execute(op, program, &mut activation, window)
+                            {
+                                break Err(error);
+                            }
+                        }
+                        WideOp::StoreUpvalueLocal { .. } => {
+                            if let Err(error) =
+                                operand_ops::execute(op, program, &mut activation, window)
+                            {
+                                break Err(error);
+                            }
+                        }
+                        WideOp::LoadThis { .. } => {
+                            if let Err(error) =
+                                operand_ops::execute(op, program, &mut activation, window)
+                            {
+                                break Err(error);
+                            }
+                        }
+                        WideOp::GetPropThis { .. } => {
+                            if let Err(error) =
+                                operand_ops::execute(op, program, &mut activation, window)
+                            {
+                                break Err(error);
+                            }
+                        }
+                        WideOp::GetPropNamed { .. } => {
+                            if let Err(error) =
+                                operand_ops::execute(op, program, &mut activation, window)
+                            {
+                                break Err(error);
+                            }
+                        }
+                        WideOp::SetPropNamed { .. } => {
+                            if let Err(error) =
+                                operand_ops::execute(op, program, &mut activation, window)
+                            {
+                                break Err(error);
+                            }
+                        }
+                        WideOp::SetPropThis { .. } => {
+                            if let Err(error) =
+                                operand_ops::execute(op, program, &mut activation, window)
+                            {
+                                break Err(error);
+                            }
+                        }
+                        WideOp::Binary { .. } => {
+                            if let Err(error) =
+                                operand_ops::execute(op, program, &mut activation, window)
+                            {
+                                break Err(error);
+                            }
+                        }
+                        WideOp::Drop { src } => {
+                            execute::store(&mut window[src as usize], Value::Undefined);
+                        }
+                        WideOp::JumpIfFalsy { cond, target } => {
+                            let falsy = match &window[cond as usize] {
+                                Value::Number(number) => *number == 0.0 || number.is_nan(),
+                                other => !crate::is_truthy(other),
                             };
-                        } else {
-                            let value =
-                                std::mem::replace(&mut window[dst as usize], Value::Undefined);
-                            match update(op, value, activation.env) {
-                                Ok(value) => execute::store(&mut window[dst as usize], value),
-                                Err(error) => break Err(error),
+                            if falsy {
+                                pc = target as usize;
+                            }
+                        }
+                        WideOp::JumpIfTruthy { cond, target } => {
+                            let truthy = match &window[cond as usize] {
+                                Value::Number(number) => !(*number == 0.0 || number.is_nan()),
+                                other => crate::is_truthy(other),
+                            };
+                            if truthy {
+                                pc = target as usize;
+                            }
+                        }
+                        WideOp::Jump { target } => pc = target as usize,
+                        WideOp::CheckCoercible { src } => {
+                            if matches!(window[src as usize], Value::Undefined | Value::Null) {
+                                break Err(not_coercible());
+                            }
+                        }
+                        WideOp::ToPropertyKey { .. } => {
+                            if let Err(error) =
+                                cold_ops::execute(op, program, &mut activation, window)
+                            {
+                                break Err(error);
+                            }
+                        }
+                        WideOp::CompareJump {
+                            op,
+                            left,
+                            right,
+                            target,
+                        } => {
+                            let holds = match (&window[left as usize], &window[right as usize]) {
+                                (Value::Number(left), Value::Number(right)) => {
+                                    compare_numbers(*left, op, *right)
+                                }
+                                (left, right) => match activation.compare(left, op, right) {
+                                    Ok(holds) => holds,
+                                    Err(error) => break Err(error),
+                                },
+                            };
+                            if !holds {
+                                pc = target as usize;
+                            }
+                        }
+                        WideOp::Unary { .. } => {
+                            if let Err(error) =
+                                cold_ops::execute(op, program, &mut activation, window)
+                            {
+                                break Err(error);
+                            }
+                        }
+                        WideOp::Typeof { .. } => {
+                            if let Err(error) =
+                                cold_ops::execute(op, program, &mut activation, window)
+                            {
+                                break Err(error);
+                            }
+                        }
+                        WideOp::ToNumeric { .. } => {
+                            if let Err(error) =
+                                cold_ops::execute(op, program, &mut activation, window)
+                            {
+                                break Err(error);
+                            }
+                        }
+                        WideOp::Update { .. } => {
+                            if let Err(error) =
+                                cold_ops::execute(op, program, &mut activation, window)
+                            {
+                                break Err(error);
+                            }
+                        }
+                        WideOp::GetProp { .. } => {
+                            if let Err(error) =
+                                operand_ops::execute(op, program, &mut activation, window)
+                            {
+                                break Err(error);
+                            }
+                        }
+                        WideOp::GetPropIndex { .. } => {
+                            if let Err(error) =
+                                operand_ops::execute(op, program, &mut activation, window)
+                            {
+                                break Err(error);
+                            }
+                        }
+                        WideOp::LoadGlobal { .. } => {
+                            if let Err(error) =
+                                cold_ops::execute(op, program, &mut activation, window)
+                            {
+                                break Err(error);
+                            }
+                        }
+                        WideOp::NewArray { .. } => {
+                            if let Err(error) =
+                                cold_ops::execute(op, program, &mut activation, window)
+                            {
+                                break Err(error);
+                            }
+                        }
+                        WideOp::ClearLocal { .. } => {
+                            if let Err(error) =
+                                cold_ops::execute(op, program, &mut activation, window)
+                            {
+                                break Err(error);
+                            }
+                        }
+                        WideOp::MoveChecked { .. } => {
+                            if let Err(error) =
+                                cold_ops::execute(op, program, &mut activation, window)
+                            {
+                                break Err(error);
+                            }
+                        }
+                        WideOp::AssignChecked { .. } => {
+                            if let Err(error) =
+                                cold_ops::execute(op, program, &mut activation, window)
+                            {
+                                break Err(error);
+                            }
+                        }
+                        WideOp::New { dst, base, argc } => {
+                            break Ok(Action::New {
+                                dst,
+                                base,
+                                argc,
+                                resume_pc: pc,
+                            });
+                        }
+                        WideOp::Call { dst, base, argc } => {
+                            break Ok(Action::Call {
+                                dst,
+                                base,
+                                argc,
+                                resume_pc: pc,
+                            });
+                        }
+                        WideOp::CallResolved { dst, base, argc } => {
+                            break Ok(Action::CallResolved {
+                                dst,
+                                base,
+                                argc,
+                                resume_pc: pc,
+                            });
+                        }
+                        WideOp::Return { src } => {
+                            break Ok(Action::Return(std::mem::replace(
+                                &mut window[src as usize],
+                                Value::Undefined,
+                            )));
+                        }
+                        WideOp::Throw { src } => {
+                            break Err(thrown(&mut window[src as usize]));
+                        }
+                        // Spelled as a call with an arity no call has, so the
+                        // driver's action type and its match stay exactly as they
+                        // were: growing either re-rolls this loop's register
+                        // allocation (docs/performance-knowledge.md, "Codegen").
+                        WideOp::ReferenceBoundary { pc } => {
+                            if let Err(error) =
+                                cold_ops::reference_boundary(bytecode, pc as usize, activation.env)
+                            {
+                                break Err(error);
+                            }
+                        }
+                        WideOp::Exit { ip, depth } => {
+                            if program.probed_header(pc).is_none()
+                                && let Some(index) = program.probed_backedge(ip)
+                                && program.backedge_is_native(index)
+                            {
+                                pc = program.backedge_jump_pc(index);
+                                continue;
+                            }
+                            break Ok(Action::Call {
+                                dst: depth,
+                                base: 0,
+                                argc: EXIT_ARGC,
+                                resume_pc: ip as usize,
+                            });
+                        }
+                    }
+                };
+                let action = match outcome {
+                    Ok(Action::Call {
+                        dst: depth,
+                        argc: EXIT_ARGC,
+                        resume_pc: ip,
+                        ..
+                    }) => {
+                        match exit_to_interpreter(
+                            current_callee,
+                            root_bytecode,
+                            root,
+                            ip as u32,
+                            depth,
+                            pc,
+                            window,
+                            activation.env,
+                        ) {
+                            ExitOutcome::Continue { pc: next } => {
+                                pc = next;
+                                continue;
+                            }
+                            ExitOutcome::Finished(Ok(value)) => Action::Return(value),
+                            ExitOutcome::Finished(Err(error)) => {
+                                return Err(crate::error::capture_error_origin(
+                                    error,
+                                    activation.env,
+                                ));
                             }
                         }
                     }
-                    WideOp::GetProp { dst, obj, key } => {
-                        // `v[i]` on a dense array: answered in place, the
-                        // number key left in its register.
-                        if let (Value::Array(elements), Value::Number(number)) =
-                            (&window[obj as usize], &window[key as usize])
-                            && let Some(index) =
-                                crate::bytecode::vm_props::array_index_from_number(*number)
-                            && let Some(value) = elements.plain_dense_index_value(index)
-                        {
-                            execute::store(&mut window[dst as usize], value);
-                            continue;
-                        }
-                        if let Some(value) = property::get_prop_string_own(
-                            &window[obj as usize],
-                            &window[key as usize],
-                        ) {
-                            execute::store(&mut window[dst as usize], value);
-                            continue;
-                        }
-                        let key = take_operand(window, key, dst, program.local_registers);
-                        // A forwarded local receiver is read, not consumed.
-                        let result = if obj != dst && obj < program.local_registers {
-                            property::get_prop_element_of(
-                                &window[obj as usize],
-                                key,
-                                activation.env,
-                            )
+                    Err(error) => {
+                        return Err(crate::error::capture_error_origin(error, activation.env));
+                    }
+                    Ok(action) => action,
+                };
+                match action {
+                    Action::Return(value) => {
+                        let value = if constructs {
+                            constructed(value, activation.env)
                         } else {
-                            property::get_prop_element(
-                                &mut window[obj as usize],
-                                key,
-                                activation.env,
-                            )
+                            value
                         };
-                        match result {
-                            Ok(value) => execute::store(&mut window[dst as usize], value),
-                            Err(error) => break Err(error),
-                        }
+                        clear_written(window, &program.written, storage.poison);
+                        break Boundary::Return(value);
                     }
-                    WideOp::GetPropIndex { dst, obj, index } => {
-                        if let Value::Array(elements) = &window[obj as usize]
-                            && let Some(value) =
-                                elements.plain_dense_index_value(usize::from(index))
-                        {
-                            execute::store(&mut window[dst as usize], value);
-                            continue;
-                        }
-                        match property::get_prop_index(&window[obj as usize], index, activation.env)
-                        {
-                            Ok(value) => execute::store(&mut window[dst as usize], value),
-                            Err(error) => break Err(error),
-                        }
-                    }
-                    WideOp::LoadGlobal { dst, index } => {
-                        let Some(name) = program.global_names.get(index as usize) else {
-                            break Err(execute::constant_out_of_bounds());
-                        };
-                        let site = &program.global_reads[index as usize];
-                        match property::load_global_cached(name, site, activation.env) {
-                            Ok(value) => execute::store(&mut window[dst as usize], value),
-                            Err(error) => break Err(error),
-                        }
-                    }
-                    WideOp::NewArray { dst, base, count } => {
-                        let values: Vec<Value> = (0..count as usize)
-                            .map(|offset| {
-                                std::mem::replace(
-                                    &mut window[base as usize + offset],
-                                    Value::Undefined,
-                                )
-                            })
-                            .collect();
-                        execute::store(
-                            &mut window[dst as usize],
-                            Value::Array(crate::ArrayRef::new(activation.env.realm(), values)),
-                        );
-                    }
-                    WideOp::ClearLocal { slot } => {
-                        execute::store(&mut window[slot as usize], program.tdz_marker.clone());
-                    }
-                    WideOp::MoveChecked { dst, src } => {
-                        if window[src as usize].is_uninitialized_lexical_marker() {
-                            break Err(activation.uninitialized_lexical(src as usize));
-                        }
-                        let value =
-                            crate::bytecode::vm_bindings::clone_local_value(&window[src as usize]);
-                        execute::store(&mut window[dst as usize], value);
-                    }
-                    WideOp::AssignChecked { dst, src } => {
-                        if window[dst as usize].is_uninitialized_lexical_marker() {
-                            break Err(activation.uninitialized_lexical(dst as usize));
-                        }
-                        let value =
-                            crate::bytecode::vm_bindings::clone_local_value(&window[src as usize]);
-                        execute::store(&mut window[dst as usize], value);
-                    }
-                    WideOp::New { dst, base, argc } => {
-                        break Ok(Action::New {
-                            dst,
-                            base,
-                            argc,
-                            resume_pc: pc,
-                        });
-                    }
-                    WideOp::Call { dst, base, argc } => {
-                        break Ok(Action::Call {
-                            dst,
-                            base,
-                            argc,
-                            resume_pc: pc,
-                        });
-                    }
-                    WideOp::CallResolved { dst, base, argc } => {
-                        break Ok(Action::CallResolved {
-                            dst,
-                            base,
-                            argc,
-                            resume_pc: pc,
-                        });
-                    }
-                    WideOp::Return { src } => {
-                        break Ok(Action::Return(std::mem::replace(
-                            &mut window[src as usize],
-                            Value::Undefined,
-                        )));
-                    }
-                    WideOp::Throw { src } => {
-                        break Err(thrown(&mut window[src as usize]));
-                    }
-                    // Spelled as a call with an arity no call has, so the
-                    // driver's action type and its match stay exactly as they
-                    // were: growing either re-rolls this loop's register
-                    // allocation (docs/performance-knowledge.md, "Codegen").
-                    WideOp::ReferenceCheck { event } => {
-                        let references = &activation.bytecode.binding_plan.references;
-                        if !references
-                            .event_starts_elidable(event as usize, activation.env.activation)
-                            && let Err(error) =
-                                references.select_checked_starts(event as usize, activation.env)
-                        {
-                            break Err(error);
-                        }
-                    }
-                    WideOp::Exit { ip, depth } => {
-                        break Ok(Action::Call {
-                            dst: depth,
-                            base: 0,
-                            argc: EXIT_ARGC,
-                            resume_pc: ip as usize,
-                        });
-                    }
-                }
-            }
-        };
-        let action = match outcome {
-            Ok(Action::Call {
-                dst: depth,
-                argc: EXIT_ARGC,
-                resume_pc: ip,
-                ..
-            }) => {
-                match exit_to_interpreter(
-                    &current_callee,
-                    root_bytecode,
-                    root,
-                    ip as u32,
-                    depth,
-                    pc,
-                    &mut registers[current_base..current_base + current_len],
-                    &mut env,
-                ) {
-                    ExitOutcome::Continue { pc: resume } => {
-                        pc = resume;
-                        continue;
-                    }
-                    ExitOutcome::Finished(Ok(value)) => Action::Return(value),
-                    ExitOutcome::Finished(Err(error)) => fail!(error),
-                }
-            }
-            Ok(action) => action,
-            Err(error) => fail!(error),
-        };
-        if let Action::New {
-            dst,
-            base,
-            argc,
-            resume_pc,
-        } = action
-        {
-            let callee_index = current_base + base as usize;
-            let callee = std::mem::replace(&mut registers[callee_index], Value::Undefined);
-            // An admitted ordinary constructor runs on this driver like a
-            // call, with a fresh receiver as `this`.
-            match admit_constructor(&callee, &mut env, frames.len()) {
-                Ok(Some((inline, receiver))) => {
-                    push_constructor_frame(
-                        callee,
-                        inline,
-                        receiver,
-                        root_bytecode,
-                        runtime,
-                        registers,
-                        frames,
-                        activations,
-                        &mut current_callee,
-                        &mut current_base,
-                        &mut current_len,
-                        callee_index + 1,
-                        argc,
+                    Action::New {
                         dst,
+                        base,
+                        argc,
                         resume_pc,
-                    );
-                    rebind_env!();
-                    pc = 0;
-                    continue;
+                    } => {
+                        let index = base as usize;
+                        let callee = std::mem::replace(&mut window[index], Value::Undefined);
+                        match admit_constructor(&callee, activation.env, depth) {
+                            Ok(Some((inline, receiver))) => {
+                                let target = Some(callee.clone());
+                                break Boundary::Call {
+                                    callee,
+                                    receiver: Value::Object(receiver),
+                                    target,
+                                    inline,
+                                    arguments: current_base + index + 1,
+                                    argc: argc as usize,
+                                    dst,
+                                    resume_pc,
+                                    flags: CONSTRUCT,
+                                };
+                            }
+                            Ok(None) => {}
+                            Err(error) => {
+                                return Err(crate::error::capture_error_origin(
+                                    error,
+                                    activation.env,
+                                ));
+                            }
+                        }
+                        let args = &window[index + 1..index + 1 + argc as usize];
+                        match construct_from_activation(activation.env, callee, args) {
+                            Ok(value) => {
+                                execute::store(&mut window[dst as usize], value);
+                                pc = resume_pc;
+                            }
+                            Err(error) => {
+                                return Err(crate::error::capture_error_origin(
+                                    error,
+                                    activation.env,
+                                ));
+                            }
+                        }
+                    }
+                    action => {
+                        let (dst, base, argc, resume_pc, resolved) = match action {
+                            Action::Call {
+                                dst,
+                                base,
+                                argc,
+                                resume_pc,
+                            } => (dst, base, argc, resume_pc, false),
+                            Action::CallResolved {
+                                dst,
+                                base,
+                                argc,
+                                resume_pc,
+                            } => (dst, base, argc, resume_pc, true),
+                            _ => unreachable!("handled completion"),
+                        };
+                        let index = base as usize;
+                        let callee = std::mem::replace(&mut window[index], Value::Undefined);
+                        let receiver = if resolved {
+                            Some(std::mem::replace(&mut window[index - 1], Value::Undefined))
+                        } else {
+                            None
+                        };
+                        let args = &window[index + 1..index + 1 + argc as usize];
+                        if let Some(inline) = inline_callee(&callee) {
+                            if inline.numeric
+                                && let Some(value) = try_numeric_call(&callee, args)
+                            {
+                                crate::diagnostics::count!(ordinary_call_attempts);
+                                if let Some(value) = receiver {
+                                    release(value);
+                                }
+                                release(callee);
+                                execute::store(&mut window[dst as usize], value);
+                                pc = resume_pc;
+                                continue;
+                            }
+                            break Boundary::Call {
+                                callee,
+                                receiver: receiver.unwrap_or(Value::Undefined),
+                                target: None,
+                                inline,
+                                arguments: current_base + index + 1,
+                                argc: argc as usize,
+                                dst,
+                                resume_pc,
+                                flags: 0,
+                            };
+                        }
+                        match call_from_activation(
+                            &mut activation,
+                            callee,
+                            receiver.unwrap_or(Value::Undefined),
+                            args,
+                        ) {
+                            Ok(value) => {
+                                execute::store(&mut window[dst as usize], value);
+                                pc = resume_pc;
+                            }
+                            Err(error) => {
+                                return Err(crate::error::capture_error_origin(
+                                    error,
+                                    activation.env,
+                                ));
+                            }
+                        }
+                    }
                 }
-                Ok(None) => {}
-                Err(error) => fail!(error),
             }
-            let arguments = &registers[callee_index + 1..callee_index + 1 + argc as usize];
-            match construct_from_activation(&mut env, callee, arguments) {
-                Ok(value) => {
-                    execute::store(&mut registers[current_base + dst as usize], value);
-                    pc = resume_pc;
-                    continue;
-                }
-                Err(error) => fail!(error),
-            }
-        }
-        let (dst, base, argc, resume_pc, resolved) = match action {
-            Action::Return(value) => {
-                clear_window(&mut registers[current_base..current_base + current_len]);
-                let Some(caller) = frames.last() else {
+        };
+        match boundary {
+            Boundary::Return(value) => {
+                let dst = storage.pop();
+                let Some(caller) = storage.frames.last() else {
                     return Ok(value);
                 };
-                let value = if caller.constructs {
-                    constructed(value, env.activation)
-                } else {
-                    value
-                };
-                let caller = frames.pop().expect("a returning callee has a caller");
-                activations.release(frames.len());
-                rebind_env!();
-                current_callee = caller.callee;
-                current_base = caller.base;
-                current_len = caller.len;
-                pc = caller.resume_pc;
-                execute::store(&mut registers[current_base + caller.dst as usize], value);
-                continue;
+                execute::store(
+                    &mut storage.registers[caller.service.base as usize + dst as usize],
+                    value,
+                );
             }
-            Action::Call {
-                dst,
-                base,
-                argc,
-                resume_pc,
-            } => (dst, base, argc, resume_pc, false),
-            Action::CallResolved {
-                dst,
-                base,
-                argc,
-                resume_pc,
-            } => (dst, base, argc, resume_pc, true),
-            Action::New { .. } => unreachable!("construction was handled above"),
-        };
-        let callee_index = current_base + base as usize;
-        // Both call forms pop the callee register (and a resolved call its
-        // receiver register) and push the result at `dst`, so taking the
-        // values out costs no reference count.
-        let mut callee = std::mem::replace(&mut registers[callee_index], Value::Undefined);
-        let mut receiver = if resolved {
-            Some(std::mem::replace(
-                &mut registers[callee_index - 1],
-                Value::Undefined,
-            ))
-        } else {
-            None
-        };
-        let argument_index = callee_index + 1;
-        let argument_count = argc as usize;
-
-        if let Some(inline) = inline_callee(&callee) {
-            let entered = entry::enter_call(
-                inline,
-                &mut callee,
-                &mut receiver,
-                root_bytecode,
-                runtime,
-                registers,
-                frames,
-                activations,
-                &mut current_callee,
-                &mut current_base,
-                &mut current_len,
-                &mut pc,
-                argument_index,
-                argument_count,
-                dst,
-                resume_pc,
-            );
-            rebind_env!();
-            match entered {
-                Ok(()) => continue,
-                Err(error) => fail!(error),
-            }
-        }
-
-        let outcome = {
-            let bytecode = running_bytecode(&current_callee, root_bytecode);
-            let (upvalue_owner, upvalue_slots) = match &current_callee {
-                Value::Function(function) => (
-                    Some(function),
-                    bytecode.cell_received_upvalue_slots().unwrap_or(0),
-                ),
-                _ => (root_owner.as_ref(), root_slots),
-            };
-            let mut activation = WideActivation {
-                bytecode,
-                env: &mut env,
-                upvalue_owner,
-                upvalue_slots,
-            };
-            let arguments = &registers[argument_index..argument_index + argument_count];
-            call_from_activation(
-                &mut activation,
+            Boundary::Call {
                 callee,
-                receiver.unwrap_or(Value::Undefined),
+                receiver,
+                target,
+                inline,
                 arguments,
-            )
-        };
-        match outcome {
-            Ok(value) => {
-                execute::store(&mut registers[current_base + dst as usize], value);
-                pc = resume_pc;
-            }
-            Err(error) => fail!(error),
+                argc,
+                dst,
+                resume_pc,
+                flags,
+            } => enter_boundary(
+                callee,
+                receiver,
+                target,
+                inline,
+                arguments,
+                argc,
+                dst,
+                resume_pc,
+                flags,
+                storage,
+                runtime,
+                root_bytecode,
+            )?,
         }
     }
 }
@@ -1569,14 +1300,6 @@ fn construct_plain_array(
 /// run_frames. The fresh call activation is then discarded, even if it now
 /// describes an inline child. Never resume or expose it as the parked caller;
 /// restoring caller frames is the normal-return protocol, not this cleanup.
-#[cold]
-#[inline(never)]
-fn unwind(registers: &mut [Value], frames: &mut Vec<WideFrame>, live_end: usize) {
-    frames.clear();
-    let end = live_end.min(registers.len());
-    clear_window(&mut registers[..end]);
-}
-
 #[cold]
 fn missing_program() -> RuntimeError {
     RuntimeError {
@@ -1806,4 +1529,108 @@ pub(super) fn run_typed_loop_here(
             declined_typed_loop_programs,
         },
     }
+}
+
+#[inline(always)]
+pub(in crate::bytecode) fn try_run_indexed(
+    function: &Function,
+    receiver: &mut Option<Value>,
+    target: &mut Option<Value>,
+    arguments: &[Value],
+    runtime: &mut crate::context::RuntimeServices,
+) -> Option<Result<Value, RuntimeError>> {
+    let bytecode = function.bytecode.as_ref()?;
+    if bytecode
+        .binding_plan
+        .references
+        .needs_dynamic_indexed_entry()
+    {
+        return None;
+    }
+    let upvalues = crate::bytecode::DirectCallUpvalues::Function(function);
+    let entry = admit(bytecode, upvalues)?;
+    if entry.program.requires_this && function.lexical_this {
+        let owner = function.lexical_call()?;
+        if owner.this.read().is_err() {
+            return None;
+        }
+    }
+    let receiver = crate::bytecode::frame_bank::receiver(
+        function,
+        receiver.take(),
+        entry.program.requires_this,
+        runtime,
+    );
+    Some(run_root(
+        bytecode,
+        RootActivation::Indexed { function },
+        receiver,
+        target.take(),
+        runtime,
+        entry,
+        bytecode.parameter_slots(),
+        arguments,
+        RootExit {
+            upvalues,
+            realm_upvalue_slots: function.realm_upvalue_slots,
+        },
+    ))
+}
+
+/// Entry-only owning preparation leaves the native driver before callbacks.
+#[cfg_attr(debug_assertions, inline(never))]
+#[cfg_attr(not(debug_assertions), inline(always))]
+#[allow(clippy::too_many_arguments)]
+fn enter_boundary(
+    callee: Value,
+    receiver: Value,
+    target: Option<Value>,
+    inline: InlineCallee,
+    arguments: usize,
+    argc: usize,
+    dst: u16,
+    resume_pc: usize,
+    flags: u32,
+    storage: &mut FrameStorage,
+    runtime: &mut crate::context::RuntimeServices,
+    root_bytecode: &Bytecode,
+) -> Result<(), RuntimeError> {
+    let receiver = if flags & CONSTRUCT != 0 {
+        receiver
+    } else {
+        let Value::Function(function) = &callee else {
+            unreachable!("admitted callee");
+        };
+        crate::bytecode::frame_bank::receiver(
+            function,
+            Some(receiver),
+            inline.requires_this,
+            runtime,
+        )
+    };
+    storage.frames.last_mut().expect("caller header").pc = resume_pc as u32;
+    storage.push(
+        Value::Undefined,
+        receiver,
+        target,
+        inline.register_count,
+        argc,
+        dst,
+        flags,
+    )?;
+    storage.move_arguments(&callee, arguments, argc);
+    if inline.has_lexical_slots {
+        let bytecode = running_bytecode(&callee, root_bytecode);
+        let program = super::program_for(bytecode).expect("admitted lexical body");
+        let base = storage.frames.last().expect("callee header").service.base as usize;
+        seed_lexical_markers(
+            program,
+            &mut storage.registers[base..base + inline.register_count],
+        );
+    }
+    storage.install_callee(callee);
+    crate::diagnostics::count!(ordinary_call_attempts);
+    crate::diagnostics::count!(compact_direct_calls);
+
+    Ok(())
 }

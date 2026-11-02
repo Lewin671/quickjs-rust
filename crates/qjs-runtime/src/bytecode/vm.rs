@@ -35,11 +35,11 @@ use crate::{
 use std::{
     cell::RefCell,
     ops::{Deref, DerefMut},
-    rc::Rc,
 };
 pub(super) type Slot = Option<Value>;
 
 mod general_ops;
+mod inline_data;
 mod rare_ops;
 mod wide_resume;
 
@@ -87,10 +87,6 @@ pub(super) fn eval_function_bytecode(
     vm.direct_eval_with_stack = direct_eval_with_stack;
     let value = vm.run();
     let bound_this = vm.env.derived_this_cell().and_then(|cell| cell.read().ok());
-    vm.recycle_binding_slots();
-    if let Some(cold) = vm.current.cold.take() {
-        bytecode.recycle_cold_frame(cold);
-    }
     FunctionBytecodeResult { value, bound_this }
 }
 
@@ -117,12 +113,7 @@ pub(super) fn eval_call_bytecode(
     );
     vm.persist_global_lexicals = true;
     vm.direct_eval_with_stack = direct_eval_with_stack;
-    let value = vm.run();
-    vm.recycle_binding_slots();
-    if let Some(cold) = vm.current.cold.take() {
-        bytecode.recycle_cold_frame(cold);
-    }
-    value
+    vm.run()
 }
 
 /// Runs a guarded direct call and drops its completed frame in place.
@@ -164,15 +155,7 @@ fn eval_direct_call_fallback(
         Vec::new(),
         Some(direct_call_slots),
     );
-    let value = vm.run();
-    // The direct-slot contract excludes closures over this frame's locals, so
-    // nothing outlives the call and the allocation can go back to the body's
-    // pool instead of being freed and rebuilt on the next invocation.
-    vm.recycle_binding_slots();
-    if let Some(cold) = vm.current.cold.take() {
-        bytecode.recycle_cold_frame(cold);
-    }
-    value
+    vm.run()
 }
 
 /// `FrameState::slow_flags` bits, set by every writer that changes what the
@@ -203,6 +186,10 @@ pub(super) struct FrameState<'a> {
     pub(super) stack: OperandStack,
     pub(super) locals: Vec<Slot>,
     pub(super) local_upvalues: Vec<Option<BindingCell>>,
+    /// Compiled own-cell routes, enabled once for this activation's environment.
+    pub(super) indexed_cell_slots: u128,
+    /// Validated initialized mutable own/received cell routes, indexed by slot.
+    pub(super) initialized_mutable_slots: u128,
     /// Direct frames that only read received cells retain the source function
     /// once and resolve cells by bytecode slot. This avoids rebuilding an
     /// owned local-sized option vector for every direct invocation while
@@ -297,41 +284,27 @@ pub(super) struct ColdFrame {
     pub(super) wide_handback: Option<Option<usize>>,
 }
 
-/// A per-body pool of cleared [`ColdFrame`] boxes, shared like the operand
-/// stack recycler so a cloned `Bytecode` keeps handing out the same storage.
-// The pool exists to hand the same `Box` allocation back to the next frame,
-// so the boxes are the point, not an oversight.
-#[allow(clippy::vec_box)]
-#[derive(Clone, Default)]
-pub(super) struct ColdFramePool(Rc<RefCell<Vec<Box<ColdFrame>>>>);
-
-impl std::fmt::Debug for ColdFramePool {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("ColdFramePool")
-    }
-}
-
-impl ColdFramePool {
-    const MAX_POOLED: usize = 8;
-
-    pub(super) fn take(&self) -> Box<ColdFrame> {
-        crate::diagnostics::count!(cold_frame_pool_requests);
-        self.0.borrow_mut().pop().unwrap_or_else(|| {
-            crate::diagnostics::count!(cold_frame_allocations);
-            Box::default()
-        })
-    }
-
-    pub(super) fn recycle(&self, mut cold: Box<ColdFrame>) {
-        cold.reset();
-        let mut pooled = self.0.borrow_mut();
-        if pooled.len() < Self::MAX_POOLED {
-            pooled.push(cold);
-        }
-    }
-}
-
 impl ColdFrame {
+    pub(super) fn retained_bytes(&self) -> usize {
+        size_of::<Self>()
+            .saturating_add(
+                self.class_regions.capacity()
+                    * size_of::<super::vm_class_region::ClassKeyContinuation>(),
+            )
+            .saturating_add(self.active_reference_lifetimes.capacity() * size_of::<usize>())
+            .saturating_add(
+                self.resolved_bindings.capacity()
+                    * size_of::<Option<crate::binding::ResolvedReference>>(),
+            )
+            .saturating_add(self.sloppy_global_names.capacity() * size_of::<String>())
+            .saturating_add(self.try_stack.capacity() * size_of::<TryFrame>())
+            .saturating_add(self.with_stack.capacity() * size_of::<Value>())
+            .saturating_add(
+                self.disposable_scopes.capacity()
+                    * size_of::<Vec<super::vm_dispose::DisposeResource>>(),
+            )
+    }
+
     /// Clears every field so a pooled box starts the next frame empty. A
     /// frame that completed normally has already emptied its stacks, so this
     /// is a handful of length checks.
@@ -375,8 +348,7 @@ impl<'a> FrameState<'a> {
     #[cold]
     #[inline(never)]
     fn materialize_cold(&mut self) {
-        let bytecode: &Bytecode = &self.bytecode;
-        self.cold = Some(bytecode.take_cold_frame());
+        self.cold = Some(self.stack.pool().take_cold());
     }
 
     #[inline]
@@ -439,25 +411,36 @@ impl<'a> FrameState<'a> {
     }
 }
 
-pub(super) struct Vm<'a, 's> {
+pub(super) use super::frame_owner::{InlineFrame, VmFrame};
+
+pub(super) struct Vm<'a, 's, F: VmFrame<'a> = InlineFrame<'a>> {
     pub(super) runtime: &'s mut crate::context::RuntimeServices,
-    pub(super) current: FrameState<'a>,
+    pub(super) current: F,
+    pub(super) frame_lifetime: std::marker::PhantomData<&'a ()>,
     /// Frames waiting for the one above them to finish. Empty until ordinary
     /// calls are routed onto this VM; the driver in `frame_stack` is what
     /// makes a non-empty stack meaningful.
-    pub(super) callers: Vec<super::frame_stack::SuspendedFrame<'a>>,
+    pub(super) callers: Vec<super::frame_stack::SuspendedFrame<F>>,
     /// A frame a handler asked to enter, waiting for the driver to install it
     /// once the current activation's program view has been dropped.
-    pub(super) pending_frame_entry: Option<(FrameState<'a>, super::frame_stack::FrameContinuation)>,
+    pub(super) pending_frame_entry: Option<(F, super::frame_stack::FrameContinuation)>,
 }
 
-impl<'a, 's> Vm<'a, 's> {
-    pub(super) fn into_frame(self) -> FrameState<'a> {
+impl<'a, 's, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, 's, F> {
+    /// Segment decisions are not properties of a reusable semantic record.
+    pub(super) fn reset_segment(&mut self) {
+        self.declined_typed_loop_programs = 0;
+        if let Some(cold) = self.cold.as_deref_mut() {
+            cold.wide_handback = None;
+        }
+    }
+
+    pub(super) fn into_frame(self) -> F {
         self.current
     }
 }
 
-impl<'a, 's> Deref for Vm<'a, 's> {
+impl<'a, 's, F: VmFrame<'a>> Deref for Vm<'a, 's, F> {
     type Target = FrameState<'a>;
 
     fn deref(&self) -> &Self::Target {
@@ -465,13 +448,13 @@ impl<'a, 's> Deref for Vm<'a, 's> {
     }
 }
 
-impl DerefMut for Vm<'_, '_> {
+impl<'a, F: VmFrame<'a>> DerefMut for Vm<'a, '_, F> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.current
     }
 }
 
-impl<'a, 's> Vm<'a, 's> {
+impl<'a, 's, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, 's, F> {
     pub(super) fn coerce_property_key(
         &mut self,
         value: Value,
@@ -558,67 +541,9 @@ impl<'a, 's> Vm<'a, 's> {
         let code = program.execution_code;
         let constants: &[Value] = &program.bytecode.constants;
         let mut pc = self.current.ip;
-        let references = &program.bytecode.binding_plan.references;
-        let mut event_cursor = references.events.partition_point(|event| event.pc < pc);
-        let mut expected_pc = pc;
-        // Fixed for the activation (set only at frame entry and resume).
-        let reference_hooks = self.current.reference_hooks;
         'dispatch: loop {
-            debug_assert!(
-                SLOW || (self.current.binding_scope.is_none()
-                    && !self.current.reference_hooks
-                    && self.current.authoritative_slots == authority_at_entry),
-                "the fast dispatch loop outlived a slow-path change"
-            );
-            if SLOW {
-                if let Some(active) = self.current.binding_scope
-                    && program
-                        .bytecode
-                        .binding_plan
-                        .pc_scopes
-                        .get(pc)
-                        .is_some_and(|scope| *scope != active)
-                {
-                    self.update_binding_scope(pc);
-                    if self.current.authoritative_slots != authority_at_entry {
-                        self.current.ip = pc;
-                        return Ok(FrameExit::RefreshBindings);
-                    }
-                }
-                if reference_hooks {
-                    if pc != expected_pc {
-                        event_cursor = references.events.partition_point(|event| event.pc < pc);
-                    }
-                    expected_pc = pc + 1;
-                    if self.current.active_reference_count != 0 {
-                        self.prune_references(references, pc);
-                    }
-                    if references
-                        .events
-                        .get(event_cursor)
-                        .is_some_and(|event| event.pc == pc)
-                    {
-                        let event = &references.events[event_cursor];
-                        event_cursor += 1;
-                        self.current.ip = pc + 1;
-                        let result = self.run_reference_event(references, event, &code[pc]);
-                        match self.handle_runtime_result(result)? {
-                            Some(false) => {}
-                            _ => {
-                                pc = self.current.ip;
-                                continue;
-                            }
-                        }
-                    }
-                }
-                // Every authority writer sets `SLOW_AUTHORITY`.
-                if self.current.slow_flags & SLOW_AUTHORITY != 0
-                    && self.current.authoritative_slots != authority_at_entry
-                {
-                    self.current.ip = pc;
-                    return Ok(FrameExit::RefreshBindings);
-                }
-            }
+            #[cfg(debug_assertions)]
+            self.verify_dispatch_interval::<SLOW>(authority_at_entry, pc, code);
             let Some(op) = code.get(pc) else {
                 self.current.ip = pc;
                 return Err(RuntimeError {
@@ -631,11 +556,26 @@ impl<'a, 's> Vm<'a, 's> {
             crate::diagnostics::update(|c| c.executed_ops += 1);
             'out_of_line: {
                 match op {
+                    Op::BindingBoundary { event, cleanup } => {
+                        crate::diagnostics::count!(binding_boundary_events);
+                        if SLOW {
+                            self.current.ip = pc;
+                            if let Some(exit) = self.run_binding_boundary(
+                                &program,
+                                *event,
+                                *cleanup,
+                                authority_at_entry,
+                            )? {
+                                return Ok(exit);
+                            }
+                            pc = self.current.ip;
+                        }
+                        continue 'dispatch;
+                    }
+                    #[allow(clippy::collapsible_match)]
                     Op::LoadConst(index) => {
                         crate::diagnostics::count!(dispatched_load_const_ops);
-                        if let Some(value) = constants.get(*index) {
-                            let value = value.clone();
-                            self.current.stack.push(value);
+                        if self.try_constant(constants, *index) {
                             continue 'dispatch;
                         }
                     }
@@ -650,14 +590,7 @@ impl<'a, 's> Vm<'a, 's> {
                         // round trips through memory to report a success that
                         // cannot fail. Answer the authoritative-slot case here
                         // instead, and leave everything else out of line.
-                        if !self.current.direct_eval_with_stack
-                            && *slot < u128::BITS as usize
-                            && self.current.authoritative_slots & (1_u128 << *slot) != 0
-                            && let Some(Some(value)) = self.current.locals.get(*slot)
-                        {
-                            let value = super::vm_bindings::clone_local_value(value);
-                            self.current.stack.push(value);
-                            crate::diagnostics::count!(authoritative_load_local_hits);
+                        if self.try_private_load(*slot) {
                             continue 'dispatch;
                         }
                         self.current.ip = pc;
@@ -673,18 +606,7 @@ impl<'a, 's> Vm<'a, 's> {
                         // `Result` path. Falling through when the stack is empty is
                         // deliberate -- the general path raises the underflow.
                         let slot = *slot;
-                        if slot < u128::BITS as usize
-                            && self.current.authoritative_slots & (1_u128 << slot) != 0
-                            && self
-                                .current
-                                .bytecode
-                                .locals
-                                .get(slot)
-                                .is_some_and(|local| local.mutable)
-                            && let Some(value) = self.current.stack.pop()
-                        {
-                            self.current.locals[slot] = Some(value);
-                            crate::diagnostics::count!(authoritative_store_local_hits);
+                        if self.try_private_store(slot, false) {
                             continue 'dispatch;
                         }
                         self.current.ip = pc;
@@ -699,20 +621,7 @@ impl<'a, 's> Vm<'a, 's> {
                         // to an initialized mutable slot never builds a `Result` to
                         // report that it succeeded.
                         let slot = *slot;
-                        if !self.current.direct_eval_with_stack
-                            && slot < u128::BITS as usize
-                            && self.current.authoritative_slots & (1_u128 << slot) != 0
-                            && self
-                                .current
-                                .bytecode
-                                .locals
-                                .get(slot)
-                                .is_some_and(|local| local.mutable)
-                            && self.current.locals.get(slot).is_some_and(Option::is_some)
-                            && let Some(value) = self.current.stack.pop()
-                        {
-                            self.current.locals[slot] = Some(value);
-                            crate::diagnostics::count!(authoritative_assign_local_hits);
+                        if self.try_private_store(slot, true) {
                             continue 'dispatch;
                         }
                         self.current.ip = pc;
@@ -837,15 +746,15 @@ impl<'a, 's> Vm<'a, 's> {
                     Op::Return => {
                         crate::diagnostics::count!(dispatched_branch_return_ops);
                         self.current.ip = pc;
-                        if let Some(value) = self.op_return()? {
-                            return Ok(FrameExit::Completed(Completion::Return(value)));
+                        if let Some(exit) = self.inline_return()? {
+                            return Ok(exit);
                         }
                         pc = self.current.ip;
                         break 'out_of_line;
                     }
                     Op::Pop => {
                         crate::diagnostics::count!(dispatched_stack_ops);
-                        if self.current.stack.pop().is_some() {
+                        if self.try_pop() {
                             continue 'dispatch;
                         }
                         self.current.ip = pc;
@@ -853,14 +762,11 @@ impl<'a, 's> Vm<'a, 's> {
                     }
                     Op::Dup => {
                         crate::diagnostics::count!(dispatched_stack_ops);
-                        let stack = &mut *self.current.stack;
-                        let Some(value) = stack.last() else {
-                            self.current.ip = pc;
-                            return Err(stack_underflow());
-                        };
-                        let value = super::vm_bindings::clone_local_value(value);
-                        stack.push(value);
-                        continue 'dispatch;
+                        if self.try_duplicate() {
+                            continue 'dispatch;
+                        }
+                        self.current.ip = pc;
+                        return Err(stack_underflow());
                     }
                     Op::ToNumeric => {
                         crate::diagnostics::count!(dispatched_numeric_ops);
@@ -897,16 +803,7 @@ impl<'a, 's> Vm<'a, 's> {
                         // `Result`, which `handle_runtime_result` then rewraps --
                         // four values crossing a call boundary to add two floats
                         // that are already adjacent on the stack.
-                        let stack = &mut *self.current.stack;
-                        let len = stack.len();
-                        if len >= 2
-                            && let (Value::Number(left), Value::Number(right)) =
-                                (&stack[len - 2], &stack[len - 1])
-                            && let Some(value) =
-                                super::vm_props::fast_number_binary_numbers(*left, *op, *right)
-                        {
-                            stack.truncate(len - 1);
-                            stack[len - 2] = value;
+                        if self.try_number_binary(*op) {
                             continue 'dispatch;
                         }
                         self.current.ip = pc;
@@ -1091,7 +988,7 @@ impl<'a, 's> Vm<'a, 's> {
                 self.direct_eval_with_stack && self.bytecode.local_is_from_env(slot);
             if self.slot_is_authoritative(slot) && !direct_eval_lookup {
                 let cached = {
-                    let frame = &mut self.current;
+                    let frame = &mut *self.current;
                     match frame.locals.get(slot).and_then(Option::as_ref) {
                         Some(object) => {
                             if let Some(value) = object.unconditional_named_hook(name.as_str()) {
@@ -1104,7 +1001,7 @@ impl<'a, 's> Vm<'a, 's> {
                             } else {
                                 let context = crate::context::Context {
                                     runtime: self.runtime,
-                                    activation: &mut frame.env,
+                                    activation: (&mut frame.env).into(),
                                     native: None,
                                 };
                                 cache

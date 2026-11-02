@@ -86,6 +86,10 @@ impl ReferencePlan {
             && (self.sites.is_empty() || !self.sloppy_eval || self.global_code)
     }
 
+    pub(super) fn needs_dynamic_indexed_entry(&self) -> bool {
+        self.dynamic || !self.sites.is_empty() && self.sloppy_eval && !self.global_code
+    }
+
     /// Whether the whole activation may run without any reference event.
     pub(super) fn can_skip(&self, env: &ActivationContext) -> bool {
         if self.needs_dynamic_resolution(env) {
@@ -177,11 +181,11 @@ impl ReferencePlan {
         env: &mut crate::context::Context<'_>,
     ) -> Result<(), crate::RuntimeError> {
         for &index in &self.events[event].starts {
-            if self.start_elidable(index, env.activation) {
+            if self.start_elidable(index, &env.activation) {
                 continue;
             }
             let site = &self.sites[index];
-            debug_assert!(site.checked && self.simple_context(env.activation));
+            debug_assert!(site.checked && self.simple_context(&env.activation));
             let reference = crate::binding::GlobalReference::select(&site.name, site.strict, env)?;
             env.activation
                 .saved_references
@@ -192,6 +196,25 @@ impl ReferencePlan {
                 ));
         }
         Ok(())
+    }
+
+    /// Explicit tier cleanup; a boundary with no selected references never
+    /// materializes Context. Active references preserve their exact selected base.
+    pub(super) fn cleanup_checked(&self, pc: usize, env: &mut crate::context::Context<'_>) {
+        if !env.activation.has_saved_references() {
+            return;
+        }
+        crate::diagnostics::count!(reference_cleanup_boundaries);
+        let saved = &mut env.activation.saved_references;
+        if let Some(entries) = saved {
+            entries.retain(|(index, _)| {
+                let life = &self.lifetimes[*index];
+                pc >= life.start && pc < life.end
+            });
+            if entries.is_empty() {
+                *saved = None;
+            }
+        }
     }
 
     /// Takes the reference a checkpoint saved for the site storing at

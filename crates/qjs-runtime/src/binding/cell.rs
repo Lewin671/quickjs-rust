@@ -88,6 +88,41 @@ impl BindingCell {
         }))
     }
 
+    /// Validate a compiler-selected route once while linking the closure.
+    /// Observing an initialized state is necessary, but never supplies the proof.
+    pub(crate) fn validates_initialized_mutable(&self, name: &str) -> bool {
+        let meta = self.metadata();
+        meta.strict_write == WritePolicy::InitializedMutable
+            && !meta.deletable
+            && meta.name == name
+            && meta.mutable
+            && matches!(meta.kind, BindingKind::Var | BindingKind::Parameter)
+            && matches!(*self.0.state.borrow(), BindingState::Initialized(_))
+    }
+
+    /// Only a statically selected, link-validated capture may call this operation.
+    /// A single safe borrow publishes the replacement; no policy/TDZ lookup runs
+    /// in release. Scalar ownership is tested solely to avoid generic drop glue.
+    #[inline(always)]
+    pub(crate) fn replace_initialized_mutable(&self, value: Value) {
+        debug_assert!(self.validates_initialized_mutable(&self.metadata().name));
+        let mut state = self.0.state.borrow_mut();
+        if matches!(
+            &*state,
+            BindingState::Initialized(
+                Value::Number(_) | Value::Boolean(_) | Value::Null | Value::Undefined
+            )
+        ) {
+            let old = std::mem::replace(&mut *state, BindingState::Initialized(value));
+            std::mem::forget(old);
+        } else {
+            let old = std::mem::replace(&mut *state, BindingState::Initialized(value));
+            drop(state);
+            drop_owned_state(old);
+        }
+        crate::diagnostics::count!(initialized_mutable_writes);
+    }
+
     pub(crate) fn fresh_uninitialized(&self) -> Self {
         Self::with_metadata(self.0.meta.clone(), None)
     }
@@ -213,7 +248,7 @@ impl BindingCell {
             WritePolicy::Throw => {}
             WritePolicy::IgnoreSloppy if strict => {}
             WritePolicy::IgnoreSloppy => return Ok(()),
-            WritePolicy::Mutable => {
+            WritePolicy::Mutable | WritePolicy::InitializedMutable => {
                 *state = BindingState::Initialized(value);
                 return Ok(());
             }
@@ -558,5 +593,24 @@ mod object_route_tests {
         lexical.initialize(Value::Number(3.0)).unwrap();
         assert!(lexical.assign(Value::Number(4.0), false).is_err());
         assert_eq!(lexical.read(), Ok(Value::Number(3.0)));
+    }
+}
+
+#[inline(never)]
+fn drop_owned_state(state: BindingState) {
+    match state {
+        BindingState::Initialized(value) => match value {
+            Value::Undefined | Value::Null | Value::Number(_) | Value::Boolean(_) => {}
+            Value::BigInt(v) => drop(v),
+            Value::String(v) => drop(v),
+            Value::Function(v) => drop(v),
+            Value::Array(v) => drop(v),
+            Value::Object(v) => drop(v),
+            Value::Proxy(v) => drop(v),
+            Value::Map(v) => drop(v),
+            Value::Set(v) => drop(v),
+        },
+        BindingState::LazyArguments(v) => drop(v),
+        BindingState::Uninitialized | BindingState::InvalidatedObjectRoute => {}
     }
 }

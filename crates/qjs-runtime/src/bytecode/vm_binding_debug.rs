@@ -2,9 +2,9 @@
 //! exercises indexed cell routes through the existing VM; production tiers
 //! and their admission remain unchanged when the debug mode is off.
 use super::vm::Vm;
-use crate::binding::{BindingKind, ScopeId};
+use crate::binding::{BindingKind, ScopeId, WritePolicy};
 
-impl Vm<'_, '_> {
+impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
     #[inline]
     pub(super) fn force_binding_exposure(&mut self, id: ScopeId) {
         if !self.runtime.binding_debug.forcing() {
@@ -85,21 +85,20 @@ impl Vm<'_, '_> {
             }
             if let Some(meta) = self.bytecode.binding_meta(slot) {
                 assert_eq!(cell.metadata().name, meta.name, "metadata name: {slot}");
+                // InitializedMutable is a link-time proof of Mutable, not a
+                // different assignment policy. Module aliases can carry either
+                // annotation while sharing the same canonical mutable cell.
+                let semantic_policy = |policy| match policy {
+                    WritePolicy::InitializedMutable => WritePolicy::Mutable,
+                    other => other,
+                };
                 assert_eq!(
-                    cell.metadata().strict_write,
-                    meta.strict_write,
+                    semantic_policy(cell.metadata().strict_write),
+                    semantic_policy(meta.strict_write),
                     "metadata policy: {slot}"
                 );
             }
         }
-    }
-
-    /// Completed private vectors are not observable. Poison is retained in the
-    /// existing recycler until take clears it; live cells/leases are untouched.
-    pub(super) fn recycle_binding_slots(&mut self) {
-        let poison = self.runtime.binding_debug.poisoning();
-        let slots = std::mem::take(&mut self.current.locals);
-        self.bytecode.recycle_local_slots_with_poison(slots, poison);
     }
 }
 
@@ -181,9 +180,10 @@ mod tests {
         let bytecode = function.bytecode.as_ref().unwrap();
         let slot = bytecode.local_slot("value").unwrap();
         let mut retained = Vec::new();
+        let initial = crate::function::enter_indexed_activation(&function);
+        let mut runtime = crate::context::RuntimeServices::for_realm(initial.realm());
         for force in [false, true, false, true] {
             let activation = crate::function::enter_indexed_activation(&function);
-            let mut runtime = crate::context::RuntimeServices::for_realm(activation.realm());
             runtime.binding_debug = crate::binding::BindingDebug {
                 verify: true,
                 force,
@@ -206,7 +206,7 @@ mod tests {
             let cell = vm.local_upvalue_cell(slot).unwrap().clone();
             assert!(cell.ptr_eq(&read.upvalues[0]));
             vm.verify_binding_authority();
-            vm.recycle_binding_slots();
+            drop(vm);
             retained.push(cell);
         }
         for cell in retained {

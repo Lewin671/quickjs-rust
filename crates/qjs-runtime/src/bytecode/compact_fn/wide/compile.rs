@@ -432,16 +432,18 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
 
     for (ip, op) in code.iter().enumerate() {
         // The reference event whose checked global starts begin here.
-        let checkpoint = references
-            .events
-            .binary_search_by_key(&ip, |event| event.pc)
-            .ok()
-            .filter(|&event| {
-                references.events[event]
-                    .starts
-                    .iter()
-                    .any(|&site| references.sites[site].checked)
-            });
+        let checkpoint = match op {
+            Op::BindingBoundary { event, cleanup } => {
+                *cleanup && references.has_checked
+                    || event.is_some_and(|event| {
+                        references.events[event]
+                            .starts
+                            .iter()
+                            .any(|&site| references.sites[site].checked)
+                    })
+            }
+            _ => false,
+        };
         if jump_targets[ip] {
             materialize(&mut ops, &mut aliases, &register);
         }
@@ -470,9 +472,9 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
         }
         // After any header exit, so a backedge to `ip` checks again, and
         // before the instruction's own operations: the RHS starts here.
-        if let Some(event) = checkpoint {
-            ops.push(WideOp::ReferenceCheck {
-                event: u32::try_from(event).ok()?,
+        if checkpoint {
+            ops.push(WideOp::ReferenceBoundary {
+                pc: u32::try_from(ip).ok()?,
             });
         }
         if fused_pops[ip] {
@@ -616,7 +618,7 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
             _ => materialize(&mut ops, &mut aliases, &register),
         }
         match op {
-            Op::FunctionPrologueEnd | Op::FreshIterationScope(_) => {}
+            Op::BindingBoundary { .. } | Op::FunctionPrologueEnd | Op::FreshIterationScope(_) => {}
             // A constant loaded only to be discarded -- a statement's
             // completion value -- is not loaded at all.
             Op::Pop
@@ -663,6 +665,8 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
                 let slot_bit = 1_u128 << *slot;
                 if upvalue_slots & slot_bit != 0 {
                     ops.push(WideOp::LoadUpvalueLocal {
+                        capture: u16::try_from(bytecode.cell_received_upvalue_index(*slot)?)
+                            .ok()?,
                         dst: register(depth),
                         slot: slot_index,
                     });
@@ -729,6 +733,8 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
                         let slot_bit = 1_u128 << slot;
                         if upvalue_slots & slot_bit != 0 {
                             ops.push(WideOp::LoadUpvalueLocal {
+                                capture: u16::try_from(bytecode.cell_received_upvalue_index(slot)?)
+                                    .ok()?,
                                 dst: register(depth),
                                 slot: u16::try_from(slot).ok()?,
                             });
@@ -799,6 +805,8 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
                         let slot_bit = 1_u128 << slot;
                         if upvalue_slots & slot_bit != 0 {
                             ops.push(WideOp::LoadUpvalueLocal {
+                                capture: u16::try_from(bytecode.cell_received_upvalue_index(slot)?)
+                                    .ok()?,
                                 dst: register(depth),
                                 slot: u16::try_from(slot).ok()?,
                             });
@@ -908,7 +916,7 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
                 if *slot < u128::BITS as usize && upvalue_slots & (1_u128 << *slot) != 0 =>
             {
                 ops.push(WideOp::StoreUpvalueLocal {
-                    slot: u16::try_from(*slot).ok()?,
+                    capture: u16::try_from(bytecode.cell_received_upvalue_index(*slot)?).ok()?,
                     src: register(depth.checked_sub(1)?),
                 });
             }
@@ -1139,11 +1147,68 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
     let typed_entry_counts = (0..probed_backedges.len())
         .map(|_| std::cell::Cell::new((0, 0)))
         .collect();
+    let mut writes = vec![false; register_count];
+    for &slot in bytecode.parameter_slots() {
+        if slot < register_count {
+            writes[slot] = true;
+        }
+    }
+    for &slot in &lexical_slots {
+        writes[slot as usize] = true;
+    }
+    for op in &ops {
+        match *op {
+            WideOp::LoadConst { dst, .. }
+            | WideOp::Move { dst, .. }
+            | WideOp::LoadUpvalueLocal { dst, .. }
+            | WideOp::Binary { dst, .. }
+            | WideOp::Call { dst, .. }
+            | WideOp::Dup { dst, .. }
+            | WideOp::LoadThis { dst }
+            | WideOp::GetPropNamed { dst, .. }
+            | WideOp::CallResolved { dst, .. }
+            | WideOp::Unary { dst, .. }
+            | WideOp::Typeof { dst, .. }
+            | WideOp::ToNumeric { dst }
+            | WideOp::Update { dst, .. }
+            | WideOp::GetProp { dst, .. }
+            | WideOp::GetPropThis { dst, .. }
+            | WideOp::SetPropThis { dst, .. }
+            | WideOp::GetPropIndex { dst, .. }
+            | WideOp::LoadGlobal { dst, .. }
+            | WideOp::New { dst, .. }
+            | WideOp::NewArray { dst, .. }
+            | WideOp::MoveChecked { dst, .. }
+            | WideOp::AssignChecked { dst, .. }
+            | WideOp::ToPropertyKey { dst } => writes[dst as usize] = true,
+            WideOp::SetPropNamed { obj, .. } => writes[obj as usize] = true,
+            WideOp::ClearLocal { slot } => writes[slot as usize] = true,
+            WideOp::Exit { .. } => {
+                for (slot, written) in writes.iter_mut().enumerate() {
+                    if slot >= local_registers || slot < 128 && own_locals & (1u128 << slot) != 0 {
+                        *written = true;
+                    }
+                }
+            }
+            WideOp::ReferenceBoundary { .. }
+            | WideOp::StoreUpvalueLocal { .. }
+            | WideOp::Drop { .. }
+            | WideOp::JumpIfFalsy { .. }
+            | WideOp::Jump { .. }
+            | WideOp::Return { .. }
+            | WideOp::Throw { .. }
+            | WideOp::JumpIfTruthy { .. }
+            | WideOp::CompareJump { .. }
+            | WideOp::CheckCoercible { .. } => {}
+        }
+    }
+    let written = crate::bytecode::frame_bank::written_ranges(writes);
     Some(WideProgram {
         ops,
         named_reads,
         named_writes,
         register_count,
+        written,
         required_authoritative_slots,
         requires_this,
         global_reads: global_names.iter().map(|_| Default::default()).collect(),
@@ -1207,8 +1272,11 @@ fn global_store_stays_interpreted(
     {
         return Some("sloppy global store inside an accelerated loop");
     }
-    let value_end = match ip.checked_sub(1).map(|at| &code[at]) {
-        Some(Op::Dup) => ip - 1,
+    let previous = (0..ip)
+        .rev()
+        .find(|&at| !matches!(code[at], Op::BindingBoundary { .. }));
+    let value_end = match previous {
+        Some(at) if matches!(code[at], Op::Dup) => at,
         _ => ip,
     };
     // An append with its value kept (`Dup`) would copy the accumulator: the
@@ -1227,10 +1295,14 @@ fn global_store_stays_interpreted(
 /// global store of `g` right after it: that addition exits, and the exit
 /// extends the global string in place and continues past the store
 /// (`property::try_append_global_var`) rather than copying the accumulator.
+pub(super) fn next_operation(code: &[Op], start: usize) -> Option<usize> {
+    (start..code.len()).find(|&pc| !matches!(code[pc], Op::BindingBoundary { .. }))
+}
+
 fn appends_to_global(code: &[Op], ip: usize) -> bool {
     matches!(code.get(ip), Some(Op::Binary(BinaryOp::Add)))
         && matches!(
-            (code.get(ip + 1), expression_start(code, ip + 1).map(|start| &code[start])),
+            (next_operation(code, ip + 1).and_then(|next| code.get(next)), expression_start(code, ip + 1).map(|start| &code[start])),
             (Some(Op::StoreLocalOrGlobalSloppy { name, .. }), Some(Op::LoadGlobal(read)))
                 if read == name
         )
@@ -1556,7 +1628,10 @@ fn effect_of(op: &Op) -> Option<Effect> {
         falls_through: true,
     };
     let effect = match op {
-        Op::FunctionPrologueEnd | Op::ClearLocal(_) | Op::FreshIterationScope(_) => simple(0, 0),
+        Op::BindingBoundary { .. }
+        | Op::FunctionPrologueEnd
+        | Op::ClearLocal(_)
+        | Op::FreshIterationScope(_) => simple(0, 0),
         Op::LoadConst(_) | Op::LoadLocal(_) | Op::Dup | Op::LoadGlobal(_) => simple(0, 1),
         Op::GetPropIndex(encoded) => {
             if crate::bytecode::ir::decode_index_receiver(*encoded)

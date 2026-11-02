@@ -822,9 +822,9 @@ impl TypedProgram {
     }
 }
 
-fn receiver_objects(
+fn receiver_objects<'a, F: crate::bytecode::vm::VmFrame<'a>>(
     plan: &LegacyDynamicDensePlan,
-    vm: &Vm<'_, '_>,
+    vm: &Vm<'a, '_, F>,
 ) -> Result<Option<Vec<ObjectRef>>, ()> {
     let mut objects = Vec::with_capacity(plan.receiver_sources.len());
     let mut saw_typed_array = false;
@@ -868,9 +868,9 @@ fn typed_limit(
 /// TypedArray and the ordinary dense-Array executor retains priority. Once any
 /// TypedArray participates, every structural rejection suppresses this plan for
 /// the current invocation so the backedge does not repeat failed leases.
-pub(super) fn try_run(
+pub(super) fn try_run<'a, F: crate::bytecode::vm::VmFrame<'a>>(
     plan: &LegacyDynamicDensePlan,
-    vm: &mut Vm<'_, '_>,
+    vm: &mut Vm<'a, '_, F>,
     exit: usize,
 ) -> Option<DenseNumericMutationLoopRun> {
     record_typed_array_dense_attempt();

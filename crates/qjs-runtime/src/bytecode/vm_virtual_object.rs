@@ -31,7 +31,7 @@ fn constant_binary_init_hits() -> usize {
     TEST_CONSTANT_BINARY_INIT_HITS.get()
 }
 
-impl<'a, 's> Vm<'a, 's> {
+impl<'a, 's, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, 's, F> {
     /// Re-selects lowered code after generator setup/resume changes the frame's
     /// real binding authority. Instruction offsets are identical in both
     /// streams, and the analysis never carries a virtual candidate across a

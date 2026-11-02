@@ -69,6 +69,7 @@ declare_counters! {
     /// Calls a VM call opcode dispatched to a user function with a bytecode
     /// body, before any tier decides how to run it. A workload that claims N
     /// calls must report about N here, or the workload is not measuring calls.
+    indexed_context_materializations,
     ordinary_call_attempts,
     /// Host/callback forwarding to the direct-leaf entry; not a second JS call.
     ordinary_call_forwardings,
@@ -101,6 +102,20 @@ declare_counters! {
     binding_promotions,
     /// Actual Rc<CellStorage> allocations, including canonical object caches.
     binding_cell_allocations,
+    /// Statically selected capture routes validated while creating a closure.
+    initialized_mutable_links,
+    initialized_mutable_frame_routes,
+    indexed_cell_reads,
+    /// Explicit checkpoint dispatches, including elided fast checkpoints.
+    binding_boundary_events,
+    binding_boundary_scope_changes,
+    reference_cleanup_boundaries,
+    reference_start_elisions,
+    dynamic_reference_selections,
+    /// Captured assignments using a validated compiler capability.
+    initialized_mutable_writes,
+    /// Captured assignments retaining full dynamic/TDZ/write-policy checks.
+    checked_capture_writes,
     /// Actual Rc<ScopeLease> allocations; cached reuse does not increment.
     scope_lease_allocations,
     /// Function creations retaining a lexical scope, not lease allocations.

@@ -44,6 +44,10 @@ CALLEES = (
     f"{_BYTECODE}::compact_fn::numeric_plan::run",
     f"<{_BYTECODE}::typed_loop::helper_graph::numeric::NumProgram>::run",
     f"<{_BYTECODE}::named_property_cache::NamedPropertyCache>::probe",
+    # Shared user-call entries and frame-owner teardown introduced by S3c.
+    f"{_EXECUTE}::user_calls::registers",
+    f"{_EXECUTE}::user_calls::call",
+    f"<{_BYTECODE}::vm::FrameState as core::ops::drop::Drop>::drop",
 )
 # A callee's own alignment is independent of the executor's current window.
 CALLEE_OFFSETS = {f"{_EXECUTE}::call_leaf": 0x580}

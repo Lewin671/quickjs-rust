@@ -17,6 +17,7 @@ use super::{
     TypedLoopScratch, TypedOp,
 };
 use crate::Value;
+mod user_calls;
 
 /// Runs the program covering the backedge at `ip`, if one exists and this
 /// frame admits it. Returns whether the loop was executed natively.
@@ -148,7 +149,7 @@ fn run<F: LoopFrame>(vm: &mut F, program: &TypedLoopProgram) -> Outcome {
         })
         .filter(|()| {
             program
-                .native_call_guards
+                .pure_call_guards
                 .iter()
                 .all(|guard| guard.holds(&scratch.boxed))
         });
@@ -775,8 +776,11 @@ fn seed_registers<F: LoopFrame>(
         // The sink's register starts from the binding's value; a fallback
         // slot whose copy canonical routing cleared seeded it `undefined`.
         if let Some(&(register, _)) = program.local_slots.iter().find(|(_, s)| s == slot) {
-            registers[register as usize] =
-                Typed::from_value(super::super::vm::Vm::sloppy_global_entry_value(&write))?;
+            registers[register as usize] = Typed::from_value(super::super::vm::Vm::<
+                super::super::vm::InlineFrame<'_>,
+            >::sloppy_global_entry_value(
+                &write
+            ))?;
         }
         sloppy_global_writes.push(write);
     }
@@ -871,12 +875,22 @@ fn call_leaf<F: LoopFrame>(
         return None;
     }
     if arity & super::BOXED_ARGUMENTS != 0 {
-        return call_native_boxed(
-            &mut vm.loop_context(),
+        return call_native_boxed_for_frame(
+            vm,
             boxed,
             callee,
             &args,
             arity & !super::BOXED_ARGUMENTS,
+        );
+    }
+    if !matches!(&boxed[callee as usize], Value::Function(function) if function.native.is_some()) {
+        return user_calls::registers(
+            program,
+            &boxed[callee as usize],
+            &boxed[receiver as usize],
+            registers,
+            args,
+            arity,
         );
     }
     let values = args.map(|register| registers[register as usize]);
@@ -887,6 +901,45 @@ fn call_leaf<F: LoopFrame>(
         &boxed[receiver as usize],
         &values[..usize::from(arity)],
     )
+}
+
+/// Native argument/facade temporaries must not enlarge a pure numeric call's
+/// frame. The ordinary table still decides admission and errors deoptimize.
+#[inline(never)]
+fn call_native_typed<F: LoopFrame>(
+    vm: &mut F,
+    callee: &Value,
+    receiver: &Value,
+    args: &[Typed],
+) -> Option<Value> {
+    let arity = args.len();
+    let arguments: [Value; super::helper_graph::MAX_HELPER_ARITY] = std::array::from_fn(|index| {
+        args.get(index)
+            .copied()
+            .unwrap_or(Typed::Undefined)
+            .to_value()
+    });
+    let arguments = arguments.get(..arity)?;
+    match super::super::vm_call::try_fast_global_native_call(
+        callee,
+        receiver,
+        arguments,
+        &mut vm.loop_context(),
+    ) {
+        Some(Ok(value)) => Some(value),
+        Some(Err(_)) | None => None,
+    }
+}
+
+#[inline(never)]
+fn call_native_boxed_for_frame<F: LoopFrame>(
+    vm: &mut F,
+    boxed: &[Value],
+    callee: u16,
+    args: &[u16; super::helper_graph::MAX_HELPER_ARITY],
+    arity: u8,
+) -> Option<Value> {
+    call_native_boxed(&mut vm.loop_context(), boxed, callee, args, arity)
 }
 
 /// A call through the fast native table with boxed arguments.
@@ -1094,91 +1147,18 @@ fn call_closed_form_leaf<F: LoopFrame>(
     receiver: &Value,
     args: &[Typed],
 ) -> Option<Value> {
-    let arity = u8::try_from(args.len()).ok()?;
-    let first = args.first().copied().unwrap_or(Typed::Undefined);
-    let second = args.get(1).copied().unwrap_or(Typed::Undefined);
-    // A hoisted `Math` receiver is compiled to the unboxed operation, but a
-    // callee that only turns out to be an intrinsic at run time still reaches
-    // here; answering it costs one predicate and keeps that shape working.
-    if arity <= 2
-        && let Some(value) = call_numeric_native(callee, first, second, arity)
-    {
-        return Some(value.to_value());
-    }
-    // Any other native goes through the interpreter's own fast native table
-    // -- `text.charCodeAt(i)` is the whole of a hash's input loop. Those
-    // arms are side-effect free, so an error answer deoptimizes and the
-    // interpreter's call raises it; an arm the table does not have
-    // deoptimizes the same way.
     if matches!(callee, Value::Function(function) if function.native.is_some()) {
-        let arguments: [Value; super::helper_graph::MAX_HELPER_ARITY] =
-            std::array::from_fn(|index| {
-                args.get(index)
-                    .copied()
-                    .unwrap_or(Typed::Undefined)
-                    .to_value()
-            });
-        let arguments = arguments.get(..usize::from(arity))?;
-        return match super::super::vm_call::try_fast_global_native_call(
-            callee,
-            receiver,
-            arguments,
-            &mut vm.loop_context(),
-        ) {
-            Some(Ok(value)) => Some(value),
-            Some(Err(_)) | None => None,
-        };
+        let arity = u8::try_from(args.len()).ok()?;
+        let first = args.first().copied().unwrap_or(Typed::Undefined);
+        let second = args.get(1).copied().unwrap_or(Typed::Undefined);
+        if arity <= 2
+            && let Some(value) = call_numeric_native(callee, first, second, arity)
+        {
+            return Some(value.to_value());
+        }
+        return call_native_typed(vm, callee, receiver, args);
     }
-    // Before the closed-form evaluators, not after. Preparation already
-    // refused to flatten any body they can answer, so a graph hit here is a
-    // body they would decline -- and reaching it through them first means
-    // building an argument array and walking the body twice.
-    if let Some(value) = program.helper_graphs.borrow().call(callee, args) {
-        return Some(value.to_value());
-    }
-    if !crate::function::is_direct_leaf_function(callee) {
-        return None;
-    }
-    let Value::Function(function) = callee else {
-        return None;
-    };
-    let bytecode = function.bytecode.as_ref()?;
-    // A body that is number-only arithmetic -- a hash's `safe_add` or `rol`,
-    // spectral-norm's `A(i, j)` -- is evaluated on the argument numbers
-    // directly, without boxing them for the general leaf evaluators.
-    if super::super::vm_numeric_leaf::has_number_only_leaf(bytecode)
-        && let Some(value) = call_number_only_leaf(function, bytecode, args)
-    {
-        return Some(value);
-    }
-    // Every element comes from a `Typed`, so none owns anything to release;
-    // skipping the array's drop keeps it from becoming an out-of-line call.
-    let arguments: std::mem::ManuallyDrop<[Value; super::helper_graph::MAX_HELPER_ARITY]> =
-        std::mem::ManuallyDrop::new(std::array::from_fn(|index| {
-            args.get(index)
-                .copied()
-                .unwrap_or(Typed::Undefined)
-                .to_value()
-        }));
-    let arguments = arguments.get(..usize::from(arity))?;
-    let value = super::super::vm_numeric_leaf::try_eval_pure_numeric_leaf(
-        bytecode,
-        &function.params,
-        arguments,
-        &function.upvalues,
-    )
-    .or_else(|| {
-        super::super::vm_this_property_leaf::try_eval_this_property_leaf(
-            bytecode, receiver, arguments,
-        )
-    })?;
-    // This operation answers an ordinary call, so it owes the same two counts
-    // the interpreter's call path reports. They are taken here rather than
-    // before the evaluators so a declined callee, which the interpreter then
-    // runs and counts itself, is not counted twice.
-    crate::diagnostics::count!(ordinary_call_attempts);
-    crate::diagnostics::count!(closed_form_leaf_evaluations);
-    Some(value)
+    user_calls::call(program, callee, receiver, args)
 }
 
 /// Reads an own data property, revalidating the cached (name, slot) pair by

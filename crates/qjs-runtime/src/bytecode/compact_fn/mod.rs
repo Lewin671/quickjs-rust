@@ -30,17 +30,16 @@ use qjs_ast::BinaryOp;
 use super::ir::Bytecode;
 
 mod activation;
-pub(in crate::bytecode) mod activation_stack;
 mod compile;
 mod creation_cache;
-mod execute;
+pub(in crate::bytecode) mod execute;
 mod numeric_plan;
 mod property;
 pub(in crate::bytecode) mod wide;
 pub(in crate::bytecode) use property::field_initializer_member_read;
 pub(in crate::bytecode) use wide::{hands_back_at, resumes_at};
 
-pub(super) use activation::try_run_standalone;
+pub(super) use activation::{try_run_indexed, try_run_standalone};
 pub(in crate::bytecode) use numeric_plan::NumericPlan;
 
 /// Bodies wider than this are not worth a register file; the limit also keeps
@@ -113,6 +112,7 @@ pub(super) struct CompactFunctionProgram {
     ops: Vec<CompactOp>,
     /// Total register file width: locals followed by former stack slots.
     register_count: usize,
+    written: Box<[std::ops::Range<u16>]>,
     /// Locals this body reads through indexed storage. Entry declines unless
     /// the frame reports every one of them as authoritative.
     required_authoritative_slots: u128,

@@ -1,0 +1,64 @@
+{
+  "job": "20261101T235231Z-t077-s3c2-c2",
+  "candidate": "cd020e8e8ccf7aaa00316781319213179608b776",
+  "base": "8322fc983da20800ce612ad148781aea30e28d08",
+  "builds": {
+    "base": {
+      "cache_hit": true,
+      "cache_key": "4c20d0a2f737aaa532faf646d646f39ce08299c76eab6aee8283f14c105e8fc4",
+      "cache_spec_sha256": "eb97e1e25facf6ad38d83a0ee72a798bc5caf2458e23459c896d5ecb424ae29f",
+      "path": "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261101T235231Z-t077-s3c2-c2/out/triage/base000/qjs",
+      "revision": "8322fc983da20800ce612ad148781aea30e28d08",
+      "sha256": "a02658e5e8a8d23f5da0197fcf29266d82da35f0ba511d09d4461c8c4a71b09d"
+    },
+    "candidate": {
+      "cache_hit": false,
+      "cache_key": "69382fa7f9fa1550221b2c2e797b6221b7ed50faa97cb2d9676d09b767d612c2",
+      "cache_spec_sha256": "9fd9ee58b539c1ec7eb431d583e48cdb4852918602fe73f6666b465a550a5eec",
+      "path": "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261101T235231Z-t077-s3c2-c2/out/triage/cand000/qjs",
+      "revision": "cd020e8e8ccf7aaa00316781319213179608b776",
+      "sha256": "a3a140a7473ae3cf465dd2698934df4c758372e0cf1664cccc2dc52239971aeb"
+    }
+  },
+  "counts": {
+    "attempts": 430,
+    "heavy_samples": 0,
+    "invalid": 0,
+    "valid": 430
+  },
+  "verdict": "likely loss",
+  "budget_met": true,
+  "lanes": {
+    "development": {
+      "cases": 10,
+      "wall_ns": 0.9506707808016198,
+      "instructions": 0.9872666378642444
+    },
+    "external": {
+      "cases": 45,
+      "wall_ns": 0.9977467849180801,
+      "instructions": 1.0001153484175105
+    },
+    "broad": {
+      "cases": 25,
+      "wall_ns": 0.9832797568455612,
+      "instructions": 0.9856587492011228
+    },
+    "sentinel": {
+      "cases": 6,
+      "wall_ns": 0.982791184868307,
+      "instructions": 0.983177982373533
+    },
+    "selection": {
+      "cases": 86,
+      "wall_ns": 0.9869111186598187,
+      "instructions": 0.9932106110993459
+    }
+  },
+  "instruction_targets": {
+    "development": true,
+    "external": false
+  },
+  "aggregation": "unweighted geometric means of frozen case ratios; diagnostic only",
+  "source_and_request_sha256": "356bbfbe53b1260699a2dd45d59e41c6c7f0ccba60f69042c15a0ff0b227ba11"
+}

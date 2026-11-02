@@ -11,7 +11,9 @@
 //! The `Math` and number helpers at the end are shared with other tiers.
 
 mod effects;
-pub(super) use effects::try_eval_pure_numeric_leaf;
+pub(super) use effects::{
+    replayable_numeric_plan, try_eval_pure_number_shortcut, try_eval_pure_numeric_leaf,
+};
 
 use qjs_ast::{BinaryOp, FunctionParams, UpdateOp};
 
@@ -175,7 +177,7 @@ impl NumericLeafPlan {
         let mut writes_received_upvalues = false;
         for op in &bytecode.code {
             match op {
-                Op::FunctionPrologueEnd => {}
+                Op::BindingBoundary { .. } | Op::FunctionPrologueEnd => {}
                 Op::LoadConst(index) => {
                     let value = FastValue::from_value(bytecode.constants.get(*index)?)?;
                     push_abstract(&mut stack, AbstractValue::Known(value))?;
@@ -416,15 +418,21 @@ impl NumericLeafShortcut {
 
     #[inline]
     fn eval(&self, arguments: &[Value], upvalues: &[BindingCell]) -> Option<Value> {
-        if let Self::Constant(value) = self {
-            return value.into_value();
-        }
-        let argument_number = |index: usize| -> Option<f64> {
-            match arguments.get(index)? {
+        self.eval_numbers_with(
+            |index| match arguments.get(index)? {
                 Value::Number(value) => Some(*value),
                 _ => None,
-            }
-        };
+            },
+            upvalues,
+        )
+    }
+
+    #[inline]
+    fn eval_numbers_with(
+        &self,
+        argument_number: impl Fn(usize) -> Option<f64>,
+        upvalues: &[BindingCell],
+    ) -> Option<Value> {
         let upvalue_number = |index: usize| -> Option<f64> {
             upvalues.get(index)?.with_value(|value| match value {
                 Value::Number(value) => Some(*value),
@@ -997,7 +1005,7 @@ fn try_eval_numeric_leaf_bytecode(
     let mut stack_len = 0;
     for op in &bytecode.code {
         match op {
-            Op::FunctionPrologueEnd => {}
+            Op::BindingBoundary { .. } | Op::FunctionPrologueEnd => {}
             Op::LoadConst(index) => {
                 let value = FastValue::from_value(bytecode.constants.get(*index)?)?;
                 push(&mut stack, &mut stack_len, value)?;

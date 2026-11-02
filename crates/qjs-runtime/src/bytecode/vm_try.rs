@@ -16,7 +16,7 @@ pub(super) struct TryFrame {
     class_depth: usize,
 }
 
-impl Vm<'_, '_> {
+impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
     pub(super) fn enter_try(
         &mut self,
         catch: Option<usize>,

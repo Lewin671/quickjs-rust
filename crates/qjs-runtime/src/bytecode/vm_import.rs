@@ -68,7 +68,7 @@ pub(super) fn eval_bytecode_in_agent_context(
     Ok(value)
 }
 
-impl Vm<'_, '_> {
+impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
     /// Evaluates `Op::ImportCall`: the options argument is on top of the stack
     /// (when `has_options`) with the specifier below it. Builds the import
     /// promise (coercion failures reject it rather than throwing) and pushes it.

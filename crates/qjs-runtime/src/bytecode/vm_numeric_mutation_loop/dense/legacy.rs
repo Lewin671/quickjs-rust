@@ -104,7 +104,10 @@ impl ArraySource {
         }
     }
 
-    fn resolve_read_only(&self, vm: &Vm<'_, '_>) -> Option<ArrayRef> {
+    fn resolve_read_only<'a, F: crate::bytecode::vm::VmFrame<'a>>(
+        &self,
+        vm: &Vm<'a, '_, F>,
+    ) -> Option<ArrayRef> {
         match self {
             Self::Local(slot) => match vm.locals.get(*slot) {
                 Some(Some(Value::Array(array))) => Some(array.clone()),
@@ -862,9 +865,9 @@ impl LegacyDynamicDensePlan {
         }
     }
 
-    fn try_run_hole_tail_append(
+    fn try_run_hole_tail_append<'a, F: crate::bytecode::vm::VmFrame<'a>>(
         &self,
-        vm: &mut Vm<'_, '_>,
+        vm: &mut Vm<'a, '_, F>,
         arrays: &[ArrayRef],
         locals: &mut [f64; MAX_DENSE_LOCALS],
         registers: &mut [f64],
@@ -903,7 +906,11 @@ impl LegacyDynamicDensePlan {
     }
 
     #[inline(never)]
-    pub(super) fn try_run(&self, vm: &mut Vm<'_, '_>, exit: usize) -> DenseNumericMutationLoopRun {
+    pub(super) fn try_run<'a, F: crate::bytecode::vm::VmFrame<'a>>(
+        &self,
+        vm: &mut Vm<'a, '_, F>,
+        exit: usize,
+    ) -> DenseNumericMutationLoopRun {
         debug_assert!(self.store_count <= 1);
         #[cfg(test)]
         let mut run_guard = CompactRunGuard::new();
@@ -1116,9 +1123,9 @@ impl LegacyDynamicDensePlan {
     }
 
     #[inline(never)]
-    pub(super) fn try_run_suppressing(
+    pub(super) fn try_run_suppressing<'a, F: crate::bytecode::vm::VmFrame<'a>>(
         &self,
-        vm: &mut Vm<'_, '_>,
+        vm: &mut Vm<'a, '_, F>,
         exit: usize,
     ) -> DenseNumericMutationLoopRun {
         debug_assert!(self.store_count > 1);

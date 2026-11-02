@@ -39,6 +39,30 @@ impl Bytecode {
         }
         bytecode.binding_plan.references =
             super::reference_plan::ReferencePlan::compile(&bytecode, references);
+        if !bytecode.global_scope && !bytecode.is_direct_eval_code() {
+            use crate::binding::BindingKind;
+            bytecode.binding_plan.indexed_cells = bytecode
+                .binding_plan
+                .bindings
+                .iter()
+                .filter(|meta| {
+                    meta.slot.0 < 128
+                        && !meta.deletable
+                        && meta.name != "arguments"
+                        && matches!(
+                            meta.kind,
+                            BindingKind::Var
+                                | BindingKind::Lexical
+                                | BindingKind::Catch
+                                | BindingKind::Function
+                        )
+                        && !bytecode.locals[meta.slot.0].is_received_upvalue()
+                        && !bytecode.locals[meta.slot.0].sloppy_global_fallback
+                })
+                .fold(0, |mask, meta| mask | (1_u128 << meta.slot.0));
+        }
+        super::binding_writes::finish(&mut bytecode, params);
+        super::binding_boundaries::lower(&mut bytecode);
         bytecode
     }
 

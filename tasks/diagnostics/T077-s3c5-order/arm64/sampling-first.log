@@ -1,0 +1,116 @@
+warning: method `identity` is never used
+   --> crates/qjs-runtime/src/bytecode/named_property_cache.rs:105:8
+    |
+104 | impl Resolution {
+    | --------------- method in this implementation
+105 |     fn identity(&self) -> Option<(u8, usize)> {
+    |        ^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: field `reserved` is never read
+  --> crates/qjs-runtime/src/value/layout/mod.rs:95:5
+   |
+90 | pub(crate) struct ShapeEntry {
+   |                   ---------- field in this struct
+...
+95 |     reserved: u16,
+   |     ^^^^^^^^
+   |
+   = note: `ShapeEntry` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: method `verify_position` is never used
+   --> crates/qjs-runtime/src/value/layout/storage.rs:175:19
+    |
+137 | impl Layout {
+    | ----------- method in this implementation
+...
+175 |     pub(super) fn verify_position(&self, key: KeyId) -> Option<usize> {
+    |                   ^^^^^^^^^^^^^^^
+
+warning: method `is_empty` is never used
+  --> crates/qjs-runtime/src/value/layout/transitions.rs:37:19
+   |
+15 | impl Transitions {
+   | ---------------- method in this implementation
+...
+37 |     pub(super) fn is_empty(&self) -> bool {
+   |                   ^^^^^^^^
+
+warning: methods `transitions_empty` and `next_order` are never used
+  --> crates/qjs-runtime/src/value/layout/links.rs:47:19
+   |
+13 | impl Layout {
+   | ----------- methods in this implementation
+...
+47 |     pub(super) fn transitions_empty(&self) -> bool {
+   |                   ^^^^^^^^^^^^^^^^^
+...
+52 |     pub(super) fn next_order(&self) -> u32 {
+   |                   ^^^^^^^^^^
+
+warning: method `identity` is never used
+  --> crates/qjs-runtime/src/value/named.rs:34:19
+   |
+24 | impl WeakTarget {
+   | --------------- method in this implementation
+...
+34 |     pub(crate) fn identity(&self) -> (u8, usize) {
+   |                   ^^^^^^^^
+
+warning: `qjs-runtime` (lib) generated 6 warnings
+    Finished `release` profile [optimized] target(s) in 0.11s
+profiling external/jetstream3-js-subset/cdjs ...
+Traceback (most recent call last):
+  File "<frozen runpy>", line 201, in _run_module_as_main
+  File "<frozen runpy>", line 87, in _run_code
+  File "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3c2/tools/benchmark/order_file.py", line 171, in <module>
+    raise SystemExit(main())
+                     ~~~~^^
+  File "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3c2/tools/benchmark/order_file.py", line 145, in main
+    profiles.append(profile_process(_argv(binary, case, iterations), args.seconds))
+                    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3c2/tools/benchmark/order_file.py", line 88, in profile_process
+    subprocess.run(
+    ~~~~~~~~~~~~~~^
+        ["sample", str(process.pid), str(max(1, round(seconds))), "1", "-mayDie",
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+         "-file", str(report)],
+         ^^^^^^^^^^^^^^^^^^^^^^
+        capture_output=True, check=False,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/opt/homebrew/Cellar/python@3.15/3.15.2/Frameworks/Python.framework/Versions/3.15/lib/python3.15/subprocess.py", line 671, in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+                     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.15/3.15.2/Frameworks/Python.framework/Versions/3.15/lib/python3.15/subprocess.py", line 1395, in communicate
+    stdout, stderr = self._communicate(input, endtime, timeout)
+                     ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.15/3.15.2/Frameworks/Python.framework/Versions/3.15/lib/python3.15/subprocess.py", line 2412, in _communicate
+    new_offset, completed = _communicate_io_posix(
+                            ~~~~~~~~~~~~~~~~~~~~~^
+        selector,
+        ^^^^^^^^^
+    ...<4 lines>...
+        endtime,
+        ^^^^^^^^
+        close_on_eof=True)
+        ^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.15/3.15.2/Frameworks/Python.framework/Versions/3.15/lib/python3.15/subprocess.py", line 291, in _communicate_io_posix
+    ready = selector.select(remaining)
+  File "/opt/homebrew/Cellar/python@3.15/3.15.2/Frameworks/Python.framework/Versions/3.15/lib/python3.15/selectors.py", line 398, in select
+    fd_event_list = self._selector.poll(timeout)
+KeyboardInterrupt
+Traceback (most recent call last):
+  File "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3c2/tasks/diagnostics/T077-s3c5-order/regenerate.py", line 46, in <module>
+    subprocess.run([sys.executable, '-m', 'tools.benchmark.order_file', '--binary', str(binary),
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                    '--case', 'external', '--case', 'sentinel', '--case', 'broad',
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                    '--seconds', '1', '--output', str(order)], env=env, check=True)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.15/3.15.2/Frameworks/Python.framework/Versions/3.15/lib/python3.15/subprocess.py", line 692, in run
+    raise CalledProcessError(retcode, process.args,
+                             output=stdout, stderr=stderr)
+subprocess.CalledProcessError: Command '['/opt/homebrew/opt/python@3.15/bin/python3.15', '-m', 'tools.benchmark.order_file', '--binary', '/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3c2/target/s3c5/canonical-arm/aarch64-apple-darwin/release/qjs', '--case', 'external', '--case', 'sentinel', '--case', 'broad', '--seconds', '1', '--output', '/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3c2/crates/qjs-cli/hot-functions.order']' died with <Signals.SIGINT: 2>.

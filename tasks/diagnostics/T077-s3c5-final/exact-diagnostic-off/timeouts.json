@@ -1,0 +1,5 @@
+[
+  "test/built-ins/TypedArray/prototype/copyWithin/coerced-values-end-detached.js",
+  "test/built-ins/TypedArray/prototype/copyWithin/coerced-values-start-detached.js",
+  "test/built-ins/TypedArray/prototype/copyWithin/coerced-values-end-detached-prototype.js"
+]

@@ -9,11 +9,11 @@ ordinary calls must not copy a name-to-value environment. Paths are under
 compiler records declarations and parameter/body/block/catch/loop/class-name/with
 boundaries. Scope IDs and binding IDs belong to the retained metadata owner;
 descriptors contain names, declaration attributes and routes, never live values.
-The PC map identifies the active lexical chain after normal or abrupt control
+The [checkpoint PC map](env-model-checkpoints.md) identifies the active lexical chain after normal or abrupt control
 flow, including future TDZ declarations and excluding exited sibling scopes.
 
 Parameter inputs and capture inputs are positional. Capture linking follows the
-callee's received-slot order, using ParentLocal or ParentUpvalue routes. Compiler
+callee's received-slot order, using ParentLocal or ParentUpvalue routes ([write policy](env-model-cell-policy.md)). Compiler
 inputs and temporaries are excluded from exposed descriptors. Destructured
 parameter leaf bindings are parameters too; raw pattern inputs are not bindings.
 
@@ -126,13 +126,13 @@ Tests: `context/call_owner.rs`, `function/call_activation_tests.rs`, `class_keys
 
 `context/creation.rs` owns shared realm, referrer, module routes, private context and
 explicit global selection. `context/activation.rs` owns logical variable identity
-(minted on first exposure), call owner, scope roots, mode and strictness. **Reuse:**
-only a returned, never-exposed activation (unminted identity, inline owner, no
-scopes/holders/saved references) enters a pool bounded in count and bytes; no lease,
-cell, closure, arguments object, continuation, generator or eval holder can reference
-it, and an identical later entry rebinds it. Related realms mint non-wrapping tokens in
-their AtomDomain boundary. Parameter/body entry changes only its scope boundary.
-Module-root routing stays a scope fact; creation/module metadata holds cell routes only.
+(minted on first exposure), call owner, scope roots, mode and strictness. **Storage:**
+only cleared capacity is pooled under the [common budget](frame-storage-pool.md). Context, cells, closures, arguments, continuations, generators and eval holders
+keep independent identities; none refer into a recyclable register stack. Prefix refs
+select one call-value authority, switching to Context on real demand. Metadata queries borrow creation facts without minting an activation. Dynamic creation is
+selected at entry; later property changes affect subsequent calls. Related realms
+mint non-wrapping AtomDomain tokens. Parameter/body entry changes scope boundary;
+module-root routing stays a scope fact and module metadata holds cell routes only.
 
 `Context<'a>` borrows services/activation; it is never cloned or retained. NativeSite
 borrows call info, target and eval sources; callee realm is lazy. Vm/tiers own callee

@@ -1,0 +1,30 @@
+{
+  "full_gate": {
+    "command": "./scripts/check.sh",
+    "exit": 0,
+    "runtime": 2746,
+    "curated_test262": 5174,
+    "log_sha256": "10afd35c9698b2e2484e6d840a26bc26eb9a44da70fe72d211ffb68239473607"
+  },
+  "full_perf_counters": {
+    "command": "cargo test -p qjs-runtime --features perf-counters",
+    "exit": 0,
+    "passed": 2798,
+    "log_sha256": "dc8e679e10a53793d914551fd54a1be490b1330ebad19097020fd282057e08bc"
+  },
+  "x86_all_features": {
+    "command": "cargo check -p qjs-runtime --target x86_64-apple-darwin --features agents,perf-counters",
+    "exit": 0,
+    "log_sha256": "80b7fe7029a844c1e939832c93aac0b0e1be1905c7b03082187f1e162d366578"
+  },
+  "new_ownership_tests": 3,
+  "existing_ownership_tests": 2,
+  "stress": "stress.json",
+  "ng": "compare.json",
+  "depth": "depth.json",
+  "pending": [
+    "C5 retirement of per-body free pools into the common budget",
+    "C5 complete qualification and frozen final public86",
+    "Lead formal, held-out, RSS and independent review"
+  ]
+}

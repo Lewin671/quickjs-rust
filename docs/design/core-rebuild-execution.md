@@ -40,35 +40,34 @@ At CFG merges, exceptions, callbacks and suspension the state map is complete.
 
 ## Frames and the T021 cost
 
-`Executor` owns a reusable directory of boxed activation records, a bounded pool
-of cleared register blocks, and a stack of suspended FrameIds. Each activation
-owns one `RegisterBlock { values:Vec<Value>, init_bits, cell_routes }`; allocation
-is amortized, not a fresh Vec per ordinary call. Deep recursion may grow capacity;
-return clears written owning slots and caps retained pool bytes. Cells never pool.
+`Executor` owns one contiguous `Vec<Value>` and a `Vec<FrameHeader>` for
+ordinary activations. Four prefix slots retain callee/receiver/new.target/home;
+only used inputs are written. A 64-byte header retains optional root code,
+lazy Context/cold owners, typed CallSlotRefs, window and continuation indices.
+Calls push headers, not boxed general records, and return clears written ranges.
+Cells and leases retain independent identity and never point into either Vec.
 
-Proposed 64-bit hot `FrameHeader` budget: owned Code handle 8, block handle 8,
-context handle 8, callee owner 8, continuation handle 8, cold-state handle 8,
-PC 4, return register 4, actual argc 4, flags 4 = **64 bytes**. A directory
-`FrameId { index:u32, generation:u32 }` is 8 bytes; boxed blocks stay stable when
-the directory grows. Header is initialized fieldwise, not copied wholesale.
-Context/cold allocations are optional or pooled; the 64-byte budget excludes
-register data, cell arrays and semantic argument/rest/arguments objects.
+Statically known suspendable functions (generator, async, async generator and
+TLA) own a box from entry, including the prologue, and resume the same record.
+Only suspended or exposed records can enter a directory; FrameIds are lazy.
+General synchronous VM state is owned directly by its driver, with no per-call
+boxing. Immutable root/eval code owners are retained once, never deep-copied per
+entry. Each resume resets segment declines/handback, preserving semantic state.
+Cleared register/header and general operand/local/cold allocations share one
+[bounded pool](frame-storage-pool.md); code bodies own no free-capacity state.
 
-**Hot addressing is `regs[r]`, never `store[base + r]`.** On entry/switch take
-the current block out of the directory into the driver's local owner and bind
-`let regs = current.values.as_mut_slice()` once per non-reentrant segment. Its
-data pointer/length and code/PC are loop locals. A JS call ends the borrow,
-stores only continuation state, pushes the old block/header, and takes the new
-block. Return restores them. No FrameId resolution or base addition per access.
-Use safe slices initially; no raw pointer is needed just to persuade Rust.
+**Hot addressing is `regs[r]`, never `store[base + r]`.** Bind a window once
+per non-reentrant segment. Calls end the borrow before stack/header growth;
+return rebinds the caller. No pointer survives a segment or escapes into a cell,
+closure, arguments object or eval holder. Native callbacks pin the owning stack
+while borrowing its arguments, with no live Executor borrow across JavaScript.
 
-This generalizes the actual `compact_fn/activation.rs::run_frames` zero-based
-`window` inner loop, without its contiguous global register stack or admissions.
 T021's [1.2678 experiment](../../tasks/archive/T021-single-vm-frame-stack-log.md)
-shows why merely counting fewer activations is insufficient. Release disassembly
-must confirm base is established at switches, no repeated directory/base loads,
-no aggregate action store/reload on ordinary opcode backedges. Keep bounds checks
-until separately measured; safe indexing does not justify unchecked operations.
+shows why counting fewer activations is insufficient. Inspect release assembly
+for repeated directory/base loads, aggregate switch copies or Action spills.
+Keep safe slice bounds checks until separately measured; stack reallocation is
+not a reason to add unchecked pointers. S3e owns universal Code lowering; current
+general stack-IR banks remain semantic state of the same owning record.
 
 ## Calls and context
 
@@ -97,6 +96,11 @@ need JS use cold resumable operation records, returning CallRequest once, then
 continuing at a saved semantic step. They cannot recursively invoke eval through
 a supposedly synchronous helper. Preserve proxy trap order, construct/new.target,
 derived-this and field failure rules. Count JS-depth separately from native depth.
+Frame-layout qualification runs the complete default inventory in
+`tasks/diagnostics/T077-s3a-depth-probe.py` in debug and release, against the
+preceding accepted milestone with `--baseline`: native callbacks, call/apply,
+delegation, try/catch, construct, spread, arguments, super and general-VM fallback.
+Use the ordinary CLI main-thread stack; no stack-policy override.
 
 ## Native boundary
 

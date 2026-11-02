@@ -1,0 +1,33 @@
+# upw0 (call-unexposed.js) instructions per call, (I(2N)-I(N))/N, N=1e6, arm64 release fat LTO.
+# variant  per_call  patches (tools/apply.py on 63b2347f; tools/apply_base.py on 8322fc98)
+base       1003.1   -
+c2         1941.1   -
+a-deref    1913.2   deref
+a-storerc  1910.2   storerc
+a-nocell   1901.1   nocell
+a-nocheckout 1918.1 nocheckout
+a-nocap    1916.2   nocap
+a-nodir    1739.1   nodir
+a-segrc    1921.2   segrc
+a-seginline 1822.2  seginline
+a-bcclone  1932.2   bcclone
+a-exitfast 1731.2   exitfast
+k1         1913.1   deref
+k2         1910.2   +storerc
+k3         1879.2   +nocell
+k4         1833.1   +nocheckout nocap
+k5         1659.1   +nodir
+k6         1630.1   +segrc bcclone
+k7         1516.1   +seginline
+k8         1516.1   +nopoison
+k9         1450.2   +minclear        (upw0-only; breaks general programs)
+k10        1254.1   +exitfast
+k11        1147.1   +prefixmin       (upw0-only)
+k12        1095.1   +inlinecalls     (upw0-only)
+k14        1092.1   +segstrict entryerr
+k7f        1316.1   k7 + fixdecline rootcache exitfast (passes all 55 public workloads)
+b-noproto   891.1   base: skip S3b reenter/release/bind protocol
+b-exitfast  904.1   base: native probed backedge handled in-loop
+b-npx       790.2   base: both
+# fannkuch: base 628.7M, c2 2641.3M, fk1(fixdecline) 630.6M; tofte: c2 933M -> rootcache 854M (base 704-719M, clock-sensitive)
+# public55 instruction geomean vs base: c2 1.1122, fixdecline 1.0838, k7 1.0814, k7f 1.0531

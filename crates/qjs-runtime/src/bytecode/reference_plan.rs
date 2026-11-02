@@ -53,6 +53,8 @@ pub(super) struct ReferenceLifetime {
 
 #[derive(Clone, Debug, Default)]
 pub(super) struct ReferenceEvent {
+    /// The original operation, after its explicit boundary. Admission/store
+    /// routing uses this PC; the checkpoint carries this event's index.
     pub(super) pc: usize,
     pub(super) starts: Vec<usize>,
     pub(super) read: Option<usize>,

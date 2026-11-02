@@ -40,7 +40,7 @@ pub(super) fn run_pending_jobs(root: &mut JobRoot) -> Result<(), RuntimeError> {
     );
     let mut context = crate::context::Context {
         runtime: &mut root.runtime,
-        activation: &mut activation,
+        activation: (&mut activation).into(),
         native: None,
     };
     promise::drain_promise_jobs(&mut context)

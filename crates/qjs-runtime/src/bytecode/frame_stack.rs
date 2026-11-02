@@ -20,7 +20,7 @@
 
 use crate::RuntimeError;
 
-use super::vm::{FrameState, Vm};
+use super::vm::Vm;
 use super::vm_result::Completion;
 
 /// How one activation ended.
@@ -52,12 +52,12 @@ pub(super) enum FrameContinuation {
 }
 
 /// A caller waiting for the frame above it to finish.
-pub(super) struct SuspendedFrame<'a> {
-    frame: FrameState<'a>,
+pub(super) struct SuspendedFrame<F> {
+    frame: F,
     continuation: FrameContinuation,
 }
 
-impl<'a, 's> Vm<'a, 's> {
+impl<'a, 's, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, 's, F> {
     /// Suspends the current frame and installs `frame` above it.
     ///
     /// The caller's program view must already have been dropped: replacing the
@@ -65,7 +65,7 @@ impl<'a, 's> Vm<'a, 's> {
     /// dispatch loop reading code that no longer belongs to the frame it is
     /// executing.
     #[allow(dead_code)]
-    pub(super) fn push_frame(&mut self, frame: FrameState<'a>, continuation: FrameContinuation) {
+    pub(super) fn push_frame(&mut self, frame: F, continuation: FrameContinuation) {
         let caller = std::mem::replace(&mut self.current, frame);
         self.callers.push(SuspendedFrame {
             frame: caller,
@@ -79,31 +79,51 @@ impl<'a, 's> Vm<'a, 's> {
     /// this is exactly one activation, and the loop below runs once.
     pub(super) fn run_completion(&mut self) -> Result<Completion, RuntimeError> {
         loop {
-            match self.run_current_activation() {
+            let exit = self.run_current_activation();
+            match exit {
                 Ok(FrameExit::RefreshBindings) => continue,
-                Ok(FrameExit::EnterFrame) => {
-                    let (frame, continuation) = self
-                        .pending_frame_entry
-                        .take()
-                        .expect("an EnterFrame exit records the frame it wants entered");
-                    self.push_frame(frame, continuation);
+                Ok(FrameExit::Completed(completion)) if self.callers.is_empty() => {
+                    return Ok(completion);
                 }
-                Ok(FrameExit::Completed(completion)) => match self.callers.pop() {
-                    None => return Ok(completion),
-                    Some(caller) => self.resume_caller(caller, completion)?,
-                },
-                Err(error) => match self.callers.pop() {
-                    None => return Err(error),
-                    Some(caller) => self.resume_caller_with_error(caller, error)?,
-                },
+                Err(error) if self.callers.is_empty() => return Err(error),
+                exit => self.settle_stacked_exit(exit)?,
             }
         }
+    }
+
+    /// Keep dormant multi-frame moves out of the recursive single-frame driver.
+    /// In particular, taking a pending inline frame needs a full FrameState
+    /// temporary even though production never enters that branch.
+    #[inline(never)]
+    fn settle_stacked_exit(
+        &mut self,
+        exit: Result<FrameExit, RuntimeError>,
+    ) -> Result<(), RuntimeError> {
+        match exit {
+            Ok(FrameExit::RefreshBindings) => {}
+            Ok(FrameExit::EnterFrame) => {
+                let (frame, continuation) = self
+                    .pending_frame_entry
+                    .take()
+                    .expect("an EnterFrame exit records the frame it wants entered");
+                self.push_frame(frame, continuation);
+            }
+            Ok(FrameExit::Completed(completion)) => {
+                let caller = self.callers.pop().expect("stacked completion has a caller");
+                self.resume_caller(caller, completion)?;
+            }
+            Err(error) => {
+                let caller = self.callers.pop().expect("stacked error has a caller");
+                self.resume_caller_with_error(caller, error)?;
+            }
+        }
+        Ok(())
     }
 
     /// Restores `caller` and delivers the completion of the frame above it.
     fn resume_caller(
         &mut self,
-        caller: SuspendedFrame<'a>,
+        caller: SuspendedFrame<F>,
         completion: Completion,
     ) -> Result<(), RuntimeError> {
         let Completion::Return(value) = completion else {
@@ -136,7 +156,7 @@ impl<'a, 's> Vm<'a, 's> {
     /// propagates outward when it does not.
     fn resume_caller_with_error(
         &mut self,
-        caller: SuspendedFrame<'a>,
+        caller: SuspendedFrame<F>,
         error: RuntimeError,
     ) -> Result<(), RuntimeError> {
         self.current = caller.frame;

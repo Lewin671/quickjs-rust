@@ -84,13 +84,34 @@ def profile_process(argv: list[str], seconds: float) -> Counter[str]:
     with tempfile.TemporaryDirectory(prefix="qjs-order-") as work:
         report = Path(work) / "profile.txt"
         process = subprocess.Popen(argv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        time.sleep(0.05)
-        subprocess.run(
-            ["sample", str(process.pid), str(max(1, round(seconds))), "1", "-mayDie",
-             "-file", str(report)],
-            capture_output=True, check=False,
-        )
-        process.wait()
+        try:
+            time.sleep(0.05)
+            # poll reaps a fast child. Sampling its unreaped zombie can block
+            # sample indefinitely even with -mayDie.
+            if process.poll() is not None:
+                return Counter()
+            sampler = subprocess.Popen(
+                ["sample", str(process.pid), str(max(1, round(seconds))), "1", "-mayDie",
+                 "-file", str(report)],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
+            try:
+                # Reap the target while sample runs, including the exit race
+                # between the poll above and the sampler's task-port lookup.
+                process.wait()
+                try:
+                    sampler.wait(timeout=max(10.0, seconds + 5.0))
+                except subprocess.TimeoutExpired:
+                    sampler.kill()
+                    sampler.wait()
+            finally:
+                if sampler.poll() is None:
+                    sampler.kill()
+                    sampler.wait()
+        finally:
+            if process.poll() is None:
+                process.kill()
+                process.wait()
         return (
             parse_profile(report.read_text(errors="replace"), image) if report.exists() else Counter()
         )

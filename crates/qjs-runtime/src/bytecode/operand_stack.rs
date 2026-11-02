@@ -1,97 +1,28 @@
-//! Operand-stack storage, and its per-body recycler.
-//!
-//! A frame's operand stack is a plain `Vec<Value>` whose allocation is worth
-//! reusing across calls to the same body. The recycler is a *handle* rather
-//! than a method on `Bytecode` for a structural reason: a frame must be able
-//! to return its stack when it ends without holding a borrow of the bytecode
-//! for the frame's whole lifetime. That borrow is one of the things that
-//! stopped a frame from owning its bytecode, and therefore stopped a callee
-//! from running on its caller's VM.
-
-use std::cell::RefCell;
-use std::ops::{Deref, DerefMut};
-use std::rc::Rc;
-
-use crate::value::Value;
-
-use super::ir::Bytecode;
-
-/// A shared pool of cleared operand-stack allocations for one compiled body.
-///
-/// The pool is a handle rather than a method on `Bytecode` because a frame
-/// must be able to return its stack when it ends without borrowing the
-/// bytecode for the frame's whole lifetime -- which is what stopped a frame
-/// from owning its bytecode at all.
-#[derive(Clone)]
-pub(super) struct OperandStackRecycler(Rc<RefCell<Vec<Vec<Value>>>>);
-
-impl std::fmt::Debug for OperandStackRecycler {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // The pooled allocations are cleared scratch storage, so printing them
-        // would be noise in a `Bytecode` dump.
-        formatter
-            .debug_struct("OperandStackRecycler")
-            .field("pooled", &self.0.borrow().len())
-            .finish()
-    }
-}
-
-impl OperandStackRecycler {
-    const INITIAL_CAPACITY: usize = 64;
-    pub(super) const MAX_RECYCLED_CAPACITY: usize = 256;
-    /// How many operand stacks one body keeps for reuse. Deep recursion holds
-    /// one per active frame, and the bound keeps a runaway depth from
-    /// retaining unbounded storage after it unwinds.
-    pub(super) const MAX_POOLED: usize = 32;
-
-    pub(super) fn new() -> Self {
-        Self(Rc::new(RefCell::new(Vec::new())))
-    }
-
-    pub(super) fn take(&self) -> Vec<Value> {
-        crate::diagnostics::count!(operand_stack_pool_requests);
-        self.0.borrow_mut().pop().unwrap_or_else(|| {
-            crate::diagnostics::count!(operand_stack_pool_allocations);
-            Vec::with_capacity(Self::INITIAL_CAPACITY)
-        })
-    }
-
-    pub(super) fn recycle(&self, mut stack: Vec<Value>) {
-        stack.clear();
-        if stack.capacity() > Self::MAX_RECYCLED_CAPACITY {
-            return;
-        }
-        let mut pooled = self.0.borrow_mut();
-        if pooled.len() < Self::MAX_POOLED {
-            pooled.push(stack);
-        }
-    }
-
-    #[cfg(test)]
-    pub(super) fn pooled_len(&self) -> usize {
-        self.0.borrow().len()
-    }
-}
+//! Owned operand values and a data-only cleared-storage pool handle.
+//! No bytecode or service borrow survives with an activation.
+use crate::Value;
+use std::{
+    ops::{Deref, DerefMut},
+    rc::Rc,
+};
 
 pub(super) struct OperandStack {
-    recycler: OperandStackRecycler,
+    pool: Rc<super::frame_pool::GeneralPool>,
     values: Vec<Value>,
 }
 
 impl OperandStack {
-    pub(super) fn new(bytecode: &Bytecode) -> Self {
-        let recycler = bytecode.operand_stack_recycler();
-        let values = recycler.take();
-        Self { recycler, values }
+    pub(super) fn new(pool: Rc<super::frame_pool::GeneralPool>) -> Self {
+        let values = pool.take_operands();
+        Self { pool, values }
+    }
+
+    pub(super) fn pool(&self) -> &super::frame_pool::GeneralPool {
+        &self.pool
     }
 
     pub(super) fn take(&mut self) -> Vec<Value> {
         std::mem::take(&mut self.values)
-    }
-
-    pub(super) fn replace(&mut self, values: Vec<Value>) {
-        let previous = std::mem::replace(&mut self.values, values);
-        self.recycler.recycle(previous);
     }
 }
 
@@ -111,90 +42,6 @@ impl DerefMut for OperandStack {
 
 impl Drop for OperandStack {
     fn drop(&mut self) {
-        self.recycler.recycle(std::mem::take(&mut self.values));
-    }
-}
-
-/// A shared pool of cleared local-slot allocations for one compiled body.
-///
-/// A slot-seeded direct call builds `vec![None; locals.len()]` on entry and
-/// frees it on exit, so a recursive or hot callee malloc/free pairs once per
-/// invocation for storage whose size is fixed at compile time. The frame's
-/// locals never outlive the call on that path -- the direct-slot contract
-/// excludes closures over them -- so the allocation can be handed back.
-#[derive(Clone)]
-pub(super) struct LocalSlotRecycler(Rc<RefCell<Vec<RecycledLocals>>>);
-struct RecycledLocals {
-    slots: Vec<Option<Value>>,
-    poisoned: bool,
-}
-
-impl std::fmt::Debug for LocalSlotRecycler {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter
-            .debug_struct("LocalSlotRecycler")
-            .field("pooled", &self.0.borrow().len())
-            .finish()
-    }
-}
-
-impl LocalSlotRecycler {
-    /// Deep recursion holds one vector per active frame; the bound keeps a
-    /// runaway depth from retaining unbounded storage after it unwinds.
-    const MAX_POOLED: usize = 32;
-    const MAX_RECYCLED_CAPACITY: usize = 256;
-
-    pub(super) fn new() -> Self {
-        Self(Rc::new(RefCell::new(Vec::new())))
-    }
-
-    /// Returns a vector of exactly `len` `None` slots, reusing a pooled
-    /// allocation when one is available.
-    pub(super) fn take(&self, len: usize) -> Vec<Option<Value>> {
-        crate::diagnostics::count!(local_slot_pool_requests);
-        let Some(RecycledLocals {
-            mut slots,
-            poisoned,
-        }) = self.0.borrow_mut().pop()
-        else {
-            if len != 0 {
-                crate::diagnostics::count!(local_slot_allocations);
-            }
-            return vec![None; len];
-        };
-        if poisoned {
-            for slot in &mut slots {
-                assert!(
-                    matches!(slot, Some(Value::Number(value)) if value.is_nan()),
-                    "released local poison changed"
-                );
-                *slot = None;
-            }
-        }
-        // A pooled vector is recycled at its body's slot count with every
-        // entry already cleared, so the common case needs no resize.
-        if slots.len() != len {
-            if slots.capacity() < len {
-                crate::diagnostics::count!(local_slot_allocations);
-            }
-            slots.resize(len, None);
-        }
-        slots
-    }
-
-    pub(super) fn recycle_with_poison(&self, mut slots: Vec<Option<Value>>, poison: bool) {
-        if slots.capacity() > Self::MAX_RECYCLED_CAPACITY {
-            return;
-        }
-        for slot in slots.iter_mut() {
-            *slot = poison.then_some(Value::Number(f64::NAN));
-        }
-        let mut pooled = self.0.borrow_mut();
-        if pooled.len() < Self::MAX_POOLED {
-            pooled.push(RecycledLocals {
-                slots,
-                poisoned: poison,
-            });
-        }
+        self.pool.put_operands(std::mem::take(&mut self.values));
     }
 }

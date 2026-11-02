@@ -174,7 +174,7 @@ pub(super) fn compile(bytecode: &Bytecode) -> Option<CompactFunctionProgram> {
             continue;
         };
         match op {
-            Op::FunctionPrologueEnd => {}
+            Op::BindingBoundary { .. } | Op::FunctionPrologueEnd => {}
             Op::Pop => ops.push(CompactOp::Drop {
                 src: register(depth.checked_sub(1)?),
             }),
@@ -256,9 +256,30 @@ pub(super) fn compile(bytecode: &Bytecode) -> Option<CompactFunctionProgram> {
         }
     }
 
+    let mut writes = vec![false; register_count];
+    for &slot in bytecode.parameter_slots() {
+        if slot < register_count {
+            writes[slot] = true;
+        }
+    }
+    for op in &ops {
+        match *op {
+            CompactOp::LoadConst { dst, .. }
+            | CompactOp::Move { dst, .. }
+            | CompactOp::LoadUpvalueLocal { dst, .. }
+            | CompactOp::Binary { dst, .. }
+            | CompactOp::Call { dst, .. } => writes[dst as usize] = true,
+            CompactOp::Drop { .. }
+            | CompactOp::JumpIfFalsy { .. }
+            | CompactOp::Jump { .. }
+            | CompactOp::Return { .. } => {}
+        }
+    }
+    let written = crate::bytecode::frame_bank::written_ranges(writes);
     Some(CompactFunctionProgram {
         ops,
         register_count,
+        written,
         required_authoritative_slots,
     })
 }
@@ -304,7 +325,7 @@ fn propagate_depths(code: &[Op]) -> Option<Vec<Option<u16>>> {
 
 fn effect_of(op: &Op) -> Option<Effect> {
     let effect = match op {
-        Op::FunctionPrologueEnd => Effect {
+        Op::BindingBoundary { .. } | Op::FunctionPrologueEnd => Effect {
             pops: 0,
             pushes: 0,
             target: None,

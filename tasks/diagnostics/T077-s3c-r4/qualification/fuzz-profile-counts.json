@@ -1,0 +1,20 @@
+{
+  "per_profile": {
+    "binding": {
+      "MATCH": 395,
+      "PRE": 105
+    },
+    "binding-simple": {
+      "PRE": 90,
+      "MATCH": 410
+    },
+    "receiver": {
+      "MATCH": 500
+    },
+    "global-store": {
+      "MATCH": 486,
+      "PRE": 14
+    }
+  },
+  "raw_cases_sha256": "39c02952ed85fbb8c51905db0fed715e7f4642fa5d36354478b6310edc2526c6"
+}

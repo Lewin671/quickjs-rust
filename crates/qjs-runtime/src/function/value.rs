@@ -115,7 +115,7 @@ pub(crate) struct PrivateFieldInit {
 pub struct Function(Rc<FunctionData>);
 
 #[cfg(target_pointer_width = "64")]
-const _: () = assert!(std::mem::size_of::<FunctionData>() <= 304);
+const _: () = assert!(std::mem::size_of::<FunctionData>() <= 240);
 
 /// A non-owning handle to a [`Function`], for caches that must not keep
 /// the function, or a cycle through its own code, alive.
@@ -213,6 +213,9 @@ pub struct FunctionData {
     /// The compact tier's counterpart: whether its admission proof, as far as
     /// it depends on the function alone, holds, and the register count.
     pub(crate) compact_inline_facts: Cell<u32>,
+    /// Enables the body's shared capture-write mask only after all selected
+    /// routes validate. A failed link keeps the whole instance checked.
+    initialized_mutable_upvalues: bool,
     pub(crate) upvalues: Vec<BindingCell>,
     /// Received-upvalue slots backed by the function creation realm. The cells
     /// stay live; this mask only avoids rediscovering their identity by name on
@@ -404,6 +407,16 @@ impl fmt::Debug for Function {
 }
 
 impl Function {
+    pub(crate) fn initialized_mutable_upvalues(&self) -> &u128 {
+        if self.initialized_mutable_upvalues {
+            self.bytecode
+                .as_ref()
+                .expect("validated user body")
+                .received_write_capabilities()
+        } else {
+            &0
+        }
+    }
     pub(crate) fn native_captures(&self) -> &crate::function::NativeCaptures {
         self.native_captures
             .as_deref()
@@ -491,6 +504,17 @@ impl Function {
         } else {
             lexical_scope
         };
+        let mask = bytecode.link_write_capabilities(&upvalues);
+        // The plan owns the immutable mask. One instance bit enables it only
+        // when every selected route validated; a mismatch keeps all checked.
+        let initialized_mutable_upvalues =
+            mask != 0 && mask == *bytecode.received_write_capabilities();
+        #[cfg(feature = "perf-counters")]
+        if initialized_mutable_upvalues {
+            crate::diagnostics::update(|c| {
+                c.initialized_mutable_links += u64::from(mask.count_ones())
+            });
+        }
         let needs_scope_proof = lexical_scope.is_some();
         let realm = &creation.realm;
         let realm_upvalue_slots = bytecode
@@ -522,6 +546,7 @@ impl Function {
             wide_inline_facts: Cell::new(0),
             compact_inline_facts: Cell::new(0),
             upvalues,
+            initialized_mutable_upvalues,
             realm_upvalue_slots,
             local_names,
             bytecode: Some(bytecode),
@@ -700,6 +725,7 @@ impl Function {
             wide_inline_facts: Cell::new(0),
             compact_inline_facts: Cell::new(0),
             upvalues: Vec::new(),
+            initialized_mutable_upvalues: false,
             realm_upvalue_slots: 0,
             local_names: Rc::new(Vec::new()),
             bytecode: None,
@@ -758,6 +784,7 @@ impl Function {
             wide_inline_facts: Cell::new(0),
             compact_inline_facts: Cell::new(0),
             upvalues: Vec::new(),
+            initialized_mutable_upvalues: false,
             realm_upvalue_slots: 0,
             local_names: Rc::new(Vec::new()),
             bytecode: None,
@@ -1017,65 +1044,6 @@ impl Function {
     pub(crate) fn lexical_call(&self) -> Option<Rc<crate::context::CallOwner>> {
         self.auxiliary
             .with_cold(|cold| cold.and_then(|cold| cold.lexical_call.clone()))
-    }
-
-    /// Makes a released root owner's class state what an indexed entry of
-    /// this function binds (`call_owner_inputs`, compared under one borrow):
-    /// its home object and super constructor, reusing the owner's class
-    /// record. False, changing nothing, when the entry needs a retained
-    /// lexical owner instead.
-    #[inline]
-    pub(crate) fn rebind_class_state(
-        &self,
-        class: &mut Option<Box<crate::context::ClassOwner>>,
-    ) -> bool {
-        // An ordinary function without cold state binds none.
-        if class.is_none() && self.auxiliary.with_cold(|cold| cold.is_none()) {
-            return true;
-        }
-        self.rebind_method_class_state(class)
-    }
-
-    #[inline(never)]
-    fn rebind_method_class_state(
-        &self,
-        class: &mut Option<Box<crate::context::ClassOwner>>,
-    ) -> bool {
-        fn same(left: Option<&Value>, right: Option<&Value>) -> bool {
-            match (left, right) {
-                (None, None) => true,
-                (Some(left), Some(right)) => left.same_value(right),
-                _ => false,
-            }
-        }
-        self.auxiliary.with_cold(|cold| {
-            let (home, super_constructor) = match cold {
-                None => (None, None),
-                Some(cold) if cold.lexical_call.is_none() => {
-                    (cold.home_object.as_ref(), cold.super_constructor.as_ref())
-                }
-                Some(_) => return false,
-            };
-            match class {
-                None if home.is_none() && super_constructor.is_none() => {}
-                Some(_) if home.is_none() && super_constructor.is_none() => *class = None,
-                Some(state)
-                    if same(home, state.home.as_ref())
-                        && same(super_constructor, state.super_constructor.as_ref()) => {}
-                Some(state) => {
-                    state.home = home.cloned();
-                    state.super_constructor = super_constructor.cloned();
-                }
-                None => {
-                    *class = Some(Box::new(crate::context::ClassOwner {
-                        home: home.cloned(),
-                        super_constructor: super_constructor.cloned(),
-                        active_constructor: None,
-                    }))
-                }
-            }
-            true
-        })
     }
 
     /// The call-owner inputs an indexed entry needs, under one borrow: a

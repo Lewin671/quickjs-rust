@@ -28,7 +28,6 @@ pub(super) use super::enumerate_keys_cache::EnumerateKeysCache;
 pub(super) use super::linked_code::PropertyNameId;
 use super::linked_code::{AtomLinks, PropertyNamePool};
 pub(super) use super::named_property_cache::NamedPropertyCache;
-use super::operand_stack::OperandStackRecycler;
 
 /// Packs a statically indexed property read together with an optional local
 /// receiver slot. The packed form is available only when the host word has a
@@ -586,6 +585,12 @@ pub(super) enum Op {
         value: f64,
         skip: usize,
     },
+    /// Explicit scope/reference checkpoint. Side tables are read only here;
+    /// insertion and every PC-bearing map are relocated before tier lowering.
+    BindingBoundary {
+        event: Option<usize>,
+        cleanup: bool,
+    },
 }
 
 pub(super) use super::ir_class::{
@@ -769,16 +774,6 @@ pub struct Bytecode {
         OnceCell<Vec<super::vm_numeric_mutation_loop::NumericMutationLoopPlan>>,
     pub(super) virtual_object_program: OnceCell<super::virtual_object::VirtualObjectProgram>,
     pub(super) template_objects: RefCell<HashMap<usize, Value>>,
-    /// Recycled operand stacks. A recursive or otherwise deeply nested call
-    /// has every enclosing frame holding its own stack at once, so a
-    /// single-slot pool only ever served the outermost frame and every nested
-    /// call allocated and freed one. Cloned bytecode shares the same pool.
-    pub(super) operand_stack_pool: OperandStackRecycler,
-    /// Cleared local-slot allocations reused by completed synchronous calls.
-    pub(super) local_slot_pool: super::operand_stack::LocalSlotRecycler,
-    /// Cleared cold-frame boxes handed back by completed direct calls, so a
-    /// body that opens a `try` on every call does not allocate one per call.
-    pub(super) cold_frame_pool: super::vm::ColdFramePool,
     /// Per-call metadata precomputed once at construction. Each of these used to
     /// be recomputed on every call by recursively walking `code` (and nested
     /// function/class op trees) and materializing a fresh `BTreeSet`/`Vec`,
@@ -894,9 +889,6 @@ impl Bytecode {
             numeric_mutation_loop_plans: OnceCell::new(),
             virtual_object_program: OnceCell::new(),
             template_objects: RefCell::new(HashMap::new()),
-            operand_stack_pool: OperandStackRecycler::new(),
-            local_slot_pool: super::operand_stack::LocalSlotRecycler::new(),
-            cold_frame_pool: super::vm::ColdFramePool::default(),
             cached_closure_referenced_global_names: Vec::new(),
             cached_written_binding_names: Vec::new(),
             cached_closure_written_binding_names: Vec::new(),

@@ -1,7 +1,7 @@
 //! Typed execution ownership. Lexical call state is separate from declarative
 //! bindings and can be retained without copying an activation's name/value view.
 mod call_owner;
-pub(crate) use call_owner::{CallOwner, ClassOwner, LexicalCallContext, OwnerKind, ThisBinding};
+pub(crate) use call_owner::{CallOwner, LexicalCallContext, OwnerKind, ThisBinding};
 mod activation;
 mod creation;
 pub(crate) use activation::{ActivationContext, ExecutionMode};
@@ -26,8 +26,12 @@ pub(crate) struct DirectEvalSite<'a> {
 
 mod services;
 pub(crate) use services::{GroupState, RuntimeGroup, RuntimeServices};
+mod activation_borrow;
+pub(crate) use activation_borrow::{
+    ActivationBorrow, CallRoutes, CallSeed, CallSlotRef, ContextOwner,
+};
 mod facade;
-pub(crate) use facade::Context;
+pub(crate) use facade::{Context, NativeSite};
 mod activation_api;
 mod capabilities;
 

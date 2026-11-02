@@ -1,7 +1,7 @@
 //! Services at the existing communicating-realm/atom boundary. Registry entries
 //! are weak metadata; they neither retain realms nor copy global values. The
-//! released-activation pool holds only creation handles of ordinary calls
-//! that returned, bounded and dropped with the services.
+//! register-stack pool owns only cleared value/header capacity, bounded and
+//! dropped with the services; semantic activations never enter that pool.
 use super::{Realm, realm::RealmState};
 use crate::{ObjectRef, property::atom::AtomDomain};
 use std::{
@@ -79,20 +79,20 @@ pub(crate) struct RuntimeServices {
     pub(crate) binding_debug: crate::binding::BindingDebug,
     #[cfg(feature = "agents")]
     pub(crate) agent: Option<crate::agent::AgentContextRef>,
-    /// Released callback activations (`ActivationContext::release_for_reuse`)
-    /// a later indexed entry rebinds instead of rebuilding.
-    pub(crate) released_activations: Vec<super::ActivationContext>,
+    /// Cleared owning register/header stacks; no activation identity is pooled.
+    pub(crate) frame_stacks: crate::bytecode::frame_bank::StackPool,
 }
 impl RuntimeServices {
     pub(crate) fn for_realm(realm: &Realm) -> Self {
         debug_assert!(realm.group().atoms().ptr_eq(realm.atoms()));
+        let binding_debug = crate::binding::BindingDebug::capture();
         Self {
             group: realm.group().clone(),
             host: HostServices,
-            binding_debug: crate::binding::BindingDebug::capture(),
+            binding_debug,
             #[cfg(feature = "agents")]
             agent: None,
-            released_activations: Vec::new(),
+            frame_stacks: crate::bytecode::frame_bank::StackPool::new(binding_debug.poisoning()),
         }
     }
     /// Explicit retention for the host EvalOutcome Clone API. Internal calls
@@ -104,7 +104,9 @@ impl RuntimeServices {
             binding_debug: self.binding_debug,
             #[cfg(feature = "agents")]
             agent: self.agent.clone(),
-            released_activations: Vec::new(),
+            frame_stacks: crate::bytecode::frame_bank::StackPool::new(
+                self.binding_debug.poisoning(),
+            ),
         }
     }
 }

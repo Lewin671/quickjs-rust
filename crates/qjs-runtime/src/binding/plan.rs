@@ -54,6 +54,8 @@ pub(crate) enum WritePolicy {
     Mutable,
     Throw,
     IgnoreSloppy,
+    /// Compiler-proved Var/simple-parameter initialization; link still validates.
+    InitializedMutable,
 }
 
 #[derive(Clone, Debug)]

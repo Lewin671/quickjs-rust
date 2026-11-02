@@ -11,7 +11,7 @@ use super::{
 };
 use crate::{Value, function::BindingCell};
 
-impl Vm<'_, '_> {
+impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
     pub(super) fn indexed_receiver(&self) -> Option<&Value> {
         self.indexed_call
             .then(|| self.env.initialized_receiver())
@@ -21,8 +21,9 @@ impl Vm<'_, '_> {
     pub(super) fn initial_slots(
         bytecode: &Bytecode,
         env: &crate::context::ActivationContext,
+        pool: &super::frame_pool::GeneralPool,
     ) -> Vec<Slot> {
-        let mut locals = bytecode.take_local_slots(bytecode.locals.len());
+        let mut locals = pool.take_locals(bytecode.locals.len());
         for (slot, route) in bytecode.binding_plan.initial_slots.iter().enumerate() {
             let name = &bytecode.locals[slot].name;
             locals[slot] = match route {

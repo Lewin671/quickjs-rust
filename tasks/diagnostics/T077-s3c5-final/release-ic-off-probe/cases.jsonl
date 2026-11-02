@@ -1,0 +1,6 @@
+{"path":"test/built-ins/TypedArray/prototype/copyWithin/coerced-values-end-detached-prototype.js","rust":"pass","rust_result":"pass","rust_skip":"","quickjs_ng":"pass","quickjs_ng_result":"pass","quickjs_ng_skip":""}
+{"path":"test/built-ins/TypedArray/prototype/copyWithin/coerced-values-end-detached.js","rust":"pass","rust_result":"pass","rust_skip":"","quickjs_ng":"pass","quickjs_ng_result":"pass","quickjs_ng_skip":""}
+{"path":"test/built-ins/TypedArray/prototype/copyWithin/coerced-values-end.js","rust":"pass","rust_result":"pass","rust_skip":"","quickjs_ng":"pass","quickjs_ng_result":"pass","quickjs_ng_skip":""}
+{"path":"test/built-ins/TypedArray/prototype/copyWithin/coerced-values-start-detached.js","rust":"pass","rust_result":"pass","rust_skip":"","quickjs_ng":"pass","quickjs_ng_result":"pass","quickjs_ng_skip":""}
+{"path":"test/built-ins/TypedArray/prototype/copyWithin/coerced-values-start.js","rust":"pass","rust_result":"pass","rust_skip":"","quickjs_ng":"pass","quickjs_ng_result":"pass","quickjs_ng_skip":""}
+{"path":"test/built-ins/TypedArray/prototype/copyWithin/coerced-values-target.js","rust":"pass","rust_result":"pass","rust_skip":"","quickjs_ng":"pass","quickjs_ng_result":"pass","quickjs_ng_skip":""}

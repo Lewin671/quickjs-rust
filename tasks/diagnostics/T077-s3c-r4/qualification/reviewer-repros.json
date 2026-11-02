@@ -1,0 +1,77 @@
+[
+  {
+    "file": "depth-general-vm.js",
+    "profile": "release",
+    "source_sha256": "8d875680e3f2291150f2306308480be6c413f5ae6002061d53a84ab2bcdff212",
+    "results": {
+      "s3b": {
+        "exit": 0,
+        "stdout": "R 1750\nUndefined\n",
+        "stderr": "",
+        "binary_sha256": "0f7a1cd066c140864a10f906ab9a09e54a13dbb344fb7bd30df671174e10f014"
+      },
+      "predecessor": {
+        "exit": -6,
+        "stdout": "",
+        "stderr": "\nthread 'main' (496271613) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n",
+        "binary_sha256": "83fa2730036dc0bf34b9e9f181e7734731f5df22e7845cda05b020118af10c66"
+      },
+      "repair": {
+        "exit": 0,
+        "stdout": "R 1750\nUndefined\n",
+        "stderr": "",
+        "binary_sha256": "4c47a004d3f64d63d6a4797ab300013ee00587e2344af3161d64daa0a62d9018"
+      }
+    }
+  },
+  {
+    "file": "depth-general-vm-debug.js",
+    "profile": "debug",
+    "source_sha256": "23929c16e2e42fcc80a27aaf8c04af03c08a991a2b3bf92ee4757886bd5b9da4",
+    "results": {
+      "s3b": {
+        "exit": 0,
+        "stdout": "R 480\nUndefined\n",
+        "stderr": "",
+        "binary_sha256": "d99425759f035516a0a658aa54d9cf8e2dbf2023aa8446d72f570fb1d7344d90"
+      },
+      "predecessor": {
+        "exit": -6,
+        "stdout": "",
+        "stderr": "\nthread 'main' (496271699) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n",
+        "binary_sha256": "32acdf6eb6a75165788d73d73a0dd4016ff8a765b237642c6a294103a4af6066"
+      },
+      "repair": {
+        "exit": 0,
+        "stdout": "R 480\nUndefined\n",
+        "stderr": "",
+        "binary_sha256": "90aeae2aeae8c57aa01927292d7b1fe912c807b391bcc0e85c6367b063acbcf9"
+      }
+    }
+  },
+  {
+    "file": "depth-general-vm-construct.js",
+    "profile": "release",
+    "source_sha256": "30a97c3e0a8e6d7e014420be4a6cdc8c049d56d73c9179e92f2c2e874a9863f2",
+    "results": {
+      "s3b": {
+        "exit": 0,
+        "stdout": "R 1730\nUndefined\n",
+        "stderr": "",
+        "binary_sha256": "0f7a1cd066c140864a10f906ab9a09e54a13dbb344fb7bd30df671174e10f014"
+      },
+      "predecessor": {
+        "exit": -6,
+        "stdout": "",
+        "stderr": "\nthread 'main' (496271718) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n",
+        "binary_sha256": "83fa2730036dc0bf34b9e9f181e7734731f5df22e7845cda05b020118af10c66"
+      },
+      "repair": {
+        "exit": 0,
+        "stdout": "R 1730\nUndefined\n",
+        "stderr": "",
+        "binary_sha256": "4c47a004d3f64d63d6a4797ab300013ee00587e2344af3161d64daa0a62d9018"
+      }
+    }
+  }
+]

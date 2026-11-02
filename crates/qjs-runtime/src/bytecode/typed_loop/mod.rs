@@ -568,7 +568,7 @@ pub(super) struct TypedLoopProgram {
     /// own register (`hoist`).
     hoisted_reads: Vec<TypedOp>,
     /// Entry effect proofs for the optional call-hoisted operation list.
-    native_call_guards: Vec<pure_calls::Guard>,
+    pure_call_guards: Vec<pure_calls::Guard>,
     /// Independently lowered normal region, selected before effects on proof failure.
     unhoisted: Option<Box<TypedLoopProgram>>,
     /// Created only after the first native entry, so a program that compiles

@@ -872,7 +872,7 @@ pub(super) fn native_global_eval(
         let mut activation = enter_indirect_eval(env);
         let mut selected = crate::context::Context {
             runtime: env.runtime,
-            activation: &mut activation,
+            activation: (&mut activation).into(),
             native: None,
         };
         scoped_eval::evaluate(&bytecode, &mut selected, bytecode.is_strict())
@@ -1020,7 +1020,7 @@ pub(super) fn native_eval_script(
         &bytecode,
         &mut crate::context::Context {
             runtime: env.runtime,
-            activation: &mut eval_env,
+            activation: (&mut eval_env).into(),
             native: None,
         },
     );

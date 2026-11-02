@@ -1,0 +1,38 @@
+{
+  "stage": "initial C2 draft before storage-clear repair",
+  "parent": "52422927",
+  "base": "8322fc98",
+  "timing": false,
+  "binary_sha256": {
+    "before": "0f7a1cd066c140864a10f906ab9a09e54a13dbb344fb7bd30df671174e10f014",
+    "after": "cc49c5ccdd1a6e5177aec364273affa5f95916d59e580193b0a4081d9b63e616"
+  },
+  "samples": [
+    {
+      "name": "upw0",
+      "before": 1038582469,
+      "after": 1958575020
+    },
+    {
+      "name": "upw1",
+      "before": 1354800280,
+      "after": 2292893160
+    },
+    {
+      "name": "upw4",
+      "before": 2296595007,
+      "after": 3243712555
+    },
+    {
+      "name": "vm-ops-local",
+      "before": 4790396206,
+      "after": 5350014497
+    },
+    {
+      "name": "call-implicit-global-write",
+      "before": 6750602832,
+      "after": 8035741792
+    }
+  ],
+  "standing": "diagnostic only, not frozen or timed; local instructions exposed a storage clear/bookkeeping regression"
+}

@@ -48,7 +48,7 @@ fn compile(bytecode: &Bytecode, header: usize, backedge: usize) -> Option<TypedL
     let Some(mut program) = compile_variant(bytecode, header, backedge, true) else {
         return compile_variant(bytecode, header, backedge, false);
     };
-    if !program.native_call_guards.is_empty() {
+    if !program.pure_call_guards.is_empty() {
         program.unhoisted = Some(Box::new(compile_variant(
             bytecode, header, backedge, false,
         )?));
@@ -217,7 +217,7 @@ fn compile_variant(
         &mut boxed_count,
         allow_native_calls,
     );
-    let native_call_guards = if allow_native_calls
+    let pure_call_guards = if allow_native_calls
         && !hoisted_reads.is_empty()
         && ops
             .iter()
@@ -312,7 +312,7 @@ fn compile_variant(
         boxed_constant_registers: boxed_constants,
         cache_count,
         hoisted_reads,
-        native_call_guards,
+        pure_call_guards,
         unhoisted: None,
         scratch_pool: OnceCell::new(),
     })
@@ -1248,6 +1248,7 @@ impl<'a> Builder<'a> {
 
     fn compile_op(&mut self, op: &Op, ip: usize) -> Option<()> {
         match op {
+            Op::BindingBoundary { .. } => {}
             Op::LoadConst(index) => {
                 let constant = self.bytecode.constants.get(*index)?;
                 match Typed::from_value(constant) {

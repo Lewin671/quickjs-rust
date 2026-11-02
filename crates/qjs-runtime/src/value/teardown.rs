@@ -39,3 +39,26 @@ pub(crate) fn release(mut pending: Vec<Value>) {
         }
     }
 }
+
+/// Drop an owned slot without an out-of-line drop for non-owning primitives.
+/// Resource variants always keep their ordinary destruction behavior.
+#[inline(always)]
+pub(crate) fn clear_value(value: &mut Value) {
+    let previous = std::mem::replace(value, Value::Undefined);
+    discard(previous);
+}
+
+#[inline(always)]
+fn discard(value: Value) {
+    match value {
+        Value::Number(_) | Value::Boolean(_) | Value::Null | Value::Undefined => {}
+        Value::BigInt(value) => drop(value),
+        Value::String(value) => drop(value),
+        Value::Function(value) => drop(value),
+        Value::Array(value) => drop(value),
+        Value::Object(value) => drop(value),
+        Value::Proxy(value) => drop(value),
+        Value::Map(value) => drop(value),
+        Value::Set(value) => drop(value),
+    }
+}

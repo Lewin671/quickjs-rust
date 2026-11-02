@@ -1,0 +1,35 @@
+{
+  "engine": "both",
+  "filter": "",
+  "limit": "all",
+  "shard": {"index": 2, "total": 4},
+  "total": 13393,
+  "configured": 10665,
+  "eligible": 10665,
+  "run": 10665,
+  "skipped": {
+    "total": 2728,
+    "async": 0,
+    "features": 2660,
+    "fixture": 68,
+    "includes": 0,
+    "intl402": 0,
+    "module": 0,
+    "negative": 0,
+    "raw": 0,
+    "syntax": 0
+  },
+  "rust_not_run": 0,
+  "quickjs_rust": {"pass": 10665, "fail": 0, "timeout": 0, "skipped": 0},
+  "quickjs_ng": {"pass": 10645, "fail": 20, "timeout": 0, "skipped": 0},
+  "comparison": {
+    "both_pass": 10645,
+    "quickjs_ng_pass_rust_nonpass": 0,
+    "quickjs_ng_pass_rust_not_run": 0,
+    "quickjs_ng_pass_rust_fail": 0,
+    "quickjs_ng_pass_rust_timeout": 0,
+    "rust_pass_quickjs_ng_nonpass": 20,
+    "both_nonpass": 0,
+    "both_fail_or_timeout": 0
+  }
+}

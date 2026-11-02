@@ -5,7 +5,7 @@ use crate::function::BindingCell;
 use super::ir::Bytecode;
 use super::vm::Vm;
 
-impl Vm<'_, '_> {
+impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
     pub(super) fn captured_upvalues_for_function(
         &mut self,
         function_bytecode: &Bytecode,
@@ -98,6 +98,15 @@ impl Vm<'_, '_> {
             self.local_upvalues.resize_with(slot + 1, || None);
         }
         self.local_upvalues[slot] = Some(upvalue.clone());
+        // Promotion links the compiler-selected own route exactly once. A
+        // later read/write uses this slot's cell, never a name or value cache.
+        if slot < 128
+            && !self.env.has_global_binding_root()
+            && upvalue.validates_initialized_mutable(&self.bytecode.locals[slot].name)
+        {
+            self.initialized_mutable_slots |= 1_u128 << slot;
+            crate::diagnostics::count!(initialized_mutable_frame_routes);
+        }
         if slot < u128::BITS as usize {
             self.authoritative_slots &= !(1_u128 << slot);
         }

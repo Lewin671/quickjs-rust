@@ -41,6 +41,22 @@ CASES = {
         "function f(n){return n?1+f(n-1):0;} var result;[0].forEach(function(){result=f(DEPTH);});result;",
         str,
     ),
+    # Review round 4: direct-leaf admission can still decline every register
+    # tier. These retain a general VM on every recursive native call.
+    "try_catch": (
+        "function f(n){try{return n===0?0:f(n-1)+1;}catch(e){throw e;}} f(DEPTH);", str,
+    ),
+    "construct": (
+        "function C(n){try{this.c=n===0?0:new C(n-1).c+1;}catch(e){throw e;}} new C(DEPTH).c;", str,
+    ),
+    "spread": ("function f(n){return n===0?0:f(...[n-1])+1;} f(DEPTH);", str),
+    "arguments": ("function f(n){return n===0?0:f(n-1)+arguments.length;} f(DEPTH);", str),
+    "super": (
+        "class B{m(n){return n;}} class D extends B{m(n){return n===0?0:super.m(1)+this.m(n-1);}} var d=new D(); d.m(DEPTH);", str,
+    ),
+    "general_vm": (
+        "var N=DEPTH;function g(n){try{return n===0?0:g(n-1)+1;}catch(e){throw e;}} g(N);", str,
+    ),
 }
 
 
@@ -122,6 +138,7 @@ def main():
     parser.add_argument("--output", required=True)
     parser.add_argument("--cap", type=int, default=4096)
     parser.add_argument("--cases", nargs="*", choices=list(CASES), default=list(CASES))
+    parser.add_argument("--baseline", type=Path, help="Complete prior matrix; fail on any lost depth")
     args = parser.parse_args()
     if args.cap <= 0:
         parser.error("--cap must be positive")
@@ -145,6 +162,20 @@ def main():
             Path(args.output).write_text(json.dumps(results, indent=2) + "\n")
             print(args.label, profile, case, row["largest_pass"],
                   row.get("failure_kind", "cap"), flush=True)
+
+    if args.baseline:
+        baseline = json.loads(args.baseline.read_text())
+        losses = []
+        for profile, data in results["profiles"].items():
+            prior = baseline["profiles"][profile]["cases"]
+            assert set(prior) == set(data["cases"]), "depth inventories differ"
+            for case, row in data["cases"].items():
+                if row["largest_pass"] < prior[case]["largest_pass"]:
+                    losses.append([profile, case, prior[case]["largest_pass"], row["largest_pass"]])
+        results["gate"] = {"baseline_sha256": hashlib.sha256(args.baseline.read_bytes()).hexdigest(),
+                           "lost_depth": losses, "passed": not losses}
+        Path(args.output).write_text(json.dumps(results, indent=2) + "\n")
+        assert not losses, losses
 
 
 if __name__ == "__main__":

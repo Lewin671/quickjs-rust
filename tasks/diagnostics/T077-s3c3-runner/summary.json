@@ -1,0 +1,76 @@
+{
+  "job": "20261102T054839Z-t077-s3c2-c3",
+  "candidate": "bc17ccea4392a5392fd3d713129806df18f379e6",
+  "base": "8322fc983da20800ce612ad148781aea30e28d08",
+  "builds": {
+    "base": {
+      "cache_hit": true,
+      "cache_key": "4c20d0a2f737aaa532faf646d646f39ce08299c76eab6aee8283f14c105e8fc4",
+      "cache_spec_sha256": "eb97e1e25facf6ad38d83a0ee72a798bc5caf2458e23459c896d5ecb424ae29f",
+      "path": "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261102T054839Z-t077-s3c2-c3/out/triage/base000/qjs",
+      "revision": "8322fc983da20800ce612ad148781aea30e28d08",
+      "sha256": "a02658e5e8a8d23f5da0197fcf29266d82da35f0ba511d09d4461c8c4a71b09d"
+    },
+    "candidate": {
+      "cache_hit": false,
+      "cache_key": "6916fa8b47ab15ae6859a712902261b4e2197f8a0bc648e2e145e539ed80ab9a",
+      "cache_spec_sha256": "6f7b1b2f7299450dfcc8f0d93345751ff481a91d8e86b69f59ac834da6263626",
+      "path": "/Users/qingyingliu/Code/co-work-space/tmp/bench-queue/20261102T054839Z-t077-s3c2-c3/out/triage/cand000/qjs",
+      "revision": "bc17ccea4392a5392fd3d713129806df18f379e6",
+      "sha256": "0ac9b1a91ca5282e274dc33575bc1aea735c88deb6d37de42021354c82a685ac"
+    }
+  },
+  "counts": {
+    "attempts": 430,
+    "heavy_samples": 0,
+    "invalid": 0,
+    "valid": 430
+  },
+  "verdict": "likely loss",
+  "budget_met": true,
+  "stage_seconds": {
+    "analysis": 11.241916191065684,
+    "build_base": 1.031847527017817,
+    "build_candidate": 79.83222822099924,
+    "build_quieting": 0.029565717093646526,
+    "collection": 396.40831078914925,
+    "command_total": 498.73901393217966,
+    "end_to_end": 559.498587846756,
+    "prepare_workloads": 0.32077250885777175,
+    "queue_quieting": 60.80001902580261,
+    "seal_and_replay": 8.104767241049558,
+    "settle_and_launch": 1.4033419801853597,
+    "validate_and_freeze": 0.15420870203524828
+  },
+  "lanes": {
+    "development": {
+      "cases": 10,
+      "wall_ns": 0.958058798206005,
+      "instructions": 0.9818099870878868
+    },
+    "external": {
+      "cases": 45,
+      "wall_ns": 0.995801736821766,
+      "instructions": 0.9958182897408492
+    },
+    "broad": {
+      "cases": 25,
+      "wall_ns": 0.9408227486171769,
+      "instructions": 0.946315192941577
+    },
+    "sentinel": {
+      "cases": 6,
+      "wall_ns": 0.9573117049181535,
+      "instructions": 0.9532087131323023
+    },
+    "selection": {
+      "cases": 86,
+      "wall_ns": 0.9724273622888537,
+      "instructions": 0.9765676900441211
+    }
+  },
+  "instruction_gate_met": true,
+  "aggregation": "unweighted geometric means of frozen public case ratios; exploratory triage only",
+  "submission": "idle queue, 05:48 UTC outside blackout; runner ref transfer only",
+  "source_and_request_sha256": "2e6f642059510802057426446fe7a3a0be177f4b6c455eb2b7e40fafb923b465"
+}

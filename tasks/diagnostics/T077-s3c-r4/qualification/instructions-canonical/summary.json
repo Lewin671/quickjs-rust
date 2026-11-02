@@ -1,0 +1,228 @@
+{
+  "count": 109,
+  "geomean": 0.9998662868150343,
+  "lanes": {
+    "development": 0.9996699543096922,
+    "external": 0.9999752140349859,
+    "broad": 1.0002076177137276,
+    "sentinel": 0.9999664391091743,
+    "repro": 0.9992778059114967,
+    "diagnostic": 1.0000118459696685
+  },
+  "worst": [
+    {
+      "id": "broad/empty_loop",
+      "sha256": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
+      "args": [
+        "empty_loop",
+        "100000"
+      ],
+      "stdout_sha256": "c8b06f8d98684f866abcbd193123761f2b35d153b2829bbe62de6a25d8121302",
+      "instructions": {
+        "before": [
+          44641625,
+          44637914,
+          44670533
+        ],
+        "after": [
+          44678274,
+          44682978,
+          44693951
+        ]
+      },
+      "ratio": 1.0009263327667843
+    },
+    {
+      "id": "broad/local_read",
+      "sha256": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
+      "args": [
+        "local_read",
+        "100000"
+      ],
+      "stdout_sha256": "fbed6547fd111b05b327c172c10000f9720894c1b02d9b18477bcc7a119c8a50",
+      "instructions": {
+        "before": [
+          53499342,
+          53497245,
+          53499778
+        ],
+        "after": [
+          53565008,
+          53525513,
+          53532037
+        ]
+      },
+      "ratio": 1.0006111290116428
+    },
+    {
+      "id": "external/kraken-1.1/audio-beat-detection",
+      "sha256": "2e7487f8cf34c54dc4da4dc2d866364af22c490f2d6650d08c169bda878ffa9b",
+      "args": [],
+      "stdout_sha256": "0581a6af0439f7a2ef5c87b620188cd3a9715e32e4c58478dff308d32f2848a8",
+      "instructions": {
+        "before": [
+          16887507698,
+          16861657039,
+          16906799049
+        ],
+        "after": [
+          16897667024,
+          16714401706,
+          16915162834
+        ]
+      },
+      "ratio": 1.000601588237985
+    },
+    {
+      "id": "external/jetstream3-js-subset/stanford-crypto-aes",
+      "sha256": "7afbe130da966d379938ae8160dada27f991bba82cc0d1b85b4df86f1c2ad94f",
+      "args": [],
+      "stdout_sha256": "0581a6af0439f7a2ef5c87b620188cd3a9715e32e4c58478dff308d32f2848a8",
+      "instructions": {
+        "before": [
+          3005322938,
+          3007389105,
+          3005047356
+        ],
+        "after": [
+          3007719760,
+          3006725255,
+          3004547259
+        ]
+      },
+      "ratio": 1.0004666110860396
+    },
+    {
+      "id": "broad/captured_read",
+      "sha256": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
+      "args": [
+        "captured_read",
+        "100000"
+      ],
+      "stdout_sha256": "319d5db50ef6d78caef688628756e68b2be0df9fdefcd72bcfafd8a3ffda7e2d",
+      "instructions": {
+        "before": [
+          83268688,
+          83261724,
+          83300250
+        ],
+        "after": [
+          83307681,
+          83300973,
+          83275965
+        ]
+      },
+      "ratio": 1.0003877207720626
+    },
+    {
+      "id": "broad/global_read",
+      "sha256": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
+      "args": [
+        "global_read",
+        "100000"
+      ],
+      "stdout_sha256": "353d0e1e24e91a06ae9630742e22fe9979c8125135b306ed4f3e424f2ba94ed1",
+      "instructions": {
+        "before": [
+          49115913,
+          49085527,
+          49073428
+        ],
+        "after": [
+          49108233,
+          49098567,
+          49100573
+        ]
+      },
+      "ratio": 1.0003065261986492
+    },
+    {
+      "id": "broad/branch_arithmetic",
+      "sha256": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
+      "args": [
+        "branch_arithmetic",
+        "100000"
+      ],
+      "stdout_sha256": "6a71c148e24c28260fb9dd03b9ef34ff345d9db1cb2b90a81d25d435be66d7e5",
+      "instructions": {
+        "before": [
+          63464018,
+          63520003,
+          63462153
+        ],
+        "after": [
+          63465097,
+          63484212,
+          63483105
+        ]
+      },
+      "ratio": 1.0003007530976056
+    },
+    {
+      "id": "broad/math_abs",
+      "sha256": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
+      "args": [
+        "math_abs",
+        "100000"
+      ],
+      "stdout_sha256": "d84d0fca85a4925e0f5915380b184efc71efce617ded81afa420e266aaad5e13",
+      "instructions": {
+        "before": [
+          67425794,
+          67416374,
+          67444686
+        ],
+        "after": [
+          67443595,
+          67436901,
+          67448887
+        ]
+      },
+      "ratio": 1.0002640087560555
+    },
+    {
+      "id": "broad/object_allocation",
+      "sha256": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
+      "args": [
+        "object_allocation",
+        "100000"
+      ],
+      "stdout_sha256": "7854bfee6daf37230604c947f26b970e4b6c2fcc368bd95ffc9c37858c833a52",
+      "instructions": {
+        "before": [
+          139266550,
+          139250357,
+          139259453
+        ],
+        "after": [
+          139270601,
+          139312221,
+          139294600
+        ]
+      },
+      "ratio": 1.0002523850212164
+    },
+    {
+      "id": "broad/property_dynamic_read",
+      "sha256": "e4c79e512f11bd3716cba0f2a85d650cc120594b6f06370acd92f74952c3248c",
+      "args": [
+        "property_dynamic_read",
+        "100000"
+      ],
+      "stdout_sha256": "1a86b867fdbec0ddaf46a4208d1606e32e6879178fe9519b9d4c6eade5d2359c",
+      "instructions": {
+        "before": [
+          133786687,
+          133795199,
+          133804170
+        ],
+        "after": [
+          133828643,
+          133820028,
+          133836622
+        ]
+      },
+      "ratio": 1.0002499641261418
+    }
+  ]
+}

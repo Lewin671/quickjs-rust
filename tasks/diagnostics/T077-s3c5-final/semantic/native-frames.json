@@ -1,0 +1,141 @@
+{
+  "debug": {
+    "binary_sha256": "32acdf6eb6a75165788d73d73a0dd4016ff8a765b237642c6a294103a4af6066",
+    "symbols": [
+      {
+        "symbol": "qjs_runtime::bytecode::compact_fn::activation::run_frames",
+        "raw": "__RNvNtNtNtCsDkse6Kjjuy_11qjs_runtime8bytecode10compact_fn10activation10run_frames",
+        "native_frame_bytes_from_prologue": 4016,
+        "prologue": [
+          "100100fe0: a9be6ffc    \tstp\tx28, x27, [sp, #-0x20]!",
+          "100100fe4: a9017bfd    \tstp\tx29, x30, [sp, #0x10]",
+          "100100fe8: 910043fd    \tadd\tx29, sp, #0x10",
+          "100100fec: d13e43ff    \tsub\tsp, sp, #0xf90",
+          "100100ff0: f90003ff    \tstr\txzr, [sp]",
+          "100100ff4: 910f83e9    \tadd\tx9, sp, #0x3e0",
+          "100100ff8: f9017be9    \tstr\tx9, [sp, #0x2f0]",
+          "100100ffc: f9017fe8    \tstr\tx8, [sp, #0x2f8]",
+          "100101000: f90183e0    \tstr\tx0, [sp, #0x300]",
+          "100101004: f90187e1    \tstr\tx1, [sp, #0x308]",
+          "100101008: f9018be2    \tstr\tx2, [sp, #0x310]",
+          "10010100c: f9018fe3    \tstr\tx3, [sp, #0x318]",
+          "100101010: f90193e4    \tstr\tx4, [sp, #0x320]",
+          "100101014: f9040be0    \tstr\tx0, [sp, #0x810]",
+          "100101018: f9040fe1    \tstr\tx1, [sp, #0x818]",
+          "10010101c: f90413e2    \tstr\tx2, [sp, #0x820]",
+          "100101020: f90417e3    \tstr\tx3, [sp, #0x828]",
+          "100101024: f9041be4    \tstr\tx4, [sp, #0x830]",
+          "100101028: 39203fff    \tstrb\twzr, [sp, #0x80f]",
+          "10010102c: 39203bff    \tstrb\twzr, [sp, #0x80e]",
+          "100101030: 392037ff    \tstrb\twzr, [sp, #0x80d]",
+          "100101034: 14000001    \tb\t0x100101038 <__RNvNtNtNtCsDkse6Kjjuy_11qjs_runtime8bytecode10compact_fn10activation10run_frames+0x58>",
+          "100101038: f94193e8    \tldr\tx8, [sp, #0x320]",
+          "10010103c: 91006100    \tadd\tx0, x8, #0x18"
+        ]
+      },
+      {
+        "symbol": "qjs_runtime::bytecode::compact_fn::wide::activation::run",
+        "raw": "__RNvNtNtNtNtCsDkse6Kjjuy_11qjs_runtime8bytecode10compact_fn4wide10activation3run",
+        "native_frame_bytes_from_prologue": 224,
+        "prologue": [
+          "10045a050: d10383ff    \tsub\tsp, sp, #0xe0",
+          "10045a054: a90d7bfd    \tstp\tx29, x30, [sp, #0xd0]",
+          "10045a058: 910343fd    \tadd\tx29, sp, #0xd0",
+          "10045a05c: f90017e1    \tstr\tx1, [sp, #0x28]",
+          "10045a060: aa0203e1    \tmov\tx1, x2",
+          "10045a064: f94017e2    \tldr\tx2, [sp, #0x28]",
+          "10045a068: f9001be1    \tstr\tx1, [sp, #0x30]",
+          "10045a06c: f9001fe3    \tstr\tx3, [sp, #0x38]",
+          "10045a070: f90023e4    \tstr\tx4, [sp, #0x40]",
+          "10045a074: aa0503ee    \tmov\tx14, x5",
+          "10045a078: f9401be5    \tldr\tx5, [sp, #0x30]",
+          "10045a07c: aa0603ed    \tmov\tx13, x6",
+          "10045a080: f9401fe6    \tldr\tx6, [sp, #0x38]",
+          "10045a084: aa0703ec    \tmov\tx12, x7",
+          "10045a088: f94023e7    \tldr\tx7, [sp, #0x40]",
+          "10045a08c: f9400bab    \tldr\tx11, [x29, #0x10]",
+          "10045a090: f9400faa    \tldr\tx10, [x29, #0x18]",
+          "10045a094: aa0003e9    \tmov\tx9, x0",
+          "10045a098: f90037e9    \tstr\tx9, [sp, #0x68]",
+          "10045a09c: aa0203e1    \tmov\tx1, x2",
+          "10045a0a0: f81a03a1    \tstur\tx1, [x29, #-0x60]",
+          "10045a0a4: aa0503e9    \tmov\tx9, x5",
+          "10045a0a8: f81a83a9    \tstur\tx9, [x29, #-0x58]",
+          "10045a0ac: aa0603e3    \tmov\tx3, x6"
+        ]
+      },
+      {
+        "symbol": "qjs_runtime::bytecode::compact_fn::wide::activation::run_root",
+        "raw": "__RNvNtNtNtNtCsDkse6Kjjuy_11qjs_runtime8bytecode10compact_fn4wide10activation8run_root",
+        "native_frame_bytes_from_prologue": 8832,
+        "prologue": [
+          "10045a420: a9be6ffc    \tstp\tx28, x27, [sp, #-0x20]!",
+          "10045a424: a9017bfd    \tstp\tx29, x30, [sp, #0x10]",
+          "10045a428: 910043fd    \tadd\tx29, sp, #0x10",
+          "10045a42c: d14007ff    \tsub\tsp, sp, #0x1, lsl #12   ; =0x1000",
+          "10045a430: f90003ff    \tstr\txzr, [sp]",
+          "10045a434: d14007ff    \tsub\tsp, sp, #0x1, lsl #12   ; =0x1000",
+          "10045a438: f90003ff    \tstr\txzr, [sp]",
+          "10045a43c: d10983ff    \tsub\tsp, sp, #0x260",
+          "10045a440: 914007e9    \tadd\tx9, sp, #0x1, lsl #12   ; =0x1000",
+          "10045a444: 91312129    \tadd\tx9, x9, #0xc48",
+          "10045a448: f902ebe9    \tstr\tx9, [sp, #0x5d0]",
+          "10045a44c: 914007e9    \tadd\tx9, sp, #0x1, lsl #12   ; =0x1000",
+          "10045a450: 91243529    \tadd\tx9, x9, #0x90d",
+          "10045a454: f902efe9    \tstr\tx9, [sp, #0x5d8]",
+          "10045a458: 9123a3e9    \tadd\tx9, sp, #0x8e8",
+          "10045a45c: f902f3e9    \tstr\tx9, [sp, #0x5e0]",
+          "10045a460: f902f7e8    \tstr\tx8, [sp, #0x5e8]",
+          "10045a464: f902fbe0    \tstr\tx0, [sp, #0x5f0]",
+          "10045a468: f902ffe3    \tstr\tx3, [sp, #0x5f8]",
+          "10045a46c: f90303e4    \tstr\tx4, [sp, #0x600]",
+          "10045a470: f90307e5    \tstr\tx5, [sp, #0x608]",
+          "10045a474: f9400bab    \tldr\tx11, [x29, #0x10]",
+          "10045a478: f9030beb    \tstr\tx11, [sp, #0x610]",
+          "10045a47c: f9400faa    \tldr\tx10, [x29, #0x18]"
+        ]
+      }
+    ],
+    "not_emitted": []
+  },
+  "release": {
+    "binary_sha256": "83fa2730036dc0bf34b9e9f181e7734731f5df22e7845cda05b020118af10c66",
+    "symbols": [
+      {
+        "symbol": "qjs_runtime::bytecode::compact_fn::wide::activation::run_root",
+        "raw": "__RNvNtNtNtNtCsblixXWptGqc_11qjs_runtime8bytecode10compact_fn4wide10activation8run_root",
+        "native_frame_bytes_from_prologue": 1120,
+        "prologue": [
+          "10011ccf0: 6db923e9    \tstp\td9, d8, [sp, #-0x70]!",
+          "10011ccf4: a9016ffc    \tstp\tx28, x27, [sp, #0x10]",
+          "10011ccf8: a90267fa    \tstp\tx26, x25, [sp, #0x20]",
+          "10011ccfc: a9035ff8    \tstp\tx24, x23, [sp, #0x30]",
+          "10011cd00: a90457f6    \tstp\tx22, x21, [sp, #0x40]",
+          "10011cd04: a9054ff4    \tstp\tx20, x19, [sp, #0x50]",
+          "10011cd08: a9067bfd    \tstp\tx29, x30, [sp, #0x60]",
+          "10011cd0c: 910183fd    \tadd\tx29, sp, #0x60",
+          "10011cd10: d10fc3ff    \tsub\tsp, sp, #0x3f0",
+          "10011cd14: aa0703f3    \tmov\tx19, x7",
+          "10011cd18: aa0603fb    \tmov\tx27, x6",
+          "10011cd1c: aa0503f4    \tmov\tx20, x5",
+          "10011cd20: aa0403f5    \tmov\tx21, x4",
+          "10011cd24: f90063e3    \tstr\tx3, [sp, #0xc0]",
+          "10011cd28: f9004fe2    \tstr\tx2, [sp, #0x98]",
+          "10011cd2c: f9006be1    \tstr\tx1, [sp, #0xd0]",
+          "10011cd30: f9400bad    \tldr\tx13, [x29, #0x10]",
+          "10011cd34: a91437e7    \tstp\tx7, x13, [sp, #0x140]",
+          "10011cd38: f94008c8    \tldr\tx8, [x6, #0x10]",
+          "10011cd3c: f90037e0    \tstr\tx0, [sp, #0x68]",
+          "10011cd40: f90053ed    \tstr\tx13, [sp, #0xa0]",
+          "10011cd44: b4000228    \tcbz\tx8, 0x10011cd88 <__RNvNtNtNtNtCsblixXWptGqc_11qjs_runtime8bytecode10compact_fn4wide10activation8run_root+0x98>",
+          "10011cd48: d1000508    \tsub\tx8, x8, #0x1",
+          "10011cd4c: f9000b68    \tstr\tx8, [x27, #0x10]"
+        ]
+      }
+    ],
+    "not_emitted": [
+      "qjs_runtime::bytecode::compact_fn::activation::run_frames",
+      "qjs_runtime::bytecode::compact_fn::wide::activation::run"
+    ]
+  }
+}

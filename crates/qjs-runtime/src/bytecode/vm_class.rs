@@ -17,7 +17,7 @@ use super::ir::{
 };
 use super::vm::Vm;
 
-impl Vm<'_, '_> {
+impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
     /// Builds and installs a single method/accessor on the prototype (instance)
     /// or the constructor (static).
     pub(super) fn install_method(

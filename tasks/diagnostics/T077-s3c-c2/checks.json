@@ -1,0 +1,24 @@
+{
+  "s3c-c2-full-final-source": {
+    "log_sha256": "9a9c0253bb2957428fe4e1f7545a98d357fed75700bf94654612791794174f77",
+    "conclusion": "check: ok Test262 subset (182s)"
+  },
+  "s3c-c2-fast-final-source": {
+    "log_sha256": "e210915130b343f4abf3f310b3b0e56531edf4dd897f01d0cfba535b7d976ffb",
+    "conclusion": "ok: ran 117 Test262 subset cases"
+  },
+  "s3c-c2-counters-final-source": {
+    "log_sha256": "2513ae4ad246845bcd9a55a57ab19c7b44eda00495532395ff011a92ffccc3e4",
+    "conclusion": ""
+  },
+  "s3c-c2-x86-final-source": {
+    "log_sha256": "e53b6357473898912ac3dba0ad8a24c911c7726096433403e08e0777e5a063d7",
+    "conclusion": "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.87s"
+  },
+  "runtime_source_tree_sha256": "a0e9be45f1e2fb1a7f537b32195cb9b9620b3a9ed27c3b1934227abcfb81304a",
+  "parent": "52422927",
+  "candidate": "C2 source in this commit",
+  "stress_unit_sha256": "c13fc0086c680b5640bcfc32e1d83e8bc7c69cfc7ce8f12e191769114d45f8c2",
+  "verify_recipe": "cargo build --release -p qjs-cli --config profile.release.debug-assertions=true --config profile.release.overflow-checks=true",
+  "public_verify_binary_sha256": "462d70f8a64158cc496629b5de704cd8dc3fb9ea6b38b2a4000f7c0526e280c4"
+}

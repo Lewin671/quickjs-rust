@@ -1,0 +1,146 @@
+pre-commit: change-aware fast checks...
+check-touched: mode=staged
+check-touched: changed files:
+  crates/qjs-runtime/src/bytecode/frame_stack.rs
+  crates/qjs-runtime/src/bytecode/vm.rs
+  crates/qjs-runtime/src/bytecode/vm/inline_data.rs
+  docs/design/core-rebuild-execution.md
+  docs/design/env-model-checkpoints.md
+  tasks/T077-core-rebuild.md
+  tasks/diagnostics/T077-s3a-depth-probe.py
+  tasks/diagnostics/T077-s3c-r4/README.md
+  tasks/diagnostics/T077-s3c-r4/instructions.py
+  tasks/diagnostics/T077-s3c-r4/native_frames.py
+  tasks/diagnostics/T077-s3c-r4/s3c-findings/depth-general-vm-construct.js
+  tasks/diagnostics/T077-s3c-r4/s3c-findings/depth-general-vm-debug.js
+  tasks/diagnostics/T077-s3c-r4/s3c-findings/depth-general-vm.js
+  tasks/diagnostics/T077-s3c-r4/s3c-findings/pre-duplicate-params.js
+  tasks/diagnostics/T077-s3c-r4/s3c-findings/pre-nested-finally-continue.js
+check-touched: /Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3c2/scripts/check-context.py
+check-context: ok
+check-touched: cargo fmt --all -- --check
+check-touched: cargo clippy --workspace --all-targets -- -D warnings
+    Blocking waiting for file lock on build directory
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 10.37s
+check-touched: /Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3c2/scripts/check-file-size.sh
+check-touched: cargo test -p qjs-runtime -q
+
+running 2754 tests
+....................................................................................... 87/2754
+....................................................................................... 174/2754
+....................................................................................... 261/2754
+....................................................................................... 348/2754
+....................................................................................... 435/2754
+....................................................................................... 522/2754
+....................................................................................... 609/2754
+....................................................................................... 696/2754
+....................................................................................... 783/2754
+....................................................................................... 870/2754
+....................................................................................... 957/2754
+....................................................................................... 1044/2754
+....................................................................................... 1131/2754
+....................................................................................... 1218/2754
+....................................................................................... 1305/2754
+....................................................................................... 1392/2754
+....................................................................................... 1479/2754
+....................................................................................... 1566/2754
+....................................................................................... 1653/2754
+....................................................................................... 1740/2754
+....................................................................................... 1827/2754
+....................................................................................... 1914/2754
+....................................................................................... 2001/2754
+....................................................................................... 2088/2754
+....................................................................................... 2175/2754
+....................................................................................... 2262/2754
+....................................................................................... 2349/2754
+....................................................................................... 2436/2754
+....................................................................................... 2523/2754
+....................................................................................... 2610/2754
+....................................................................................... 2697/2754
+.........................................................
+test result: ok. 2754 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 31.33s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+check-touched: /Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3c2/scripts/test262-subset.sh --filter test/annexB/language/eval-code/ --filter test/language/eval-code/ --filter test/language/statements/block/ --filter test/language/statements/function/
+building qjs-cli for Test262 subset
+test262: selected 65/5174 allowlist cases with filters: test/annexB/language/eval-code/ test/language/eval-code/ test/language/statements/block/ test/language/statements/function/
+test262 [1/65]: test/language/eval-code/direct/non-definable-function-with-function.js
+test262 [2/65]: test/language/eval-code/direct/non-definable-function-with-variable.js
+test262 [3/65]: test/language/eval-code/direct/non-definable-global-function.js
+test262 [4/65]: test/language/eval-code/direct/non-definable-global-generator.js
+test262 [5/65]: test/language/eval-code/direct/non-definable-global-var.js
+test262 [6/65]: test/language/eval-code/direct/new.target-arrow.js
+test262 [7/65]: test/language/eval-code/direct/parse-failure-5.js
+test262 [8/65]: test/language/eval-code/direct/var-env-func-init-global-update-configurable.js
+test262 [9/65]: test/language/eval-code/direct/var-env-func-init-local-new-delete.js
+test262 [10/65]: test/language/eval-code/direct/var-env-func-strict-caller-2.js
+test262 [11/65]: test/language/eval-code/direct/var-env-func-strict-caller.js
+test262 [12/65]: test/language/eval-code/direct/var-env-func-strict-source.js
+test262 [13/65]: test/language/eval-code/direct/var-env-var-init-local-new-delete.js
+test262 [14/65]: test/language/eval-code/direct/var-env-var-strict-caller-2.js
+test262 [15/65]: test/language/eval-code/direct/var-env-var-strict-caller-3.js
+test262 [16/65]: test/language/eval-code/direct/var-env-var-strict-caller.js
+test262 [17/65]: test/language/eval-code/direct/var-env-var-strict-source.js
+test262 [18/65]: test/annexB/language/eval-code/direct/func-block-decl-eval-func-init.js
+test262 [19/65]: test/annexB/language/eval-code/direct/func-block-decl-eval-func-no-skip-param.js
+test262 [20/65]: test/annexB/language/eval-code/direct/func-block-decl-eval-func-skip-early-err-try.js
+test262 [21/65]: test/annexB/language/eval-code/direct/func-if-decl-else-decl-a-eval-func-init.js
+test262 [22/65]: test/annexB/language/eval-code/direct/func-if-decl-else-decl-a-eval-func-no-skip-param.js
+test262 [23/65]: test/annexB/language/eval-code/direct/func-if-decl-else-decl-a-eval-func-update.js
+test262 [24/65]: test/annexB/language/eval-code/direct/func-if-decl-else-decl-b-eval-func-init.js
+test262 [25/65]: test/annexB/language/eval-code/direct/func-if-decl-else-decl-b-eval-func-no-skip-param.js
+test262 [26/65]: test/annexB/language/eval-code/direct/func-if-decl-else-decl-b-eval-func-update.js
+test262 [27/65]: test/annexB/language/eval-code/direct/func-if-decl-else-stmt-eval-func-init.js
+test262 [28/65]: test/annexB/language/eval-code/direct/func-if-decl-else-stmt-eval-func-no-skip-param.js
+test262 [29/65]: test/annexB/language/eval-code/direct/func-if-decl-no-else-eval-func-init.js
+test262 [30/65]: test/annexB/language/eval-code/direct/func-if-decl-no-else-eval-func-no-skip-param.js
+test262 [31/65]: test/annexB/language/eval-code/direct/func-if-stmt-else-decl-eval-func-init.js
+test262 [32/65]: test/annexB/language/eval-code/direct/func-if-stmt-else-decl-eval-func-no-skip-param.js
+test262 [33/65]: test/annexB/language/eval-code/direct/func-switch-case-eval-func-init.js
+test262 [34/65]: test/annexB/language/eval-code/direct/func-switch-case-eval-func-no-skip-param.js
+test262 [35/65]: test/annexB/language/eval-code/direct/func-switch-case-eval-func-update.js
+test262 [36/65]: test/annexB/language/eval-code/direct/func-switch-dflt-eval-func-init.js
+test262 [37/65]: test/annexB/language/eval-code/direct/func-switch-dflt-eval-func-no-skip-param.js
+test262 [38/65]: test/annexB/language/eval-code/direct/func-switch-dflt-eval-func-update.js
+test262 [39/65]: test/annexB/language/eval-code/direct/global-block-decl-eval-global-existing-global-init.js
+test262 [40/65]: test/annexB/language/eval-code/direct/global-block-decl-eval-global-existing-non-enumerable-global-init.js
+test262 [41/65]: test/annexB/language/eval-code/direct/global-block-decl-eval-global-init.js
+test262 [42/65]: test/annexB/language/eval-code/direct/global-block-decl-eval-global-skip-early-err-try.js
+test262 [43/65]: test/annexB/language/eval-code/direct/global-if-decl-else-decl-a-eval-global-existing-global-init.js
+test262 [44/65]: test/annexB/language/eval-code/direct/global-if-decl-else-decl-a-eval-global-existing-non-enumerable-global-init.js
+test262 [45/65]: test/annexB/language/eval-code/direct/global-if-decl-else-decl-a-eval-global-init.js
+test262 [46/65]: test/annexB/language/eval-code/direct/global-if-decl-else-decl-b-eval-global-existing-global-init.js
+test262 [47/65]: test/annexB/language/eval-code/direct/global-if-decl-else-decl-b-eval-global-existing-non-enumerable-global-init.js
+test262 [48/65]: test/annexB/language/eval-code/direct/global-if-decl-else-decl-b-eval-global-init.js
+test262 [49/65]: test/annexB/language/eval-code/direct/global-if-decl-else-stmt-eval-global-existing-global-init.js
+test262 [50/65]: test/annexB/language/eval-code/direct/global-if-decl-else-stmt-eval-global-existing-non-enumerable-global-init.js
+test262 [51/65]: test/annexB/language/eval-code/direct/global-if-decl-else-stmt-eval-global-init.js
+test262 [52/65]: test/annexB/language/eval-code/direct/global-if-decl-no-else-eval-global-existing-global-init.js
+test262 [53/65]: test/annexB/language/eval-code/direct/global-if-decl-no-else-eval-global-existing-non-enumerable-global-init.js
+test262 [54/65]: test/annexB/language/eval-code/direct/global-if-decl-no-else-eval-global-init.js
+test262 [55/65]: test/annexB/language/eval-code/direct/global-if-stmt-else-decl-eval-global-existing-global-init.js
+test262 [56/65]: test/annexB/language/eval-code/direct/global-if-stmt-else-decl-eval-global-existing-non-enumerable-global-init.js
+test262 [57/65]: test/annexB/language/eval-code/direct/global-if-stmt-else-decl-eval-global-init.js
+test262 [58/65]: test/annexB/language/eval-code/direct/global-switch-case-eval-global-existing-global-init.js
+test262 [59/65]: test/annexB/language/eval-code/direct/global-switch-case-eval-global-existing-non-enumerable-global-init.js
+test262 [60/65]: test/annexB/language/eval-code/direct/global-switch-case-eval-global-init.js
+test262 [61/65]: test/annexB/language/eval-code/direct/global-switch-dflt-eval-global-existing-global-init.js
+test262 [62/65]: test/annexB/language/eval-code/direct/global-switch-dflt-eval-global-existing-non-enumerable-global-init.js
+test262 [63/65]: test/annexB/language/eval-code/direct/global-switch-dflt-eval-global-init.js
+test262 [64/65]: test/annexB/language/eval-code/direct/script-decl-lex-no-collision.js
+test262 [65/65]: test/annexB/language/eval-code/indirect/global-block-decl-eval-global-skip-early-err-try.js
+ok: ran 65 Test262 subset cases
+[agent/t077-s3c-v2/codex 400a14de] Keep dormant frame moves off recursive interpreter entries
+ 15 files changed, 343 insertions(+), 24 deletions(-)
+ create mode 100644 tasks/diagnostics/T077-s3c-r4/README.md
+ create mode 100644 tasks/diagnostics/T077-s3c-r4/instructions.py
+ create mode 100644 tasks/diagnostics/T077-s3c-r4/native_frames.py
+ create mode 100644 tasks/diagnostics/T077-s3c-r4/s3c-findings/depth-general-vm-construct.js
+ create mode 100644 tasks/diagnostics/T077-s3c-r4/s3c-findings/depth-general-vm-debug.js
+ create mode 100644 tasks/diagnostics/T077-s3c-r4/s3c-findings/depth-general-vm.js
+ create mode 100644 tasks/diagnostics/T077-s3c-r4/s3c-findings/pre-duplicate-params.js
+ create mode 100644 tasks/diagnostics/T077-s3c-r4/s3c-findings/pre-nested-finally-continue.js

@@ -18,7 +18,7 @@ pub(super) struct ScopeInstances {
     with_base: usize,
 }
 
-impl Vm<'_, '_> {
+impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
     /// Re-entry creates new private lexical locations even when the previous
     /// instance escaped while still in TDZ. Declaration Init does not replace
     /// a cell already captured in this same scope instance.

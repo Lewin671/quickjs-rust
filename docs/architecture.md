@@ -71,10 +71,10 @@ in order:
    2. the this-property leaf, a closed-form evaluation of a body that only
       combines own data properties of its receiver or arguments
       (`bytecode/vm_this_property_leaf.rs`);
-   3. a callee-owned compact activation: numeric plan/compact, then wide
-      (`bytecode/compact_fn/activation.rs`); each frame owns its activation
-      (a released one rebound when identical, `compact_fn/activation_stack.rs`)
-      and borrows runtime services, without caller-context substitution;
+   3. numeric plan/compact, then wide (`bytecode/compact_fn/activation.rs`):
+      callee inputs live in a contiguous register stack with 64-byte headers;
+      Context materializes only on real service demand, and metadata queries
+      borrow creation facts without constructing an activation;
    4. a slot-seeded frame (`eval_direct_call_bytecode`, `bytecode/vm.rs`).
       It first offers the body to the compact tiers standalone: the numeric
       compact tier, which tries its `f64` plan
@@ -90,11 +90,11 @@ The interpreter's own call instruction applies the same predicate
 `call_function_slice`. `new` on a plain function has a matching
 direct route (`try_construct_direct_leaf_function`).
 
-The compact tiers execute a whole body on registers without a `FrameState`.
-Both run admitted callees in a window of their own register stack and
-re-enter `call_function` for everything else. The wide tier can also exit to
-an interpreter frame mid-body, and take a loop back from it
-(`bytecode/vm/wide_resume.rs`).
+The compact tiers run bodies on registers without FrameState. Their cleared
+stacks/headers and general operand/local/cold capacities share the
+[RuntimeServices pool](design/frame-storage-pool.md). Other calls re-enter
+`call_function`; the wide tier can hand off to the interpreter and take a loop
+back (`bytecode/vm/wide_resume.rs`).
 
 `bytecode/frame_stack.rs` is the driver every activation runs under
 (`run_completion`). Its ability to push a callee frame onto the same `Vm` is
@@ -151,8 +151,8 @@ canonical realm/module cells retain identity. Init/Assign/Read check typed state
 object-cache invalidation is distinct from lexical TDZ. No name/value snapshot. See
 [design/env-model-rewrite.md](design/env-model-rewrite.md).
 
-**Suspended frames.** A generator or async body owns its whole frame while
-suspended. See [design/generator-suspension.md](design/generator-suspension.md).
+**Suspended frames.** A generator/async/TLA body keeps the same box from
+its prologue through suspension/resume; ordinary VM frames remain unboxed. See [design/generator-suspension.md](design/generator-suspension.md).
 
 ### Object representation
 

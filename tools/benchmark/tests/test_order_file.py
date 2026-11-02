@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import unittest
 from collections import Counter
+from pathlib import Path
+from unittest.mock import Mock, patch
+import subprocess
 
 from tools.benchmark import order_file
 
@@ -18,6 +21,45 @@ PROFILE = f"""Call graph:
 
 
 class OrderFileTests(unittest.TestCase):
+    def test_exited_target_is_reaped_without_starting_sample(self):
+        target = Mock(pid=123)
+        target.poll.return_value = 0
+        with patch.object(order_file.subprocess, "Popen", return_value=target) as spawn, \
+             patch.object(order_file.time, "sleep"):
+            self.assertEqual(order_file.profile_process(["qjs"], 1), Counter())
+        self.assertEqual(spawn.call_count, 1)
+        target.kill.assert_not_called()
+
+    def test_target_is_reaped_before_waiting_for_sample(self):
+        events = []
+        target = Mock(pid=123)
+        target.poll.side_effect = [None, 0]
+        target.wait.side_effect = lambda: events.append("reap target")
+        sampler = Mock()
+        sampler.poll.return_value = 0
+        sampler.wait.side_effect = lambda **kwargs: events.append("wait sampler")
+        def spawn(argv, **kwargs):
+            if argv[0] == "qjs":
+                return target
+            Path(argv[argv.index("-file") + 1]).write_text(PROFILE)
+            return sampler
+        with patch.object(order_file.subprocess, "Popen", side_effect=spawn), \
+             patch.object(order_file.time, "sleep"):
+            self.assertEqual(order_file.profile_process(["qjs"], 1)["_" + V0], 1900)
+        self.assertEqual(events, ["reap target", "wait sampler"])
+
+    def test_a_stalled_sampler_is_killed_after_the_target_is_reaped(self):
+        target = Mock(pid=123)
+        target.poll.side_effect = [None, 0]
+        sampler = Mock()
+        sampler.poll.return_value = -9
+        sampler.wait.side_effect = [subprocess.TimeoutExpired("sample", 10), -9]
+        with patch.object(order_file.subprocess, "Popen", side_effect=[target, sampler]), \
+             patch.object(order_file.time, "sleep"):
+            self.assertEqual(order_file.profile_process(["qjs"], 1), Counter())
+        target.wait.assert_called_once_with()
+        sampler.kill.assert_called_once_with()
+
     def test_profile_keys_v0_symbols_by_name_and_legacy_ones_by_hash(self):
         weights = order_file.parse_profile(PROFILE)
         self.assertEqual(weights["_" + V0], 1900)

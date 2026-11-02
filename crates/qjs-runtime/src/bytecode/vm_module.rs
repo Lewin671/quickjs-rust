@@ -13,7 +13,7 @@ use crate::{
 
 use super::ir::Bytecode;
 use super::vm::Vm;
-use super::vm_generator::{GeneratorStart, GeneratorState};
+use super::vm_generator::{GeneratorState, prepare_suspended_start};
 use super::{ModuleBindings, ModuleEvaluation};
 
 /// Evaluates a prelude *script* against the shared graph `realm` before any
@@ -24,7 +24,7 @@ use super::{ModuleBindings, ModuleEvaluation};
 /// drained so a prelude that schedules microtasks settles before module
 /// evaluation.
 pub(super) fn eval_prelude_script(bytecode: &Bytecode, realm: &Realm) -> Result<(), RuntimeError> {
-    Vm::initialize_script_global_bindings(bytecode, realm)?;
+    Vm::<super::vm::InlineFrame<'_>>::initialize_script_global_bindings(bytecode, realm)?;
     realm.refresh_dynamic_function_realm_global();
     let env = crate::context::ActivationContext::new(
         crate::context::CreationContext::root(realm.clone()),
@@ -54,7 +54,7 @@ pub(super) fn new_module_realm() -> Realm {
     initialize_builtins(
         &mut crate::context::Context {
             runtime: &mut runtime,
-            activation: &mut env,
+            activation: (&mut env).into(),
             native: None,
         },
         &global_this,
@@ -68,14 +68,14 @@ pub(super) fn new_module_realm() -> Realm {
 /// in the module frame and shared module cells, so they do not become
 /// `globalThis` properties.
 pub(super) fn eval_module_body(
-    bytecode: &Bytecode,
+    bytecode: &Rc<Bytecode>,
     realm: &Realm,
     host: Option<crate::module::ModuleHostRef>,
     module_bindings: ModuleBindings,
     drain: bool,
 ) -> Result<ModuleEvaluation, RuntimeError> {
     if bytecode.is_global_scope() {
-        Vm::initialize_script_global_bindings(bytecode, realm)?;
+        Vm::<super::vm::InlineFrame<'_>>::initialize_script_global_bindings(bytecode, realm)?;
     }
     realm.refresh_dynamic_function_realm_global();
     let mut env = crate::context::ActivationContext::new(
@@ -157,7 +157,7 @@ pub(super) fn eval_module_function_hoists(
 /// Suspended frames and module namespaces retain the same canonical cells.
 ///
 fn eval_async_module_body(
-    bytecode: &Bytecode,
+    bytecode: &Rc<Bytecode>,
     mut env: crate::context::ActivationContext,
     module_bindings: ModuleBindings,
     drain: bool,
@@ -171,12 +171,14 @@ fn eval_async_module_body(
     let mut runtime = crate::context::RuntimeServices::for_realm(env.realm());
     let context = ObjectRef::new(HashMap::new(), env.realm().atoms());
     *context.generator_state().borrow_mut() =
-        Some(GeneratorState::SuspendedStart(Box::new(GeneratorStart {
-            bytecode: Rc::new(bytecode.clone()),
+        Some(GeneratorState::SuspendedStart(prepare_suspended_start(
+            bytecode.clone(),
             env,
-            upvalues: Vec::new(),
-            with_stack: Vec::new(),
-        })));
+            Vec::new(),
+            Vec::new(),
+            None,
+            &mut runtime,
+        )));
 
     let mut job_activation =
         crate::context::ActivationContext::new(creation, crate::context::ExecutionMode::Module);
@@ -186,7 +188,7 @@ fn eval_async_module_body(
     ));
     let mut services = crate::context::Context {
         runtime: &mut runtime,
-        activation: &mut job_activation,
+        activation: (&mut job_activation).into(),
         native: None,
     };
     let result_promise = crate::async_function::drive_async_module(&context, &mut services);

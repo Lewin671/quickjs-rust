@@ -1,0 +1,10 @@
+default 322 10
+off 322 10
+Traceback (most recent call last):
+  File "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3c2/tasks/diagnostics/T077-s3c2-checkpoint/verify.py", line 88, in <module>
+    main()
+    ~~~~^^
+  File "/Users/qingyingliu/Code/co-work-space/worktrees/quickjs-rust/t077-s3c2/tasks/diagnostics/T077-s3c2-checkpoint/verify.py", line 74, in main
+    assert run.returncode == 0 and count == 322, mode
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: verify-ic

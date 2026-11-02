@@ -1,0 +1,25 @@
+{
+  "file": "tasks/diagnostics/T077-s3c-r4/s3c-findings/pre-native-stack-overflow.js",
+  "source_sha256": "aa16af0a65b868e03d28ff166bf75e5b7c25fbe765c1721ecd07af5c0c314d8a",
+  "results": {
+    "s3b": {
+      "exit": -6,
+      "stdout": "",
+      "stderr": "\nthread 'main' (496262028) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n",
+      "binary_sha256": "0f7a1cd066c140864a10f906ab9a09e54a13dbb344fb7bd30df671174e10f014"
+    },
+    "predecessor": {
+      "exit": -6,
+      "stdout": "",
+      "stderr": "\nthread 'main' (496262031) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n",
+      "binary_sha256": "83fa2730036dc0bf34b9e9f181e7734731f5df22e7845cda05b020118af10c66"
+    },
+    "repair": {
+      "exit": -6,
+      "stdout": "",
+      "stderr": "\nthread 'main' (496262034) has overflowed its stack\nfatal runtime error: stack overflow, aborting\n",
+      "binary_sha256": "4c47a004d3f64d63d6a4797ab300013ee00587e2344af3161d64daa0a62d9018"
+    }
+  },
+  "host_stack": "unchanged CLI main thread; only core dumps disabled"
+}

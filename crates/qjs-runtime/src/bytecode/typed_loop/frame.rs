@@ -72,7 +72,7 @@ pub(in crate::bytecode) trait LoopFrame {
     fn bytecode_op(&self, ip: usize) -> Option<&super::super::ir::Op>;
 }
 
-impl LoopFrame for Vm<'_, '_> {
+impl<'a, F: crate::bytecode::vm::VmFrame<'a>> LoopFrame for Vm<'a, '_, F> {
     #[inline]
     fn loop_context(&mut self) -> crate::context::Context<'_> {
         self.context()
