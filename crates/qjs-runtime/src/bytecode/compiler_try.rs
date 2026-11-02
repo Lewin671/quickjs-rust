@@ -43,6 +43,16 @@ impl Compiler {
     /// Compiles a block body in its own lexical scope, leaving the block's
     /// completion value on the stack. Shared by plain and disposable blocks.
     pub(super) fn compile_block_body(&mut self, body: &[Stmt]) -> Result<(), RuntimeError> {
+        self.compile_block_body_with_result(body, None)
+    }
+
+    /// A catch publishes each statement into its try's live completion slot,
+    /// so abrupt exits observe the statement list before the block finishes.
+    fn compile_block_body_with_result(
+        &mut self,
+        body: &[Stmt],
+        result_slot: Option<usize>,
+    ) -> Result<(), RuntimeError> {
         self.with_lexical_scope(|compiler| {
             let blocked = annex_b_blocked_names(body, compiler.strict);
             compiler.with_annex_b_blocked_function_names(&blocked, |compiler| {
@@ -51,7 +61,8 @@ impl Compiler {
                     compiler.emit_load_undefined();
                     return Ok(());
                 }
-                let result_slot = compiler.temp_local("block_result");
+                let result_slot =
+                    result_slot.unwrap_or_else(|| compiler.temp_local("block_result"));
                 if compiler.tracks_completion_values {
                     compiler.emit_load_undefined();
                     compiler.emit(Op::StoreLocal(result_slot));
@@ -318,7 +329,7 @@ impl Compiler {
                 let slots = compiler.compile_catch_param(param)?;
                 let blocked = catch_param_annex_b_blocked_names(Some(param));
                 compiler.with_annex_b_blocked_function_names(&blocked, |compiler| {
-                    compiler.compile_block_body(&handler.body)?;
+                    compiler.compile_block_body_with_result(&handler.body, Some(result_slot))?;
                     compiler.emit(Op::StoreLocal(result_slot));
                     Ok(())
                 })?;
@@ -328,7 +339,7 @@ impl Compiler {
             return Ok((target, Some(CatchScope::Clear { slots })));
         } else {
             self.emit(Op::Pop);
-            self.compile_block_body(&handler.body)?;
+            self.compile_block_body_with_result(&handler.body, Some(result_slot))?;
             self.emit(Op::StoreLocal(result_slot));
         }
         self.emit(Op::ExitTry);
