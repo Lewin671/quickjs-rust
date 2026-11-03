@@ -1396,6 +1396,32 @@ fn a_hole_that_is_not_an_ordinary_store_is_left_to_the_interpreter() {
 }
 
 #[test]
+fn a_plain_array_does_not_vouch_for_another_array_in_the_same_loop() {
+    // An entry remembers the last array whose holes it found plain. A second
+    // array whose prototype supplies index 1 must still be asked about,
+    // whichever of the two the loop touches first: the read of `b` here
+    // follows a plain read of `a` in the same iteration.
+    let source = "var proto = Object.create(Array.prototype); proto[1] = 5;\
+         function holey() { var b = new Array(3); Object.setPrototypeOf(b, proto); return b; }\
+         function read(a, b, n) { var total = 0;\
+           for (var i = 0; i < n; i++) { total = total + (a[i] | 0) + (b[i] | 0) * 100; }\
+           return total; }\
+         function fill(a, b, n) {\
+           for (var i = 0; i < n; i++) { a[i] = i; b[i] = i; }\
+           return a.join() + '/' + b.hasOwnProperty(1) + b[1]; }";
+    assert_eq!(
+        eval(&format!(
+            "{source} read(new Array(3), holey(), 3) + ':' + read(holey(), new Array(3), 3);"
+        )),
+        Ok(Value::string_from_utf8("500:5"))
+    );
+    assert_eq!(
+        eval(&format!("{source} fill(new Array(3), holey(), 3);")),
+        Ok(Value::string_from_utf8("0,1,2/true1"))
+    );
+}
+
+#[test]
 fn a_break_leaves_the_region_instead_of_declining_it() {
     // A `break` is an unconditional jump past the backedge. It used to
     // decline the whole loop; `Leave` gives it the same one-instruction
