@@ -418,7 +418,7 @@ pub(super) enum Op {
     FreshIterationScope(Vec<usize>),
     /// Starts a protected region at the operand-stack depth it records.
     /// `end` is exclusive and includes its catch body; abrupt jumps retaining
-    /// this region must not pop its handler.
+    /// this region must not pop its handler. Regions nest properly.
     EnterTry {
         catch: Option<usize>,
         finally: Option<usize>,

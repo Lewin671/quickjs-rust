@@ -1,7 +1,7 @@
 //! Lowering for `for`-`in`, `for`-`of`, `for await`, `switch` and `with`.
 //!
-//! An iterator loop records its iterator and done slots in `LoopIterator`; its protected region closes it after inner finalizers
-//! on any abrupt exit. Protected regions also unwind with objects after all
+//! An iterator loop records its iterator and done slots in `LoopIterator`;
+//! its protected region closes it after inner finalizers on any abrupt exit. Protected regions also unwind with objects after all
 //! inner finalizers, while normal exits emit ExitWith directly.
 
 use qjs_ast::{

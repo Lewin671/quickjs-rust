@@ -91,6 +91,17 @@ impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
         Ok(())
     }
 
+    /// Stages a fresh abrupt completion for the finalizer about to begin,
+    /// which takes it in `BeginFinally`.
+    fn stage_abrupt(&mut self, completion: PendingAbrupt) {
+        let cold = self.cold_mut();
+        debug_assert!(
+            cold.pending_abrupt.is_none(),
+            "an abrupt completion is already staged"
+        );
+        cold.pending_abrupt = Some(completion);
+    }
+
     pub(super) fn throw_value(&mut self, value: Value) -> Result<(), RuntimeError> {
         // Fresh abrupt state is staged separately from active finalizers;
         // only routing outside a finalizer discards its saved completion.
@@ -137,7 +148,7 @@ impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
             self.cleanup_slots(&frame.cleanup_slots)?;
             self.cleanup_catch_scope(frame.catch_scope_active, frame.catch_scope)?;
             if let Some(finally) = frame.finally {
-                self.cold_mut().pending_abrupt = Some(PendingAbrupt::Throw(value));
+                self.stage_abrupt(PendingAbrupt::Throw(value));
                 self.unwind_finalizers(finally);
                 self.ip = finally;
             } else {
@@ -145,7 +156,7 @@ impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
             }
             return Ok(());
         }
-        self.unwind_finalizers(usize::MAX);
+        self.discard_finalizers();
         Err(RuntimeError {
             thrown: Some(Box::new(value.clone())),
             message: format!("throw statement executed: {}", error_value(value)),
@@ -164,13 +175,13 @@ impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
             self.cleanup_slots(&frame.cleanup_slots)?;
             self.cleanup_catch_scope(frame.catch_scope_active, frame.catch_scope)?;
             if let Some(finally) = frame.finally {
-                self.cold_mut().pending_abrupt = Some(PendingAbrupt::Return(value));
+                self.stage_abrupt(PendingAbrupt::Return(value));
                 self.unwind_finalizers(finally);
                 self.ip = finally;
                 return Ok(None);
             }
         }
-        self.unwind_finalizers(usize::MAX);
+        self.discard_finalizers();
         Ok(Some(value))
     }
 
@@ -200,7 +211,7 @@ impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
             self.cleanup_slots(&frame.cleanup_slots)?;
             self.cleanup_catch_scope(frame.catch_scope_active, frame.catch_scope)?;
             if let Some(finally) = frame.finally {
-                self.cold_mut().pending_abrupt = Some(PendingAbrupt::Jump(target));
+                self.stage_abrupt(PendingAbrupt::Jump(target));
                 self.unwind_finalizers(finally);
                 self.ip = finally;
                 return Ok(());
@@ -211,6 +222,8 @@ impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
         Ok(())
     }
 
+    /// Drops the finalizers whose region does not contain `target`: their
+    /// saved completions are superseded by the abrupt completion routed there.
     fn unwind_finalizers(&mut self, target: usize) {
         if let Some(cold) = self.cold.as_deref_mut() {
             while cold
@@ -220,6 +233,14 @@ impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
             {
                 cold.finally_stack.pop();
             }
+        }
+    }
+
+    /// Drops every running finalizer's saved completion: the abrupt
+    /// completion leaves the frame.
+    fn discard_finalizers(&mut self) {
+        if let Some(cold) = self.cold.as_deref_mut() {
+            cold.finally_stack.clear();
         }
     }
 
