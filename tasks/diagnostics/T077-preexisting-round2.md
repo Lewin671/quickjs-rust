@@ -17,6 +17,7 @@ instead of patching a third form. No origin push, main merge or timing.
 | `70ac7db6` | Await each async dispose before the next; SuppressedError chaining (E) |
 | `7a7cbc7e` | Wide tier enters inner loops under an interpreter-only plan region |
 | `e3db17fd` | Typed-loop entry remembers a plain array for its hole path |
+| `754f32b3` | Typed loops never create an indexed property on a non-array object |
 
 The last two repair the instruction-count regression the completion model
 exposed; see [Instruction counts](#instruction-counts).
@@ -108,6 +109,49 @@ calls: no locals 72.72M → 65.39M, 4 locals 135.81M → 137.35M, 32 locals
 points to code layout, not executed work. `prototype_method_call` executes
 fewer interpreter ops (219 → 119) with unchanged per-iteration counters.
 
+## Typed-loop prototype index creation
+
+Root cause: whether an array's element accesses are plain (realm
+`Array.prototype`, no own indexed property on the chain) is remembered for a
+whole typed-loop entry, by the executor for its last plain array (`e3db17fd`)
+and, already before this round, by the wide frame for the chain.
+`ComputedWrite`'s ordinary-object arm could create an index key mid-entry:
+`for (...) { t += a[3] | 0; p = os[i]; p[k] = 9; }` with `os[3] ===
+Object.prototype` and `k = '3'` returns 0 instead of node/NG's 36, in both the
+interpreter frame and the wide tier.
+
+Rule (refuse, not invalidate): `ComputedWrite` hands back before it would
+create an own array-index property; overwriting one stays a plain write
+(`write_or_create_computed_data_key_without_index_creation`). The typed_loop
+module header states the invariant those answers rely on. Audit of the
+admitted op set: `SetNamed`/`SetNamedTyped` only overwrite (`write_hot` never
+appends); element stores and `ArrayPush` touch arrays only, and an array on a
+chain is already a hazard (`ArrayPush` also checks live); stores into
+`Array.prototype` and `__proto__` decline; delete, private stores and
+prototype changes are not admitted; calls run only numeric closed forms and
+natives that add no property to an existing object; keys >= 2^32-1 are names.
+No other operation changes the cached facts.
+
+Evidence: unit tests for both frames (`typed_loop/tests.rs`,
+`tests/diagnostics.rs`) and for the declining write fail at `c6d8bff2` (0) and
+pass now; fixture `typed-loop-prototype-index-creation.js` gives
+`0:0:45:0:45` at the base and `0:36:45:36:45`, as node v24 and NG, now.
+Further variants (constant `'3'` and `3` keys, store before read, an array
+grown by `length`, a custom chain object, `'3.0'`) match node and NG; four of
+them were wrong at the base. Instructions only (plain release builds of
+`git archive` exports, frozen public109 inputs, median of three, AB/BA/AB,
+stdout identical): `access-nsieve` 281,072,096 → 281,045,323 (0.99990),
+`bitops-nsieve-bits` 332,311,552 → 332,240,181 (0.99979).
+
+Checks at `754f32b3`: pre-commit fast gate (2,780 runtime tests, 65 Test262
+cases); `./scripts/check.sh` exit 0 with 2,780 runtime tests, 28 counter
+diagnostics, 21 agent tests, 767 benchmark-tool tests, 35 script tests, all
+three clippy configurations and 5,176/5,176 curated Test262; NG comparison of
+339 scripts + 10 modules in all nine env modes (default, IC-off, verify-IC,
+verify-bindings, force-eval, poison, activation-poison, combined-all,
+combined-off) on both debug and release builds, 0 diffs. The matrix below is
+unchanged from `e3db17fd`.
+
 ## Verification matrix
 
 All at HEAD `e3db17fd` unless stated. Every code commit passed its pre-commit
@@ -160,6 +204,12 @@ cases): 2,774 / 2,775 / 2,776 / 2,777 / 2,777 / 2,778 runtime tests.
   CaseBlock entry: `switch(1){case 0: function g(){} case 1: typeof g}` throws
   ReferenceError; node gives `"function"` (ES2025 §14.12.4,
   BlockDeclarationInstantiation of the CaseBlock). Same at `a2b51693`.
+- Pre-existing (P2): AsyncIteratorClose does not await the `return()` result
+  (ES2025 §7.4.13 step 5.d), so `break` out of `for await` runs the async
+  generator's `finally` after the post-loop code.
+- Pre-existing (P3): a function body's top-level expression-statement values
+  stay on the operand stack until return; RSS grows with statement count, no
+  wrong result.
 - `using` directly in a case clause is a SyntaxError in both engines; only the
   message differs.
 
@@ -168,15 +218,16 @@ cases): 2,774 / 2,775 / 2,776 / 2,777 / 2,777 / 2,778 runtime tests.
 Runtime: `bytecode/{compiler,compiler_control,compiler_expr,compiler_regions,
 compiler_try,compiler_values,util,ir,vm,vm_dispose,vm_try,vm_string_append}.rs`,
 `bytecode/vm/{general_ops,rare_ops}.rs`, `bytecode/virtual_object/{flow,lower}.rs`,
-`bytecode/typed_loop/{compile,execute,frame}.rs`,
+`bytecode/typed_loop/{compile,execute,frame,mod}.rs`, `value/object/data_write.rs`,
 `bytecode/compact_fn/wide/{compile,loop_frame}.rs` (all under
 `crates/qjs-runtime/src/`).
 
 Tests: `tests/abrupt_statement_completions.rs` (four completion tests),
 `tests/protected_scope_exits.rs` (region depth), `tests/disposable_stacks.rs`
 (sequential await-using), `tests/diagnostics.rs` (inner loop on the wide tier),
-`bytecode/typed_loop/tests.rs` (plain-array memo), and a `route_jumps`
+`bytecode/typed_loop/tests.rs` (plain-array memo, index creation in a loop), and a `route_jumps`
 nested-region unit test. Fixtures in `tests/fixtures/compare-qjs/`:
 `catch-break-updateempty-completion.js`, `finally-normal-completion-isolation.js`,
 `labelled-block-break-completion.js`, `empty-statement-completion.js`,
-`for-using-exit-stack-balance.js`, `await-using-sequential-disposal.js`.
+`for-using-exit-stack-balance.js`, `await-using-sequential-disposal.js`,
+`typed-loop-prototype-index-creation.js`.
