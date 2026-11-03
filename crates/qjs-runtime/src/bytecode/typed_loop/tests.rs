@@ -1422,6 +1422,32 @@ fn a_plain_array_does_not_vouch_for_another_array_in_the_same_loop() {
 }
 
 #[test]
+fn a_loop_that_gives_a_prototype_an_index_reads_holes_through_it() {
+    // The hole read `a[3]` finds the chain plain in the first iterations;
+    // the fourth `p[k] = 9` then creates "3" on Object.prototype, and every
+    // later read must find it. The `try` keeps `f` in the interpreter frame,
+    // whose executor remembers the plain array; without it the wide tier runs
+    // the loop and its frame remembers the chain.
+    for prefix in ["try {} catch (e) {}", ""] {
+        let source = format!(
+            "function f(a, os, k, n) {{ {prefix} var t = 0, p;\
+               for (var i = 0; i < n; i++) {{ t = t + (a[3] | 0); p = os[i]; p[k] = 9; }}\
+               return t; }}\
+             var os = [{{}}, {{}}, {{}}, Object.prototype, {{}}, {{}}, {{}}, {{}}];\
+             var r = f(new Array(5), os, '3', 8);\
+             var own = Object.prototype.hasOwnProperty('3');\
+             delete Object.prototype[3];\
+             r + ':' + own + ':' + os[0][3] + ':' + new Array(5)[3];"
+        );
+        assert_eq!(
+            eval(&source),
+            Ok(Value::string_from_utf8("36:true:9:undefined")),
+            "{prefix:?}"
+        );
+    }
+}
+
+#[test]
 fn a_break_leaves_the_region_instead_of_declining_it() {
     // A `break` is an unconditional jump past the backedge. It used to
     // decline the whole loop; `Leave` gives it the same one-instruction

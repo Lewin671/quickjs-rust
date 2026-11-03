@@ -539,9 +539,13 @@ fn execute<F: LoopFrame>(
                         let lease = name
                             .property_key_lease(domain)
                             .unwrap_or_else(|| domain.intern(name.as_str()));
+                        // Never a new indexed property: the object may be on
+                        // an array's prototype chain (module header).
                         matches!(
                             object
-                                .write_or_create_computed_data_key(&lease, value)
+                                .write_or_create_computed_data_key_without_index_creation(
+                                    &lease, value
+                                )
                                 .result,
                             crate::value::OwnDataPropertyWrite::Written
                         )
@@ -1190,9 +1194,9 @@ struct Intrinsics {
 
 impl Intrinsics {
     /// `LoopFrame::array_access_is_plain`, remembered for the last array that
-    /// passed. A program runs no user code, so neither that array's prototype
-    /// nor an indexed property on its chain can change while it runs; a loop
-    /// storing into an array with holes asks on every store.
+    /// passed: a loop storing into an array with holes asks on every store.
+    /// Sound because no operation changes a prototype link or creates an
+    /// indexed property on an object a chain could hold (module header).
     fn array_access_is_plain<F: LoopFrame>(&self, vm: &mut F, array: &crate::ArrayRef) -> bool {
         if self
             .plain_array

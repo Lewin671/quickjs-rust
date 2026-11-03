@@ -571,6 +571,28 @@ fn an_inner_loop_under_a_numeric_mutation_plan_region_runs_on_the_wide_tier() {
 }
 
 #[test]
+fn a_wide_tier_loop_that_gives_a_prototype_an_index_reads_holes_through_it() {
+    // The wide frame resolves whether the array's chain has an indexed
+    // property once per entry. The loop itself creates "3" on
+    // Object.prototype in its fourth iteration, so that answer must not
+    // outlive the write: the program hands the creation back instead.
+    let (value, counters) = counted(
+        "function f(a, os, k, n) {
+             var t = 0, p;
+             for (var i = 0; i < n; i++) { t = t + (a[3] | 0); p = os[i]; p[k] = 9; }
+             return t;
+         }
+         var plain = [{}, {}, {}, {}, {}, {}, {}, {}], sum = 0;
+         for (var j = 0; j < 50; j++) sum += f(new Array(5), plain, 'x', 8);
+         var r = f(new Array(5), [{}, {}, {}, Object.prototype, {}, {}, {}, {}], '3', 8);
+         delete Object.prototype[3];
+         sum + ':' + r;",
+    );
+    assert_eq!(value, Value::String("0:36".into()));
+    assert!(counters.nested_vm_constructions <= 3, "{counters:?}");
+}
+
+#[test]
 fn named_operands_link_once_per_body_and_domain() {
     let source = |iterations: u32| {
         format!(

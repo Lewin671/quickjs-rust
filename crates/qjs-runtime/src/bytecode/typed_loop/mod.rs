@@ -30,6 +30,20 @@
 //! interpreter resumes at the exact bytecode instruction that stopped, with the
 //! operand stack that instruction expects rebuilt from the registers, so the
 //! operations that already ran are exactly the ones it does not repeat.
+//!
+//! Prototype-chain facts hold for a whole entry. Whether an array's element
+//! accesses are plain (`LoopFrame::array_access_is_plain`: the realm's
+//! `Array.prototype`, and no own indexed property anywhere on its chain) is
+//! remembered per entry, by the executor for its last plain array and by the
+//! wide frame for the chain. That is sound because no operation here changes a
+//! prototype link, deletes a property, or creates an own indexed property on a
+//! non-array object: named stores only overwrite, and `ComputedWrite` hands
+//! back before creating an array-index key, since its receiver may be
+//! `Object.prototype` or another object on the chain. Element stores do add
+//! indexed properties, but only to arrays, and an array on a prototype chain
+//! already counts as an indexed property there. Calls run only total closed
+//! forms and natives that add no property to an existing object. An
+//! operation that breaks this rule has to invalidate those answers.
 
 use qjs_ast::{BinaryOp, UnaryOp, UpdateOp};
 
@@ -277,8 +291,9 @@ enum TypedOp {
         receiver: u16,
         key: u16,
     },
-    /// Writes `receiver[key] = value` under a boxed key, overwriting an
-    /// existing own data property only.
+    /// Writes `receiver[key] = value` under a boxed key: an element of an
+    /// array, or an ordinary object's own data property, which it may create
+    /// unless the key is an array index (see the module header).
     ComputedWrite {
         receiver: u16,
         key: u16,
