@@ -655,35 +655,6 @@ impl Local {
     pub(super) fn is_received_upvalue(&self) -> bool {
         self.from_env && !self.parameter && !self.hoisted
     }
-
-    /// Whether this compiler temporary only ever accumulates a statement
-    /// completion value (a block, loop, switch, or label result slot). The
-    /// compiler names each temporary after its purpose, so the name is the
-    /// classification.
-    pub(super) fn is_completion_temporary(&self) -> bool {
-        const COMPLETION_TEMPORARIES: [&str; 8] = [
-            "block_result",
-            "loop_result",
-            "switch_result",
-            "label_result",
-            "for_in_result",
-            "for_of_result",
-            "for_await_result",
-            "try_result",
-        ];
-        if !self.compiler_temporary {
-            return false;
-        }
-        let Some(name) = self.name.strip_prefix("\0\0") else {
-            return false;
-        };
-        COMPLETION_TEMPORARIES.iter().any(|prefix| {
-            name.strip_prefix(prefix).is_some_and(|rest| {
-                rest.strip_prefix('_')
-                    .is_some_and(|n| n.bytes().all(|b| b.is_ascii_digit()))
-            })
-        })
-    }
 }
 
 /// Compiled bytecode for a script.
@@ -734,13 +705,6 @@ pub struct Bytecode {
     /// `this` resolves to the realm global; function bodies resolve `this`
     /// from their own frame.
     pub(super) global_scope: bool,
-    /// Compiler temporaries that only ever hold a statement completion value
-    /// in a function body, where no completion value is observable. They are
-    /// dead stores: the typed loop reads one as `undefined` and discards a
-    /// store into one, and the string append fast path may drop a value they
-    /// hold so the appended string stays uniquely owned. Empty for script and
-    /// eval code.
-    pub(super) dead_completion_slots: Vec<usize>,
     /// Whether this bytecode was compiled in strict mode after applying any
     /// source prologue. Direct eval needs this to choose the correct
     /// declaration instantiation environment.
@@ -817,18 +781,6 @@ impl Bytecode {
         parameter_slots: Option<Vec<usize>>,
         scope_plan: Option<(crate::binding::ScopePlanBuilder, bool)>,
     ) -> Self {
-        // Only a function body arrives with explicit parameter slots; script
-        // and eval bodies derive them, and their completion values are
-        // observable.
-        let dead_completion_slots = if parameter_slots.is_some() {
-            locals
-                .iter()
-                .enumerate()
-                .filter_map(|(slot, local)| local.is_completion_temporary().then_some(slot))
-                .collect()
-        } else {
-            Vec::new()
-        };
         let parameter_slots = parameter_slots.unwrap_or_else(|| {
             locals
                 .iter()
@@ -876,7 +828,6 @@ impl Bytecode {
             global_lexical_names,
             sloppy_global_assignment_names: collect_sloppy_global_assignment_names(&code),
             global_scope,
-            dead_completion_slots,
             strict,
             code,
             property_names,

@@ -11,8 +11,9 @@
 //!   operations.
 //! - Jumps are absolute and patched after emission. A peephole that rewrites
 //!   the tail of `code` must respect `highest_jump_target`.
-//! - Completion values are threaded only where they are observable
-//!   (`tracks_completion_values`: script and eval code, not function bodies).
+//! - Completion values are threaded only where they are observable (script,
+//!   eval and module code, not function bodies), through one completion
+//!   register per scope; see `Compiler::completion`.
 
 use crate::value::name_hash::{NameMap, NameSet};
 
@@ -27,9 +28,9 @@ use super::compiler_lexical::{
     catch_param_annex_b_blocked_names, for_init_lexical_names, function_body_annex_b_blocked_names,
     function_param_names, lexical_declared_names, switch_lexical_declared_names,
 };
-use super::compiler_try::{block_has_await_using, block_has_using};
+use super::compiler_try::block_has_using;
 use super::ir::{Bytecode, Local, Op};
-use super::util::{stmt_accepts_pending_label, stmt_updates_statement_list_completion};
+use super::util::stmt_accepts_pending_label;
 
 pub(super) struct Compiler {
     /// The furthest instruction index any emitted jump can land on.
@@ -77,20 +78,28 @@ pub(super) struct Compiler {
     /// Whether the current function body is an async generator. `yield*` uses
     /// the async iterator protocol only in this context.
     pub(super) async_generator_body: bool,
-    /// Whether statement completion values are observable in the code being
-    /// compiled. Global script and `eval` code yield their last statement
-    /// value, so every statement list must thread one through a result slot
-    /// and every loop must maintain its own UpdateEmpty accumulator. A
-    /// function body's completion value is never observable -- `[[Call]]`
-    /// yields `undefined` or the explicit `return` argument -- so that
-    /// bookkeeping is dead code there, and skipping it removes several
-    /// executed instructions per statement inside every loop.
-    pub(super) tracks_completion_values: bool,
-    /// Stack of try/catch/finally result slot contexts. When a `break` or
-    /// `continue` crosses a try boundary, the innermost try result slot must
-    /// be propagated to the target loop's result slot so UpdateEmpty semantics
-    /// are preserved.
-    pub(super) try_result_slots: Vec<TryResultEntry>,
+    /// The completion register of the statement being compiled: the slot
+    /// that holds the running completion value (ES2025 §14, UpdateEmpty in
+    /// §6.2.4.1) of the innermost scope whose value is observable, or `None`
+    /// where nothing can observe it.
+    ///
+    /// Script, eval and module code own one register for the whole statement
+    /// list. Statements never leave a value on the operand stack: an
+    /// expression statement stores its value here, and a statement that
+    /// completes empty stores nothing, so the previous value survives exactly
+    /// as UpdateEmpty requires. Blocks and labelled statements share the
+    /// register. `if`, `with`, `try`/`catch`, loops and `switch`, whose
+    /// completions are UpdateEmpty(..., undefined) or start from V =
+    /// undefined, reset it to `undefined` on entry (unless their first action
+    /// overwrites it) and then share it. Only a `finally` block, whose normal
+    /// completion must not replace the protected block's value, gets a
+    /// register of its own; a `break`/`continue` leaving it carries that value
+    /// to its target (`LoopContext::carried_breaks`).
+    ///
+    /// A function body's completion value is never observable -- `[[Call]]`
+    /// yields `undefined` or the explicit `return` argument -- so function
+    /// bodies have no register and pay no completion bookkeeping at all.
+    pub(super) completion: Option<usize>,
     /// Open `using` disposal scopes around the code being compiled. A `using`
     /// initializer emits `RegisterDisposable` only when this is non-zero (i.e.
     /// its block opened a disposal scope), so contexts not yet wired for
@@ -106,23 +115,25 @@ pub(super) struct Compiler {
     pub(super) source_is_wtf16: bool,
 }
 
-/// Tracks a try/catch/finally result slot for completion value propagation.
-pub(super) struct TryResultEntry {
-    /// The local slot tracking this block's accumulated completion value.
-    pub(super) result_slot: usize,
-    /// The loop stack depth when the try/finally block was entered. A
-    /// break/continue targeting a loop below this depth propagates this slot.
-    pub(super) loop_depth: usize,
-}
-
+/// A break/continue target: an iteration, a `switch`, or a labelled
+/// statement.
 #[derive(Default)]
 pub(super) struct LoopContext {
-    result_slot: usize,
+    /// The completion register live where the target statement runs, which
+    /// is also the register its completion value lands in.
+    register: Option<usize>,
     allows_continue: bool,
     allows_unlabeled_break: bool,
     labels: Vec<String>,
+    /// Jumps whose completion value is already in `register`.
     breaks: Vec<usize>,
     continues: Vec<usize>,
+    /// Jumps leaving a `finally` block inside the target, as (the finally
+    /// block's register, jump). Their value is copied into `register` at the
+    /// landing, after every finalizer on the way has run: a finalizer that
+    /// overrides the jump, or that throws, must leave `register` untouched.
+    carried_breaks: Vec<(usize, usize)>,
+    carried_continues: Vec<(usize, usize)>,
 }
 
 /// Live iterator state for a `for-of` loop that must be closed when an
@@ -161,8 +172,7 @@ impl Default for Compiler {
             with_base_depth: 0,
             regexp_literal_error: false,
             async_generator_body: false,
-            tracks_completion_values: true,
-            try_result_slots: Vec::new(),
+            completion: None,
             disposable_scope_depth: 0,
             source: std::rc::Rc::from(""),
             source_is_wtf16: true,
@@ -320,7 +330,7 @@ impl Compiler {
     ) -> Result<Bytecode, RuntimeError> {
         self.global_scope = false;
         self.scope_plan.scopes[0].kind = crate::binding::ScopeKind::Parameters;
-        self.tracks_completion_values = false;
+        self.completion = None;
         self.strict = self.strict || is_strict_function_body(body);
         let mut direct_parameter_slots = Vec::with_capacity(params.positional.len());
         for (index, element) in params.positional.iter().enumerate() {
@@ -403,13 +413,7 @@ impl Compiler {
                 compiler.compile_statements_with_disposal(body)?;
             } else {
                 for stmt in body {
-                    // A function body's statement completion values are never
-                    // observable, so each statement that can drop its own is
-                    // compiled without producing one. The rest still push, and
-                    // are still left where they land: the frame's operand stack
-                    // is discarded when the body returns, and adding a `Pop`
-                    // per statement would cost more instructions than it saves.
-                    compiler.compile_statement_list_entry(stmt)?;
+                    compiler.compile_function_body_statement(stmt)?;
                 }
             }
             Ok(())
@@ -783,10 +787,10 @@ impl Compiler {
         self.compiler_temporary_slot(&name, true)
     }
 
-    pub(super) fn push_loop(&mut self, result_slot: usize) {
+    pub(super) fn push_loop(&mut self) {
         let labels = self.take_pending_labels();
         self.loop_stack.push(LoopContext {
-            result_slot,
+            register: self.completion,
             allows_continue: true,
             allows_unlabeled_break: true,
             labels,
@@ -794,10 +798,10 @@ impl Compiler {
         });
     }
 
-    pub(super) fn push_breakable(&mut self, result_slot: usize, allows_unlabeled_break: bool) {
+    pub(super) fn push_breakable(&mut self, allows_unlabeled_break: bool) {
         let labels = self.take_pending_labels();
         self.loop_stack.push(LoopContext {
-            result_slot,
+            register: self.completion,
             allows_continue: false,
             allows_unlabeled_break,
             labels,
@@ -819,6 +823,28 @@ impl Compiler {
             .expect("loop context should be balanced")
     }
 
+    /// Resets the completion register to `undefined`: the entry of a
+    /// statement whose completion is UpdateEmpty(C, undefined) or whose
+    /// accumulator V starts as `undefined`.
+    pub(super) fn reset_completion(&mut self) {
+        if let Some(register) = self.completion {
+            self.emit_load_undefined();
+            self.emit(Op::StoreLocal(register));
+        }
+    }
+
+    /// Compiles `body` with `register` as the completion register.
+    pub(super) fn with_completion<T>(
+        &mut self,
+        register: Option<usize>,
+        body: impl FnOnce(&mut Self) -> Result<T, RuntimeError>,
+    ) -> Result<T, RuntimeError> {
+        let outer = std::mem::replace(&mut self.completion, register);
+        let result = body(self);
+        self.completion = outer;
+        result
+    }
+
     pub(super) fn compile_break(&mut self, label: Option<&str>) -> Result<(), RuntimeError> {
         let Some(index) = self.break_context_index(label) else {
             return Err(RuntimeError {
@@ -829,12 +855,13 @@ impl Compiler {
                 ),
             });
         };
-        self.propagate_try_result_to_loop(index);
-        self.propagate_current_completion_to(index);
-        let result_slot = self.loop_stack[index].result_slot;
-        self.emit(Op::LoadLocal(result_slot));
         let jump = self.emit(Op::AbruptJump(usize::MAX));
-        self.loop_stack[index].breaks.push(jump);
+        let carried = self.carried_completion(index);
+        let context = &mut self.loop_stack[index];
+        match carried {
+            Some(source) => context.carried_breaks.push((source, jump)),
+            None => context.breaks.push(jump),
+        }
         Ok(())
     }
 
@@ -848,11 +875,30 @@ impl Compiler {
                 ),
             });
         };
-        self.propagate_try_result_to_loop(index);
-        self.propagate_current_completion_to(index);
         let jump = self.emit(Op::AbruptJump(usize::MAX));
-        self.loop_stack[index].continues.push(jump);
+        let carried = self.carried_completion(index);
+        let context = &mut self.loop_stack[index];
+        match carried {
+            Some(source) => context.carried_continues.push((source, jump)),
+            None => context.continues.push(jump),
+        }
         Ok(())
+    }
+
+    /// The register a jump to `loop_stack[index]` must carry its value from,
+    /// when that is not the target's own register. The completion value of
+    /// a break/continue is the running value of its innermost register (every
+    /// statement between it and that register's owner has already applied its
+    /// UpdateEmpty there), and only a `finally` block owns a register inside
+    /// a target.
+    fn carried_completion(&self, index: usize) -> Option<usize> {
+        let target = self.loop_stack[index].register;
+        debug_assert_eq!(
+            self.completion.is_some(),
+            target.is_some(),
+            "a jump and its target observe completion values alike"
+        );
+        self.completion.filter(|&source| Some(source) != target)
     }
 
     fn break_context_index(&self, label: Option<&str>) -> Option<usize> {
@@ -875,109 +921,77 @@ impl Compiler {
         })
     }
 
-    /// Returns the current loop stack depth, used by try/catch/finally
-    /// compilation to record the nesting level at which a try block was entered.
-    pub(super) fn loop_stack_depth(&self) -> usize {
-        self.loop_stack.len()
-    }
-
-    /// Pushes a try/finally result slot onto the tracking stack with the
-    /// current loop nesting depth. Must be balanced with `pop_try_result_slot`.
-    pub(super) fn push_try_result_slot(&mut self, result_slot: usize, loop_depth: usize) {
-        self.try_result_slots.push(TryResultEntry {
-            result_slot,
-            loop_depth,
-        });
-    }
-
-    /// Pops the most recent try/finally result slot from the tracking stack.
-    pub(super) fn pop_try_result_slot(&mut self) {
-        self.try_result_slots
-            .pop()
-            .expect("try result slot stack should be balanced");
-    }
-
-    /// When a `break` or `continue` crosses a try/catch/finally boundary,
-    /// propagate the innermost try result slot to the target loop's result
-    /// slot. This implements the UpdateEmpty semantics for try statements:
-    /// the try's accumulated completion value becomes the break's value.
-    fn propagate_try_result_to_loop(&mut self, target_loop_index: usize) {
-        // The innermost try_result_slot whose loop_depth exceeds
-        // target_loop_index was entered inside the target loop, so a
-        // break/continue crosses its boundary.
-        if let Some(entry) = self
-            .try_result_slots
-            .iter()
-            .rev()
-            .find(|e| e.loop_depth > target_loop_index)
-        {
-            let try_slot = entry.result_slot;
-            let target_slot = self.loop_stack[target_loop_index].result_slot;
-            self.emit(Op::LoadLocal(try_slot));
-            self.emit(Op::StoreLocal(target_slot));
-        }
-    }
-
-    fn propagate_current_completion_to(&mut self, target_index: usize) {
-        let Some(current_index) = self.loop_stack.len().checked_sub(1) else {
-            return;
-        };
-        if current_index == target_index {
-            return;
-        }
-        let current_slot = self.loop_stack[current_index].result_slot;
-        let target_slot = self.loop_stack[target_index].result_slot;
-        self.emit(Op::LoadLocal(current_slot));
-        self.emit(Op::StoreLocal(target_slot));
-    }
-
-    pub(super) fn patch_loop_breaks(&mut self, context: &LoopContext, target: usize) {
-        for jump in &context.breaks {
-            self.patch_jump(*jump, target);
-        }
-    }
-
-    pub(super) fn emit_scoped_loop_completion(
-        &mut self,
-        result_slot: usize,
-        cleanup_slots: &[usize],
-        context: &LoopContext,
-    ) -> usize {
-        if cleanup_slots.is_empty() {
-            self.emit(Op::LoadLocal(result_slot));
+    /// Lands every break of `context` at the next instruction. A carried
+    /// break first passes through a stub that publishes its value; the
+    /// stubs sit behind a jump, so fall-through pays nothing when there are
+    /// none.
+    pub(super) fn land_breaks(&mut self, context: &LoopContext) {
+        if !context.carried_breaks.is_empty() {
+            let over = self.emit(Op::Jump(usize::MAX));
+            let stubs = self.emit_carry_stubs(&context.carried_breaks, context.register);
             let done = self.code.len();
-            self.patch_loop_breaks(context, done);
-            return done;
+            self.patch_jump(over, done);
+            for stub in stubs {
+                self.patch_jump(stub, done);
+            }
         }
-
-        for slot in cleanup_slots {
-            self.emit(Op::ClearLocal(*slot));
-        }
-        self.emit(Op::LoadLocal(result_slot));
-        let normal_done = self.emit(Op::Jump(usize::MAX));
-
-        let break_cleanup = self.code.len();
-        for slot in cleanup_slots {
-            self.emit(Op::ClearLocal(*slot));
-        }
-        let break_done = self.emit(Op::Jump(usize::MAX));
-
         let done = self.code.len();
-        self.patch_jump(normal_done, done);
-        self.patch_jump(break_done, done);
-        self.patch_loop_breaks(context, break_cleanup);
-        done
+        for jump in &context.breaks {
+            self.patch_jump(*jump, done);
+        }
     }
 
-    pub(super) fn patch_loop_continues(&mut self, context: &LoopContext, target: usize) {
+    /// Lands every continue of `context` at `target`. Must be called where
+    /// fall-through cannot reach (right after the loop's back edge) and inside
+    /// the same protected regions as `target`, because a carried continue's
+    /// stub is emitted here.
+    pub(super) fn land_continues(&mut self, context: &LoopContext, target: usize) {
         for jump in &context.continues {
             self.patch_jump(*jump, target);
         }
+        for stub in self.emit_carry_stubs(&context.carried_continues, context.register) {
+            self.patch_jump(stub, target);
+        }
     }
 
+    /// Emits one `register = source` stub per carried jump, returning the
+    /// stubs' unpatched exit jumps.
+    fn emit_carry_stubs(
+        &mut self,
+        carried: &[(usize, usize)],
+        register: Option<usize>,
+    ) -> Vec<usize> {
+        let Some(register) = register else {
+            debug_assert!(carried.is_empty(), "carried value without a register");
+            return Vec::new();
+        };
+        carried
+            .iter()
+            .map(|&(source, jump)| {
+                let stub = self.code.len();
+                self.patch_jump(jump, stub);
+                self.emit(Op::LoadLocal(source));
+                self.emit(Op::StoreLocal(register));
+                self.emit(Op::Jump(usize::MAX))
+            })
+            .collect()
+    }
+
+    /// The exit of an iteration or `switch`: breaks land here, then the
+    /// per-iteration lexical slots are cleared on every way out.
+    pub(super) fn land_loop_exit(&mut self, cleanup_slots: &[usize], context: &LoopContext) {
+        self.land_breaks(context);
+        for slot in cleanup_slots {
+            self.emit(Op::ClearLocal(*slot));
+        }
+    }
+
+    /// Compiles one statement. A statement leaves nothing on the operand
+    /// stack; its completion value, when it has one, goes to the completion
+    /// register (`Compiler::completion`).
     pub(super) fn compile_stmt(&mut self, stmt: &Stmt) -> Result<(), RuntimeError> {
         match stmt {
-            Stmt::Expr(expr) => self.compile_expr(expr),
+            Stmt::Expr(expr) => self.compile_expression_statement(expr),
             Stmt::Block { body, .. } => {
                 if block_has_using(body) {
                     self.compile_disposable_block(body)
@@ -1036,17 +1050,10 @@ impl Compiler {
                 self.emit(Op::Throw);
                 Ok(())
             }
-            Stmt::Debugger { .. } | Stmt::Empty => {
-                self.emit_load_undefined();
-                Ok(())
-            }
+            Stmt::Debugger { .. } | Stmt::Empty => Ok(()),
             Stmt::VarDecl {
                 kind, declarations, ..
-            } => {
-                self.compile_var_decl_bindings(*kind, declarations)?;
-                self.emit_load_undefined();
-                Ok(())
-            }
+            } => self.compile_var_decl_bindings(*kind, declarations),
             Stmt::With { object, body, .. } => self.compile_with(object, body),
             Stmt::Labelled { label, body, .. } => self.compile_labelled(label, body),
             Stmt::Break { label, .. } => self.compile_break(label.as_deref()),
@@ -1064,7 +1071,6 @@ impl Compiler {
             } => self.compile_try(block, handler.as_ref(), finalizer.as_deref()),
             Stmt::FunctionDecl { .. } => {
                 self.emit_annex_b_function_copy(stmt);
-                self.emit_load_undefined();
                 Ok(())
             }
             Stmt::ClassDecl { name, body, .. } => {
@@ -1081,168 +1087,89 @@ impl Compiler {
                     Ok(())
                 })?;
                 self.emit(Op::StoreLocal(slot));
-                self.emit_load_undefined();
                 Ok(())
             }
             Stmt::ModuleDecl(_) => Err(super::util::unsupported_module_item()),
         }
     }
 
+    /// Compiles a script, eval or module statement list, leaving its
+    /// completion value on the operand stack.
     fn compile_script_statement_list(&mut self, body: &[Stmt]) -> Result<(), RuntimeError> {
-        if block_has_using(body) {
-            return self.compile_script_statement_list_with_disposal(body);
-        }
-        let result_slot = self.temp_local("script_result");
+        let register = self.temp_local("script_result");
         self.emit_load_undefined();
-        self.emit(Op::StoreLocal(result_slot));
-        for stmt in body {
-            self.compile_stmt(stmt)?;
-            if stmt_updates_statement_list_completion(stmt) {
-                self.emit(Op::StoreLocal(result_slot));
+        self.emit(Op::StoreLocal(register));
+        self.with_completion(Some(register), |compiler| {
+            if block_has_using(body) {
+                compiler.compile_statements_with_disposal(body)
             } else {
-                self.emit(Op::Pop);
+                body.iter().try_for_each(|stmt| compiler.compile_stmt(stmt))
             }
-        }
-        self.emit(Op::LoadLocal(result_slot));
+        })?;
+        self.emit(Op::LoadLocal(register));
         Ok(())
     }
 
-    fn compile_script_statement_list_with_disposal(
-        &mut self,
-        body: &[Stmt],
-    ) -> Result<(), RuntimeError> {
-        self.emit(Op::EnterDisposableScope);
-        let result_slot = self.temp_local("script_using_result");
-        self.emit_load_undefined();
-        self.emit(Op::StoreLocal(result_slot));
-
-        let enter = self.emit(Op::EnterTry {
-            catch: None,
-            finally: None,
-            end: usize::MAX,
-            catch_scope: None,
-            cleanup_slots: Vec::new(),
-        });
-        self.disposable_scope_depth += 1;
-        let body_result = (|| {
-            for stmt in body {
-                self.compile_stmt(stmt)?;
-                if stmt_updates_statement_list_completion(stmt) {
-                    self.emit(Op::StoreLocal(result_slot));
-                } else {
-                    self.emit(Op::Pop);
-                }
-            }
-            Ok(())
-        })();
-        self.disposable_scope_depth -= 1;
-        body_result?;
-        self.emit(Op::ExitTry);
-        let normal_jump = self.emit(Op::Jump(usize::MAX));
-
-        let finally_target = self.compile_dispose_finally(block_has_await_using(body));
-        if let Op::EnterTry { finally, .. } = &mut self.code[enter] {
-            *finally = Some(finally_target);
-        }
-        self.patch_jump(normal_jump, finally_target);
-        self.finish_try(enter, finally_target);
-        self.emit(Op::LoadLocal(result_slot));
-        Ok(())
-    }
-
-    /// Compiles a loop body. When completion values are unobservable the body
-    /// leaves nothing on the operand stack, so the loop needs neither the
-    /// per-iteration result store nor the block's own result slot.
-    pub(super) fn compile_loop_body(
-        &mut self,
-        body: &Stmt,
-        result_slot: usize,
-    ) -> Result<(), RuntimeError> {
-        // A brace-less body is one statement, not a statement list, so it takes
-        // the same discarded-value treatment a braced body's statements get.
-        // Without it `for (...) s += "x";` produced a value the loop stored,
-        // which kept the string alive and made the append quadratic.
-        if !self.compile_statement_list_entry(body)? {
+    /// Compiles an expression statement: its value goes to the completion
+    /// register, or is discarded where nothing observes it.
+    fn compile_expression_statement(&mut self, expr: &qjs_ast::Expr) -> Result<(), RuntimeError> {
+        if let Some(register) = self.completion {
+            self.compile_expr(expr)?;
+            self.emit(Op::StoreLocal(register));
             return Ok(());
         }
-        self.emit(Op::StoreLocal(result_slot));
+        if !self.compile_discarded_expression(expr)? {
+            self.compile_expr(expr)?;
+            self.emit(Op::Pop);
+        }
         Ok(())
     }
 
-    pub(super) fn reset_current_loop_completion_to_undefined(&mut self) {
-        if !self.tracks_completion_values {
-            return;
+    /// A top-level statement of a function body. Like any statement where no
+    /// completion is observable, except that an expression statement's value
+    /// is left where it lands: the frame's operand stack is discarded when
+    /// the body returns, and a `Pop` per statement would cost more
+    /// instructions than it saves.
+    fn compile_function_body_statement(&mut self, stmt: &Stmt) -> Result<(), RuntimeError> {
+        debug_assert!(self.completion.is_none());
+        if let Stmt::Expr(expr) = stmt {
+            if !self.compile_discarded_expression(expr)? {
+                self.compile_expr(expr)?;
+            }
+            return Ok(());
         }
-        if let Some(result_slot) = self.current_loop_result_slot() {
-            self.emit_load_undefined();
-            self.emit(Op::StoreLocal(result_slot));
-        }
+        self.compile_stmt(stmt)
     }
 
-    /// Compiles one statement of a statement list, returning whether it left
-    /// its completion value on the operand stack. Where the completion value is
-    /// unobservable, a plain identifier assignment statement -- the most
-    /// frequent statement form in ordinary code -- is compiled to the store
-    /// alone, dropping both the value duplication and the store that would
-    /// discard it.
-    pub(super) fn compile_statement_list_entry(
-        &mut self,
-        stmt: &Stmt,
-    ) -> Result<bool, RuntimeError> {
-        if !self.tracks_completion_values
-            && let Stmt::Expr(qjs_ast::Expr::Assignment {
-                target: target @ qjs_ast::AssignmentTarget::Identifier { .. },
-                op,
-                value,
-                ..
-            }) = stmt
-        {
-            if *op == qjs_ast::AssignmentOp::Assign {
-                self.compile_assign_discarded(target, value)?;
-                return Ok(false);
-            }
-            // A compound assignment in statement position is the shape of
-            // `sum += term` and `text += "literal"`. Producing its value costs
-            // a duplication plus the store that discards it, and — worse — the
-            // completion temporary holds the result until the block ends, so a
-            // uniquely held string can never be appended to in place and
-            // repeated `+=` becomes quadratic.
-            if Self::compound_assign_can_discard(target, *op) {
-                self.compile_compound_assign_discarded(target, *op, value)?;
-                return Ok(false);
-            }
-        }
-        // A variable declaration in statement position is the other ubiquitous
-        // statement form. Its completion value is always `undefined`, so where
-        // nothing can observe it the declaration compiles to its binding stores
-        // alone.
-        if !self.tracks_completion_values
-            && let Stmt::VarDecl {
-                kind, declarations, ..
-            } = stmt
-        {
-            self.compile_var_decl_bindings(*kind, declarations)?;
+    /// Compiles an expression whose value nothing uses without producing the
+    /// value, when that saves work; returns whether it did. A plain identifier
+    /// assignment -- the most frequent statement form in ordinary code --
+    /// compiles to the store alone, dropping both the value duplication and
+    /// the instruction that would discard it.
+    fn compile_discarded_expression(&mut self, expr: &qjs_ast::Expr) -> Result<bool, RuntimeError> {
+        let qjs_ast::Expr::Assignment {
+            target: target @ qjs_ast::AssignmentTarget::Identifier { .. },
+            op,
+            value,
+            ..
+        } = expr
+        else {
             return Ok(false);
+        };
+        if *op == qjs_ast::AssignmentOp::Assign {
+            self.compile_assign_discarded(target, value)?;
+            return Ok(true);
         }
-        self.compile_stmt(stmt)?;
-        Ok(true)
-    }
-
-    pub(super) fn store_statement_list_completion(&mut self, result_slot: usize) {
-        if self.tracks_completion_values && self.current_loop_result_slot().is_some() {
-            self.emit(Op::Dup);
-            self.emit(Op::StoreLocal(result_slot));
-            let loop_slot = self
-                .current_loop_result_slot()
-                .expect("loop result slot should still exist");
-            self.emit(Op::StoreLocal(loop_slot));
-        } else {
-            self.emit(Op::StoreLocal(result_slot));
+        // A compound assignment in statement position is the shape of
+        // `sum += term` and `text += "literal"`. Producing its value costs a
+        // duplication plus the instruction that discards it, and -- worse --
+        // a held copy keeps a uniquely held string from being appended to in
+        // place, making repeated `+=` quadratic.
+        if Self::compound_assign_can_discard(target, *op) {
+            self.compile_compound_assign_discarded(target, *op, value)?;
+            return Ok(true);
         }
-    }
-
-    fn current_loop_result_slot(&self) -> Option<usize> {
-        self.loop_stack.last().map(|context| context.result_slot)
+        Ok(false)
     }
 
     /// Whether the code currently being compiled is inside a `with` body, so
@@ -1267,17 +1194,14 @@ impl Compiler {
             return self.compile_stmt(body);
         }
 
-        let result_slot = self.temp_local("label_result");
-        self.emit_load_undefined();
-        self.emit(Op::StoreLocal(result_slot));
+        // A labelled statement shares the enclosing completion register: a
+        // `break` to it completes it normally with the break's value, which
+        // may be empty (`1; L: break L;` is 1).
         self.push_label(label.to_owned());
-        self.push_breakable(result_slot, false);
+        self.push_breakable(false);
         self.compile_stmt(body)?;
-        self.emit(Op::StoreLocal(result_slot));
         let context = self.pop_loop();
-        self.emit(Op::LoadLocal(result_slot));
-        let done = self.code.len();
-        self.patch_loop_breaks(&context, done);
+        self.land_breaks(&context);
         Ok(())
     }
 }

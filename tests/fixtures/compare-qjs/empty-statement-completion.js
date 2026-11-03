@@ -1,0 +1,20 @@
+(function(){var r=[];
+r.push(eval("1; B: { }"));
+r.push(eval("1; B: { break B; }"));
+r.push(eval("1; B: if (false) 2;"));
+r.push(eval("1; { }"));
+r.push(eval("1; var x;"));
+r.push(eval("1; let y = 2;"));
+r.push(eval("1; function f() {}"));
+r.push(eval("1; class C {}"));
+r.push(eval("1; ;"));
+r.push(eval("1; debugger;"));
+r.push(eval("1; switch (0) { }"));
+r.push(eval("1; switch (0) { case 0: }"));
+r.push(eval("1; switch (0) { case 0: function g() {} }"));
+r.push(eval("1; if (true) function h() {}"));
+r.push(eval("1; while (false);"));
+r.push(eval("1; with ({}) ;"));
+r.push(eval("1; for (var k in {});"));
+r.push(eval("1; try { } catch { }"));
+return r.map(String).join('|');})()

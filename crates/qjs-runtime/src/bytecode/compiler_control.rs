@@ -15,6 +15,7 @@ use super::compiler_lexical::{
     for_in_left_lexical_names, switch_annex_b_blocked_names, switch_lexical_declared_bindings,
 };
 use super::ir::Op;
+use super::util::stmt_writes_completion_first;
 
 impl Compiler {
     pub(super) fn compile_for_in(
@@ -87,7 +88,6 @@ impl Compiler {
         right: &Expr,
         body: &Stmt,
     ) -> Result<(), RuntimeError> {
-        let result_slot = self.temp_local("for_await_result");
         let iterator_slot = self.temp_local("for_await_iterator");
         let next_slot = self.temp_local("for_await_next");
         let done_slot = self.temp_local("for_await_done");
@@ -98,8 +98,7 @@ impl Compiler {
             done_slot,
         };
 
-        self.emit_load_undefined();
-        self.emit(Op::StoreLocal(result_slot));
+        self.reset_completion();
         self.declare_for_in_head_tdz(left);
         self.compile_expr(right)?;
         self.emit(Op::GetAsyncIterator);
@@ -145,10 +144,12 @@ impl Compiler {
         let true_slot = self.const_slot(Value::Boolean(true));
         self.emit(Op::LoadConst(true_slot));
         self.emit(Op::StoreLocal(body_active_slot));
-        self.compile_for_of_iteration(left, value_slot, body, result_slot, &blocked)?;
+        self.compile_for_of_iteration(left, value_slot, body, &blocked)?;
         let context = self.pop_loop();
 
         self.emit(Op::Jump(loop_start));
+        // Continues land inside the iterator region, at the next step.
+        self.land_continues(&context, loop_start);
 
         let exit = self.code.len();
         self.patch_jump(exit_jump, exit);
@@ -157,14 +158,12 @@ impl Compiler {
         self.emit(Op::ExitTry);
         let cleanup_slots = self.current_lexical_slots_for_names(&blocked);
         self.emit_for_of_loop_completion(
-            result_slot,
             iterator,
             &cleanup_slots,
             &context,
             enter,
             body_active_slot,
         );
-        self.patch_loop_continues(&context, loop_start);
         Ok(())
     }
 
@@ -174,14 +173,12 @@ impl Compiler {
         right: &Expr,
         body: &Stmt,
     ) -> Result<(), RuntimeError> {
-        let result_slot = self.temp_local("for_in_result");
         let target_slot = self.temp_local("for_in_target");
         let keys_slot = self.temp_local("for_in_keys");
         let index_slot = self.temp_local("for_in_index");
         let key_slot = self.temp_local("for_in_key");
 
-        self.emit_load_undefined();
-        self.emit(Op::StoreLocal(result_slot));
+        self.reset_completion();
         self.compile_for_in_initializer(left)?;
         self.declare_for_in_head_tdz(left);
         self.compile_expr(right)?;
@@ -220,9 +217,8 @@ impl Compiler {
         self.compile_for_in_left(left, key_slot)?;
 
         self.with_annex_b_blocked_function_names(&blocked, |compiler| {
-            compiler.push_loop(result_slot);
-            compiler.compile_loop_body(body, result_slot)?;
-            Ok(())
+            compiler.push_loop();
+            compiler.compile_stmt(body)
         })?;
         let context = self.pop_loop();
 
@@ -237,13 +233,13 @@ impl Compiler {
         self.emit(Op::Binary(BinaryOp::Add));
         self.emit(Op::StoreLocal(index_slot));
         self.emit(Op::Jump(loop_start));
+        self.land_continues(&context, update_start);
 
         let exit = self.code.len();
         self.patch_jump(exit_jump, exit);
         self.emit(Op::Pop);
         let cleanup_slots = self.current_lexical_slots_for_names(&blocked);
-        self.emit_scoped_loop_completion(result_slot, &cleanup_slots, &context);
-        self.patch_loop_continues(&context, update_start);
+        self.land_loop_exit(&cleanup_slots, &context);
         Ok(())
     }
 
@@ -253,7 +249,6 @@ impl Compiler {
         right: &Expr,
         body: &Stmt,
     ) -> Result<(), RuntimeError> {
-        let result_slot = self.temp_local("for_of_result");
         let iterator_slot = self.temp_local("for_of_iterator");
         let next_slot = self.temp_local("for_of_next");
         let done_slot = self.temp_local("for_of_done");
@@ -264,8 +259,7 @@ impl Compiler {
             done_slot,
         };
 
-        self.emit_load_undefined();
-        self.emit(Op::StoreLocal(result_slot));
+        self.reset_completion();
         self.declare_for_in_head_tdz(left);
         self.compile_expr(right)?;
         self.emit(Op::GetIterator);
@@ -307,10 +301,12 @@ impl Compiler {
         let true_slot = self.const_slot(Value::Boolean(true));
         self.emit(Op::LoadConst(true_slot));
         self.emit(Op::StoreLocal(body_active_slot));
-        self.compile_for_of_iteration(left, value_slot, body, result_slot, &blocked)?;
+        self.compile_for_of_iteration(left, value_slot, body, &blocked)?;
         let context = self.pop_loop();
 
         self.emit(Op::Jump(loop_start));
+        // Continues land inside the iterator region, at the next step.
+        self.land_continues(&context, loop_start);
 
         let exit = self.code.len();
         self.patch_jump(exit_jump, exit);
@@ -319,14 +315,12 @@ impl Compiler {
         self.emit(Op::ExitTry);
         let cleanup_slots = self.current_lexical_slots_for_names(&blocked);
         self.emit_for_of_loop_completion(
-            result_slot,
             iterator,
             &cleanup_slots,
             &context,
             enter,
             body_active_slot,
         );
-        self.patch_loop_continues(&context, loop_start);
         Ok(())
     }
 
@@ -335,61 +329,22 @@ impl Compiler {
         left: &ForInLeft,
         value_slot: usize,
         body: &Stmt,
-        result_slot: usize,
         blocked: &[String],
     ) -> Result<(), RuntimeError> {
         self.with_annex_b_blocked_function_names(blocked, |compiler| {
-            compiler.push_loop(result_slot);
+            compiler.push_loop();
             if for_in_left_has_disposal(left) {
-                compiler.compile_for_of_iteration_with_disposal(
-                    left,
-                    value_slot,
-                    body,
-                    result_slot,
-                )?;
+                // Each iteration's `using` binding is disposed when that
+                // iteration's body completes.
+                compiler.compile_disposal_region(for_in_left_has_await_using(left), |compiler| {
+                    compiler.compile_for_in_left(left, value_slot)?;
+                    compiler.compile_stmt(body)
+                })
             } else {
                 compiler.compile_for_in_left(left, value_slot)?;
-                compiler.compile_loop_body(body, result_slot)?;
+                compiler.compile_stmt(body)
             }
-            Ok(())
         })
-    }
-
-    fn compile_for_of_iteration_with_disposal(
-        &mut self,
-        left: &ForInLeft,
-        value_slot: usize,
-        body: &Stmt,
-        result_slot: usize,
-    ) -> Result<(), RuntimeError> {
-        self.emit(Op::EnterDisposableScope);
-        let loop_depth = self.loop_stack_depth();
-        self.push_try_result_slot(result_slot, loop_depth);
-        let enter = self.emit(Op::EnterTry {
-            catch: None,
-            finally: None,
-            end: usize::MAX,
-            catch_scope: None,
-            cleanup_slots: Vec::new(),
-        });
-        self.disposable_scope_depth += 1;
-        let body_result = (|| {
-            self.compile_for_in_left(left, value_slot)?;
-            self.compile_loop_body(body, result_slot)?;
-            Ok(())
-        })();
-        self.disposable_scope_depth -= 1;
-        body_result?;
-        self.emit(Op::ExitTry);
-        let normal_jump = self.emit(Op::Jump(usize::MAX));
-        self.pop_try_result_slot();
-        let finally_target = self.compile_dispose_finally(for_in_left_has_await_using(left));
-        if let Op::EnterTry { finally, .. } = &mut self.code[enter] {
-            *finally = Some(finally_target);
-        }
-        self.patch_jump(normal_jump, finally_target);
-        self.finish_try(enter, finally_target);
-        Ok(())
     }
 
     /// Emits the for-of exit paths. The normal path arrives with the
@@ -398,7 +353,6 @@ impl Compiler {
     /// errors close it with close errors swallowed before rethrowing.
     fn emit_for_of_loop_completion(
         &mut self,
-        result_slot: usize,
         iterator: LoopIterator,
         cleanup_slots: &[usize],
         context: &super::compiler::LoopContext,
@@ -408,7 +362,6 @@ impl Compiler {
         for slot in cleanup_slots {
             self.emit(Op::ClearLocal(*slot));
         }
-        self.emit(Op::LoadLocal(result_slot));
         let normal_done = self.emit(Op::Jump(usize::MAX));
 
         let catch_target = self.code.len();
@@ -437,10 +390,11 @@ impl Compiler {
         let begin = self.emit(Op::BeginFinally(usize::MAX));
         self.emit_close_unless_done(iterator.iterator_slot, iterator.done_slot, false);
         self.emit(Op::EndFinally);
+        let finally_end = self.code.len();
+        self.patch_finally_end(begin, finally_end);
+        self.land_breaks(context);
         let done = self.code.len();
-        self.patch_finally_end(begin, done);
         self.patch_jump(normal_done, done);
-        self.patch_loop_breaks(context, done);
         self.finish_try(enter, finally_target);
         if let Op::EnterTry { catch, finally, .. } = &mut self.code[enter] {
             *catch = Some(catch_target);
@@ -462,11 +416,10 @@ impl Compiler {
         cases: &[SwitchCase],
     ) -> Result<(), RuntimeError> {
         let discriminant_slot = self.temp_local("switch_discriminant");
-        let result_slot = self.temp_local("switch_result");
         self.compile_expr(discriminant)?;
         self.emit(Op::StoreLocal(discriminant_slot));
-        self.emit_load_undefined();
-        self.emit(Op::StoreLocal(result_slot));
+        // CaseBlockEvaluation starts V at `undefined` (ES2025 14.12.4).
+        self.reset_completion();
 
         for (name, mutable) in switch_lexical_declared_bindings(cases, self.strict) {
             self.declare_lexical_slot(&name, mutable);
@@ -492,12 +445,12 @@ impl Compiler {
 
         let no_match_jump = self.emit(Op::Jump(usize::MAX));
         let blocked = switch_annex_b_blocked_names(cases, self.strict);
-        self.push_breakable(result_slot, true);
+        self.push_breakable(true);
         let mut case_starts = Vec::with_capacity(cases.len());
         self.with_annex_b_blocked_function_names(&blocked, |compiler| {
             for case in cases {
                 case_starts.push(compiler.code.len());
-                compiler.compile_switch_case(&case.consequent, result_slot)?;
+                compiler.compile_switch_case(&case.consequent)?;
             }
             Ok(())
         })?;
@@ -515,15 +468,11 @@ impl Compiler {
             }
         }
         let cleanup_slots = self.current_lexical_slots_for_names(&blocked);
-        self.emit_scoped_loop_completion(result_slot, &cleanup_slots, &context);
+        self.land_loop_exit(&cleanup_slots, &context);
         Ok(())
     }
 
-    fn compile_switch_case(
-        &mut self,
-        body: &[Stmt],
-        result_slot: usize,
-    ) -> Result<(), RuntimeError> {
+    fn compile_switch_case(&mut self, body: &[Stmt]) -> Result<(), RuntimeError> {
         for stmt in body {
             if let Stmt::FunctionDecl { .. } = stmt {
                 self.compile_function_decl(stmt)?;
@@ -531,7 +480,6 @@ impl Compiler {
             } else {
                 self.compile_stmt(stmt)?;
             }
-            self.emit(Op::StoreLocal(result_slot));
         }
         Ok(())
     }
@@ -668,7 +616,6 @@ impl Compiler {
     }
 
     pub(super) fn compile_with(&mut self, object: &Expr, body: &Stmt) -> Result<(), RuntimeError> {
-        // The completion value of a `with` is its body's completion value.
         self.compile_expr(object)?;
         let enter = self.emit(Op::EnterTry {
             catch: None,
@@ -678,9 +625,12 @@ impl Compiler {
             cleanup_slots: Vec::new(),
         });
         self.emit(Op::EnterWith);
+        // The completion is UpdateEmpty(C, undefined) (ES2025 14.11.2).
+        if !stmt_writes_completion_first(body) {
+            self.reset_completion();
+        }
         self.scope_plan.enter(crate::binding::ScopeKind::With);
         self.with_depth += 1;
-        self.reset_current_loop_completion_to_undefined();
         let result = self.compile_stmt(body);
         self.with_depth -= 1;
         self.scope_plan.exit();

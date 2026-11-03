@@ -1765,10 +1765,9 @@ fn typed_loops_write_boxed_locals_into_dense_elements() {
 }
 
 /// A function body's statement completion values are unobservable, so the
-/// temporaries carrying them are read as `undefined` and never written: the
-/// arms of an `if`/`else if` chain leave different completion temporaries on
-/// the stack -- one boxed, one scalar -- and their join used to decline the
-/// whole region (ai-astar's neighbor loop).
+/// compiler keeps none: the arms of an `if`/`else if` chain used to leave
+/// different completion temporaries on the stack -- one boxed, one scalar --
+/// and their join declined the whole region (ai-astar's neighbor loop).
 #[test]
 fn typed_loops_join_arms_that_leave_different_completion_values() {
     let source = "function run(items, heuristic) {

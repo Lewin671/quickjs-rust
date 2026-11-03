@@ -3,7 +3,7 @@
 //! JavaScript strings are immutable, so a buffer may be grown only while it
 //! is uniquely held. Before a compound string assignment the handlers here
 //! drop the engine-internal copies of the old value (the local slot, its
-//! cell, the realm mirror, dead completion temporaries); the store that
+//! cell, the realm mirror); the store that
 //! follows restores the binding. A reference JavaScript can reach is never
 //! dropped: it keeps the string shared and forces a copy.
 
@@ -59,29 +59,9 @@ impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
             && matches!(local, Value::String(current) if crate::JsString::ptr_eq(current, expected))
         {
             *local = Value::Undefined;
-            self.release_dead_completion_copies(expected);
             return true;
         }
         self.detach_matching_shared_string(slot, expected)
-    }
-
-    /// Drops copies of `expected` parked in the frame's dead completion
-    /// temporaries. `if (c) text += part;` inside a function-body loop stores
-    /// the statement's value in the block's and the loop's result slots, which
-    /// nothing can read; left there, they kept the buffer shared and every
-    /// append copied the whole string.
-    pub(super) fn release_dead_completion_copies(&mut self, expected: &crate::JsString) {
-        if expected.is_unique() || self.bytecode.dead_completion_slots.is_empty() {
-            return;
-        }
-        let frame = &mut *self.current;
-        for slot in frame.bytecode.dead_completion_slots.iter().copied() {
-            if let Some(Some(local)) = frame.locals.get_mut(slot)
-                && matches!(&*local, Value::String(current) if crate::JsString::ptr_eq(current, expected))
-            {
-                *local = Value::Undefined;
-            }
-        }
     }
 
     /// Temporarily clears the engine's internal mirrors of one shared binding
@@ -266,12 +246,6 @@ impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
             return Ok(result);
         }
         if local_meta.mutable && self.slot_is_authoritative(slot) {
-            if let Some(Some(Value::String(current))) = self.locals.get(slot)
-                && !current.is_unique()
-            {
-                let expected = current.clone();
-                self.release_dead_completion_copies(&expected);
-            }
             if let Some(Some(Value::String(string))) = self.locals.get_mut(slot) {
                 crate::string::push_js_str(string.make_mut(), suffix);
                 return Ok(Value::String(string.clone()));
@@ -539,9 +513,9 @@ mod tests {
         );
     }
 
-    /// `if (c) text += part;` in a function-body loop parks each result in
-    /// the block's and loop's completion slots. Those are dead in a function
-    /// body, so the append must release them and keep the buffer unique; a
+    /// `if (c) text += part;` in a function-body loop: no statement
+    /// completion value is observable in a function body, so the compiler
+    /// keeps no copy of the appended string and the buffer stays unique; a
     /// genuine alias of the string still forces a copy.
     #[test]
     fn conditional_string_append_in_function_loop_stays_unique() {
@@ -558,21 +532,18 @@ mod tests {
                 _ => None,
             })
             .expect("build bytecode should be present");
-        assert_eq!(
-            build.dead_completion_slots.len(),
-            2,
-            "block and loop result slots: {:#?}",
+        assert!(
+            build.locals.iter().all(|local| !local.compiler_temporary),
+            "a function body allocates no completion temporaries: {:#?}",
             build.locals
         );
-        assert!(bytecode.dead_completion_slots.is_empty());
         assert_eq!(
             eval(
                 "function build(n) { var text = ''; for (var i = 0; i < n; i++) { if (i % 2) text += 'b'; else text += 'a'; } return text; } build(6);"
             ),
             Ok(Value::String("ababab".into()))
         );
-        // With a real alias the completion slot is not the only other owner,
-        // and the alias must keep its old value.
+        // With a real alias the alias must keep its old value.
         assert_eq!(
             eval(
                 "function build(n) { var text = '', seen; for (var i = 0; i < n; i++) { if (i >= 0) seen = text += 'a'; } return seen + ':' + text; } build(3);"
