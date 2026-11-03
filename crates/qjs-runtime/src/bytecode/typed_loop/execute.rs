@@ -59,8 +59,11 @@ pub(crate) fn try_run_typed_loop<F: LoopFrame>(
     // different: the dispatch chain consulted it first on this very edge and
     // it declined without entering, so the frame is at the header with
     // every slot written back, which is the state this program seeds from.
+    // A frame that never runs those plans cannot be inside one's replay.
+    let enclosing_plans_run_here = vm.runs_numeric_mutation_plans();
     let claimed_by_enclosing_region = |(plan_header, plan_backedge): (usize, usize)| {
-        (plan_header..=plan_backedge).contains(&backedge)
+        enclosing_plans_run_here
+            && (plan_header..=plan_backedge).contains(&backedge)
             && !(plan_header == header && plan_backedge == backedge)
     };
     // The converse holds for the special mutation plans: a region that

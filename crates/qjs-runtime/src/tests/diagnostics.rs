@@ -541,6 +541,36 @@ fn a_typed_loop_run_from_the_wide_tier_reads_the_receiver_and_keeps_the_stack() 
 }
 
 #[test]
+fn an_inner_loop_under_a_numeric_mutation_plan_region_runs_on_the_wide_tier() {
+    // The outer loop matches a numeric mutation plan that only the
+    // interpreter runs, and that declines here (the elements are booleans).
+    // The wide tier cannot be part-way through that plan's replay, so the
+    // inner loop it reaches is its own: it enters on the first outer
+    // iteration instead of being refused as claimed by the plan's region.
+    let (value, counters) = counted(
+        "function sieve(m, flags) {
+             var i, k, count = 0;
+             for (i = 2; i <= m; i++) flags[i] = true;
+             for (i = 2; i <= m; i++) {
+                 if (flags[i]) {
+                     for (k = i + i; k <= m; k += i) flags[k] = false;
+                     count++;
+                 }
+             }
+             return count;
+         }
+         var total = 0;
+         for (var r = 0; r < 20; r++) total += sieve(1000, new Array(1001));
+         total;",
+    );
+    assert_eq!(value, Value::Number(3_360.0));
+    // Per call: the fill loop and the first inner loop on the wide tier,
+    // then the outer loop in the interpreter frame it exits to.
+    assert!(counters.loop_plan_entries >= 60, "{counters:?}");
+    assert!(counters.nested_vm_constructions <= 21, "{counters:?}");
+}
+
+#[test]
 fn named_operands_link_once_per_body_and_domain() {
     let source = |iterations: u32| {
         format!(

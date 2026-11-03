@@ -97,6 +97,10 @@ impl LoopFrame for WideLoopFrame<'_, '_> {
         false
     }
 
+    fn runs_numeric_mutation_plans(&self) -> bool {
+        false
+    }
+
     fn declined_typed_loop_programs(&self) -> u128 {
         self.declined
     }
