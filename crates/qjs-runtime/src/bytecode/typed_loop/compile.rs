@@ -1263,20 +1263,6 @@ impl<'a> Builder<'a> {
                     }
                 }
             }
-            // A function body's statement completion values are never
-            // observable, so the temporaries that carry them hold nothing a
-            // region must keep: reading one as `undefined` lets the joins of
-            // an `if`/`else` chain -- each arm leaving a different completion
-            // temporary on the stack, one boxed, one not -- agree.
-            Op::LoadLocal(slot) if self.bytecode.dead_completion_slots.contains(slot) => {
-                let register = self.constant_register(Typed::Undefined)?;
-                self.push(register, Origin::Computed);
-            }
-            Op::StoreLocal(slot) | Op::AssignLocal(slot)
-                if self.bytecode.dead_completion_slots.contains(slot) =>
-            {
-                self.stack.pop()?;
-            }
             Op::LoadLocal(slot) => {
                 let origin = Origin::Local(u32::try_from(*slot).ok()?);
                 if self.slot_is_boxed(*slot) {

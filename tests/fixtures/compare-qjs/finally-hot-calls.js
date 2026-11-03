@@ -1,0 +1,1 @@
+(function(){function f(i){var x=0;for(var j=0;j<2;j++){try{try{if(j)continue;x+=i;}finally{x+=2;}}finally{x+=3;}}return x;}function hot(n){var sum=0;for(var i=0;i<n;i++)sum+=f(i);return sum;}return hot(100)+':'+hot(100);})()

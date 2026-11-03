@@ -17,7 +17,7 @@ use crate::{
 use super::compiler::Compiler;
 use super::compiler_lexical::{for_init_lexical_names, stmt_declares_capturable_lexical};
 use super::ir::Op;
-use super::util::parse_number_literal;
+use super::util::{parse_number_literal, stmt_writes_completion_first};
 
 enum OptionalChainStep<'a> {
     Member(&'a qjs_ast::MemberProperty),
@@ -39,27 +39,28 @@ impl Compiler {
         self.compile_expr(test)?;
         let else_jump = self.emit(Op::JumpIfFalse(usize::MAX));
         self.emit(Op::Pop);
-        self.reset_current_loop_completion_to_undefined();
         self.compile_if_clause_stmt(consequent)?;
         let end_jump = self.emit(Op::Jump(usize::MAX));
         let else_target = self.code.len();
         self.patch_jump(else_jump, else_target);
         self.emit(Op::Pop);
-        if let Some(alternate) = alternate {
-            self.reset_current_loop_completion_to_undefined();
-            self.compile_if_clause_stmt(alternate)?;
-        } else {
-            self.emit_load_undefined();
+        match alternate {
+            Some(alternate) => self.compile_if_clause_stmt(alternate)?,
+            // A false test without an else completes with `undefined`.
+            None => self.reset_completion(),
         }
         let end_target = self.code.len();
         self.patch_jump(end_jump, end_target);
         Ok(())
     }
 
+    /// Compiles one `if` arm, whose completion is UpdateEmpty(C, undefined).
     fn compile_if_clause_stmt(&mut self, stmt: &Stmt) -> Result<(), RuntimeError> {
+        if !stmt_writes_completion_first(stmt) {
+            self.reset_completion();
+        }
         if let Stmt::FunctionDecl { name, .. } = stmt {
             if self.annex_b_function_name_blocked(name) {
-                self.emit_load_undefined();
                 return Ok(());
             }
             return self.with_scope_kind(crate::binding::ScopeKind::Block, |compiler| {
@@ -73,43 +74,29 @@ impl Compiler {
                 )
             });
         }
-        // Where nothing observes the `if` statement's value, a clause is a
-        // statement-list entry: `if (c) text += piece;` then stores without
-        // leaving the new string behind in a completion temporary, which would
-        // keep a second reference and make every later append copy.
-        if !self.tracks_completion_values {
-            if !self.compile_statement_list_entry(stmt)? {
-                self.emit_load_undefined();
-            }
-            return Ok(());
-        }
         self.compile_stmt(stmt)
     }
 
     pub(super) fn compile_while(&mut self, test: &Expr, body: &Stmt) -> Result<(), RuntimeError> {
-        let result_slot = self.temp_local("loop_result");
-        self.emit_load_undefined();
-        self.emit(Op::StoreLocal(result_slot));
+        self.reset_completion();
         let loop_start = self.code.len();
         self.compile_expr(test)?;
         let exit_jump = self.emit(Op::JumpIfFalse(usize::MAX));
         self.emit(Op::Pop);
-        self.push_loop(result_slot);
+        self.push_loop();
         let body_start = self.code.len();
-        self.compile_loop_body(body, result_slot)?;
+        self.compile_stmt(body)?;
         let context = self.pop_loop();
         // A `continue` (and the fall-through after the body) must pass through
         // the per-iteration environment refresh, so the refresh — when needed —
         // becomes the continue target rather than the loop top.
         let continue_target = self.emit_loop_iteration_scope(body, body_start, loop_start);
         self.emit(Op::Jump(loop_start));
+        self.land_continues(&context, continue_target);
         let exit = self.code.len();
         self.patch_jump(exit_jump, exit);
         self.emit(Op::Pop);
-        self.emit(Op::LoadLocal(result_slot));
-        let done = self.code.len();
-        self.patch_loop_breaks(&context, done);
-        self.patch_loop_continues(&context, continue_target);
+        self.land_breaks(&context);
         Ok(())
     }
 
@@ -157,13 +144,11 @@ impl Compiler {
         body: &Stmt,
         test: &Expr,
     ) -> Result<(), RuntimeError> {
-        let result_slot = self.temp_local("loop_result");
-        self.emit_load_undefined();
-        self.emit(Op::StoreLocal(result_slot));
+        self.reset_completion();
         let loop_start = self.code.len();
-        self.push_loop(result_slot);
+        self.push_loop();
         let body_start = self.code.len();
-        self.compile_loop_body(body, result_slot)?;
+        self.compile_stmt(body)?;
         let context = self.pop_loop();
         // The refresh (when needed) sits before the test so both the
         // fall-through and a `continue` (which targets the test) run it.
@@ -173,13 +158,11 @@ impl Compiler {
         let exit_jump = self.emit(Op::JumpIfFalse(usize::MAX));
         self.emit(Op::Pop);
         self.emit(Op::Jump(loop_start));
+        self.land_continues(&context, continue_target);
         let exit = self.code.len();
         self.patch_jump(exit_jump, exit);
         self.emit(Op::Pop);
-        self.emit(Op::LoadLocal(result_slot));
-        let done = self.code.len();
-        self.patch_loop_breaks(&context, done);
-        self.patch_loop_continues(&context, continue_target);
+        self.land_breaks(&context);
         Ok(())
     }
 
@@ -212,8 +195,21 @@ impl Compiler {
         body: &Stmt,
     ) -> Result<(), RuntimeError> {
         if for_init_has_using(init) {
-            return self.compile_for_with_disposal(init, test, update, body);
+            // The loop's `using` resources are disposed when the loop exits.
+            return self.compile_disposal_region(for_init_has_await_using(init), |compiler| {
+                compiler.compile_for_from_init(init, test, update, body)
+            });
         }
+        self.compile_for_from_init(init, test, update, body)
+    }
+
+    fn compile_for_from_init(
+        &mut self,
+        init: Option<&ForInit>,
+        test: Option<&Expr>,
+        update: Option<&Expr>,
+        body: &Stmt,
+    ) -> Result<(), RuntimeError> {
         let mut init_created_closure = false;
         if let Some(init) = init {
             let init_start = self.code.len();
@@ -230,93 +226,6 @@ impl Compiler {
             self.emit(Op::Pop);
         }
         self.compile_for_loop_after_init(init, test, update, body, init_created_closure)
-    }
-
-    fn compile_for_with_disposal(
-        &mut self,
-        init: Option<&ForInit>,
-        test: Option<&Expr>,
-        update: Option<&Expr>,
-        body: &Stmt,
-    ) -> Result<(), RuntimeError> {
-        self.emit(Op::EnterDisposableScope);
-        let result_slot = self.temp_local("loop_result");
-        self.emit_load_undefined();
-        self.emit(Op::StoreLocal(result_slot));
-
-        let enter = self.emit(Op::EnterTry {
-            catch: None,
-            finally: None,
-            catch_scope: None,
-            cleanup_slots: Vec::new(),
-        });
-        self.disposable_scope_depth += 1;
-        let body_result = (|| {
-            if let Some(init) = init {
-                let init_start = self.code.len();
-                self.compile_for_init(init)?;
-                let init_created_closure = self.code[init_start..].iter().any(|op| {
-                    matches!(
-                        op,
-                        Op::NewFunction { .. }
-                            | Op::NewClass { .. }
-                            | Op::CallDirectEval { .. }
-                            | Op::CallDirectEvalSpread { .. }
-                    )
-                });
-                self.emit(Op::Pop);
-                self.compile_for_loop_after_init_with_result(
-                    Some(init),
-                    test,
-                    update,
-                    body,
-                    result_slot,
-                    init_created_closure,
-                )
-            } else {
-                self.compile_for_loop_after_init_with_result(
-                    init,
-                    test,
-                    update,
-                    body,
-                    result_slot,
-                    false,
-                )
-            }
-        })();
-        self.disposable_scope_depth -= 1;
-        body_result?;
-        self.emit(Op::ExitTry);
-        let normal_jump = self.emit(Op::Jump(usize::MAX));
-
-        let finally_target = self.compile_dispose_finally(for_init_has_await_using(init));
-        if let Op::EnterTry { finally, .. } = &mut self.code[enter] {
-            *finally = Some(finally_target);
-        }
-        self.patch_jump(normal_jump, finally_target);
-        self.emit(Op::LoadLocal(result_slot));
-        Ok(())
-    }
-
-    fn compile_for_loop_after_init(
-        &mut self,
-        init: Option<&ForInit>,
-        test: Option<&Expr>,
-        update: Option<&Expr>,
-        body: &Stmt,
-        init_created_closure: bool,
-    ) -> Result<(), RuntimeError> {
-        let result_slot = self.temp_local("loop_result");
-        self.emit_load_undefined();
-        self.emit(Op::StoreLocal(result_slot));
-        self.compile_for_loop_after_init_with_result(
-            init,
-            test,
-            update,
-            body,
-            result_slot,
-            init_created_closure,
-        )
     }
 
     /// Returns the numeric bound of a counted-loop test whose right operand is
@@ -347,15 +256,15 @@ impl Compiler {
         parse_number_literal(raw).ok()
     }
 
-    fn compile_for_loop_after_init_with_result(
+    fn compile_for_loop_after_init(
         &mut self,
         init: Option<&ForInit>,
         test: Option<&Expr>,
         update: Option<&Expr>,
         body: &Stmt,
-        result_slot: usize,
         init_created_closure: bool,
     ) -> Result<(), RuntimeError> {
+        self.reset_completion();
         let blocked = init.map_or_else(Vec::new, for_init_lexical_names);
         let iteration_slots: Vec<usize> = if matches!(
             init,
@@ -412,9 +321,8 @@ impl Compiler {
         };
         let body_start = self.code.len();
         self.with_annex_b_blocked_function_names(&blocked, |compiler| {
-            compiler.push_loop(result_slot);
-            compiler.compile_loop_body(body, result_slot)?;
-            Ok(())
+            compiler.push_loop();
+            compiler.compile_stmt(body)
         })?;
         let context = self.pop_loop();
         let update_start = self.code.len();
@@ -432,14 +340,14 @@ impl Compiler {
             self.emit(Op::Pop);
         }
         self.emit(Op::Jump(loop_start));
+        self.land_continues(&context, update_start);
         let exit = self.code.len();
         if let Some(exit_jump) = exit_jump {
             self.patch_jump(exit_jump, exit);
             self.emit(Op::Pop);
         }
         let cleanup_slots = self.current_lexical_slots_for_names(&blocked);
-        self.emit_scoped_loop_completion(result_slot, &cleanup_slots, &context);
-        self.patch_loop_continues(&context, update_start);
+        self.land_loop_exit(&cleanup_slots, &context);
         Ok(())
     }
 

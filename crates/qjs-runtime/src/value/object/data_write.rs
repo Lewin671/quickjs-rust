@@ -17,14 +17,26 @@ impl ObjectRef {
         value: &Value,
         chain_proven: bool,
     ) -> OrdinaryDataWrite {
-        self.write_or_create_data_key_impl(key, value, chain_proven, false)
+        self.write_or_create_data_key_impl(key, value, chain_proven, false, true)
     }
     pub(crate) fn write_or_create_computed_data_key(
         &self,
         key: &KeyLease,
         value: &Value,
     ) -> OrdinaryDataWrite {
-        self.write_or_create_data_key_impl(key, value, false, true)
+        self.write_or_create_data_key_impl(key, value, false, true, true)
+    }
+    /// `write_or_create_computed_data_key` that declines, before any effect,
+    /// a write that would create an own array-index property. Overwriting an
+    /// existing one is still a plain write: only creation changes what
+    /// `has_own_index_property` reports to a reader of this object's
+    /// prototype-chain facts.
+    pub(crate) fn write_or_create_computed_data_key_without_index_creation(
+        &self,
+        key: &KeyLease,
+        value: &Value,
+    ) -> OrdinaryDataWrite {
+        self.write_or_create_data_key_impl(key, value, false, true, false)
     }
     fn write_or_create_data_key_impl(
         &self,
@@ -32,6 +44,7 @@ impl ObjectRef {
         value: &Value,
         chain_proven: bool,
         dynamic: bool,
+        create_index: bool,
     ) -> OrdinaryDataWrite {
         let decline = || OrdinaryDataWrite {
             result: OwnDataPropertyWrite::NeedsSlowPath,
@@ -83,6 +96,9 @@ impl ObjectRef {
             }
             Err(lookup) => lookup,
         };
+        if !create_index && key.array_index().is_some() {
+            return decline();
+        }
         if !chain_proven {
             let mut current = lookup.prototype();
             loop {
@@ -185,6 +201,34 @@ mod tests {
         let named = ObjectRef::new(HashMap::new(), &domain);
         named.write_or_create_data_key(&domain.intern("stable"), &Value::Null, false);
         assert!(!named.with_named(|store| store.is_dictionary()));
+    }
+    #[test]
+    fn index_creation_can_be_declined_before_effects() {
+        let domain = crate::property::atom::AtomDomain::new();
+        let object = ObjectRef::new(HashMap::new(), &domain);
+        let index = domain.intern("3");
+        let write = |key: &KeyLease, value: f64| {
+            object
+                .write_or_create_computed_data_key_without_index_creation(
+                    key,
+                    &Value::Number(value),
+                )
+                .result
+        };
+        assert!(matches!(
+            write(&index, 1.0),
+            OwnDataPropertyWrite::NeedsSlowPath
+        ));
+        assert!(!object.has_own_index_property());
+        assert_eq!(object.get("3"), None);
+        // A non-index key that looks numeric is an ordinary name.
+        let name = domain.intern("4294967295");
+        assert!(matches!(write(&name, 2.0), OwnDataPropertyWrite::Written));
+        assert!(!object.has_own_index_property());
+        // An existing index property is overwritten in place.
+        object.write_or_create_computed_data_key(&index, &Value::Null);
+        assert!(matches!(write(&index, 3.0), OwnDataPropertyWrite::Written));
+        assert_eq!(object.get("3"), Some(Value::Number(3.0)));
     }
     #[test]
     fn computed_write_declines_accessors_and_inherited_readonly_before_effects() {

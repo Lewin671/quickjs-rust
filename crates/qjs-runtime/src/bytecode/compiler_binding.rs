@@ -373,6 +373,7 @@ impl Compiler {
         let enter = self.emit(Op::EnterTry {
             catch: None,
             finally: None,
+            end: usize::MAX,
             catch_scope: None,
             cleanup_slots: Vec::new(),
         });
@@ -418,11 +419,15 @@ impl Compiler {
         self.emit(Op::Throw);
 
         let finally_target = self.code.len();
+        let begin = self.emit(Op::BeginFinally(usize::MAX));
         self.emit_close_unless_done(destructuring.iterator_slot, destructuring.done_slot, false);
         self.emit(Op::EndFinally);
+        let end = self.code.len();
+        self.patch_finally_end(begin, end);
 
         let after = self.code.len();
         self.patch_jump(over_catch, after);
+        self.finish_try(destructuring.enter, finally_target);
         if let Op::EnterTry { catch, finally, .. } = &mut self.code[destructuring.enter] {
             *catch = Some(catch_target);
             *finally = Some(finally_target);

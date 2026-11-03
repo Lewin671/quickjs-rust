@@ -541,6 +541,58 @@ fn a_typed_loop_run_from_the_wide_tier_reads_the_receiver_and_keeps_the_stack() 
 }
 
 #[test]
+fn an_inner_loop_under_a_numeric_mutation_plan_region_runs_on_the_wide_tier() {
+    // The outer loop matches a numeric mutation plan that only the
+    // interpreter runs, and that declines here (the elements are booleans).
+    // The wide tier cannot be part-way through that plan's replay, so the
+    // inner loop it reaches is its own: it enters on the first outer
+    // iteration instead of being refused as claimed by the plan's region.
+    let (value, counters) = counted(
+        "function sieve(m, flags) {
+             var i, k, count = 0;
+             for (i = 2; i <= m; i++) flags[i] = true;
+             for (i = 2; i <= m; i++) {
+                 if (flags[i]) {
+                     for (k = i + i; k <= m; k += i) flags[k] = false;
+                     count++;
+                 }
+             }
+             return count;
+         }
+         var total = 0;
+         for (var r = 0; r < 20; r++) total += sieve(1000, new Array(1001));
+         total;",
+    );
+    assert_eq!(value, Value::Number(3_360.0));
+    // Per call: the fill loop and the first inner loop on the wide tier,
+    // then the outer loop in the interpreter frame it exits to.
+    assert!(counters.loop_plan_entries >= 60, "{counters:?}");
+    assert!(counters.nested_vm_constructions <= 21, "{counters:?}");
+}
+
+#[test]
+fn a_wide_tier_loop_that_gives_a_prototype_an_index_reads_holes_through_it() {
+    // The wide frame resolves whether the array's chain has an indexed
+    // property once per entry. The loop itself creates "3" on
+    // Object.prototype in its fourth iteration, so that answer must not
+    // outlive the write: the program hands the creation back instead.
+    let (value, counters) = counted(
+        "function f(a, os, k, n) {
+             var t = 0, p;
+             for (var i = 0; i < n; i++) { t = t + (a[3] | 0); p = os[i]; p[k] = 9; }
+             return t;
+         }
+         var plain = [{}, {}, {}, {}, {}, {}, {}, {}], sum = 0;
+         for (var j = 0; j < 50; j++) sum += f(new Array(5), plain, 'x', 8);
+         var r = f(new Array(5), [{}, {}, {}, Object.prototype, {}, {}, {}, {}], '3', 8);
+         delete Object.prototype[3];
+         sum + ':' + r;",
+    );
+    assert_eq!(value, Value::String("0:36".into()));
+    assert!(counters.nested_vm_constructions <= 3, "{counters:?}");
+}
+
+#[test]
 fn named_operands_link_once_per_body_and_domain() {
     let source = |iterations: u32| {
         format!(

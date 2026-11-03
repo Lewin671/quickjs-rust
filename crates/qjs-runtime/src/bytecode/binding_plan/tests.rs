@@ -148,7 +148,14 @@ fn duplicate_parameter_routes_and_shadowed_declarations_keep_distinct_identities
     let root = compile("function f(a, a) { { let a; } return a; }");
     let body = functions(&root)[0];
     assert_eq!(body.parameter_slots().len(), 2);
-    assert_eq!(body.parameter_slots()[0], body.parameter_slots()[1]);
+    let inputs = body.parameter_slots();
+    assert_ne!(inputs[0], inputs[1]);
+    assert!(body.locals[inputs[0]].compiler_temporary);
+    assert_eq!(body.locals[inputs[1]].name, "a");
+    assert_eq!(
+        &*body.binding_plan.parameters.mapped_slots,
+        &[None, Some(inputs[1])]
+    );
     let bindings: Vec<_> = body
         .binding_plan
         .bindings

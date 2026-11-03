@@ -16,10 +16,12 @@ impl Bytecode {
             Some((slots, params)) => (Some(slots), Some(params)),
             None => (None, None),
         };
+        let mut code = compiler.code;
+        super::compiler_regions::route_jumps(&mut code);
         let mut bytecode = Self::with_scope_global_lexical_names_and_strict_with_parameter_slots(
             compiler.constants,
             compiler.locals,
-            compiler.code,
+            code,
             compiler.global_scope,
             global_lexical_names,
             compiler.strict,

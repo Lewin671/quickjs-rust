@@ -59,8 +59,11 @@ pub(crate) fn try_run_typed_loop<F: LoopFrame>(
     // different: the dispatch chain consulted it first on this very edge and
     // it declined without entering, so the frame is at the header with
     // every slot written back, which is the state this program seeds from.
+    // A frame that never runs those plans cannot be inside one's replay.
+    let enclosing_plans_run_here = vm.runs_numeric_mutation_plans();
     let claimed_by_enclosing_region = |(plan_header, plan_backedge): (usize, usize)| {
-        (plan_header..=plan_backedge).contains(&backedge)
+        enclosing_plans_run_here
+            && (plan_header..=plan_backedge).contains(&backedge)
             && !(plan_header == header && plan_backedge == backedge)
     };
     // The converse holds for the special mutation plans: a region that
@@ -307,6 +310,7 @@ fn execute<F: LoopFrame>(
                 .or_else(|| {
                     missing_element_is_undefined(
                         vm,
+                        &intrinsics,
                         &receivers[receiver as usize],
                         registers[reg(index_register)],
                     )
@@ -328,7 +332,8 @@ fn execute<F: LoopFrame>(
                 // else -- a hole below the length, a store past it -- is cold
                 // and needs the realm's prototype facts, so it is reached only
                 // when the overwrite declined.
-                if !dense_write(array, index, value) && !fill_hole_or_grow(vm, array, index, value)
+                if !dense_write(array, index, value)
+                    && !fill_hole_or_grow(vm, &intrinsics, array, index, value)
                 {
                     deopt_here!(op);
                 }
@@ -340,6 +345,7 @@ fn execute<F: LoopFrame>(
             } => {
                 if !dense_write_boxed(
                     vm,
+                    &intrinsics,
                     &receivers[receiver as usize],
                     registers[reg(index)],
                     &boxed[value as usize],
@@ -482,7 +488,12 @@ fn execute<F: LoopFrame>(
                 let Some(value) = element_read(&boxed[receiver as usize], registers[reg(index)])
                     .or_else(|| match &boxed[receiver as usize] {
                         Value::Array(array)
-                            if missing_element_is_undefined(vm, array, registers[reg(index)]) =>
+                            if missing_element_is_undefined(
+                                vm,
+                                &intrinsics,
+                                array,
+                                registers[reg(index)],
+                            ) =>
                         {
                             Some(Value::Undefined)
                         }
@@ -497,7 +508,12 @@ fn execute<F: LoopFrame>(
                 let Some(value) = computed_read(&boxed[receiver as usize], &boxed[key as usize])
                     .or_else(|| match (&boxed[receiver as usize], &boxed[key as usize]) {
                         (Value::Array(array), Value::Number(index))
-                            if missing_element_is_undefined(vm, array, Typed::Number(*index)) =>
+                            if missing_element_is_undefined(
+                                vm,
+                                &intrinsics,
+                                array,
+                                Typed::Number(*index),
+                            ) =>
                         {
                             Some(Value::Undefined)
                         }
@@ -523,9 +539,13 @@ fn execute<F: LoopFrame>(
                         let lease = name
                             .property_key_lease(domain)
                             .unwrap_or_else(|| domain.intern(name.as_str()));
+                        // Never a new indexed property: the object may be on
+                        // an array's prototype chain (module header).
                         matches!(
                             object
-                                .write_or_create_computed_data_key(&lease, value)
+                                .write_or_create_computed_data_key_without_index_creation(
+                                    &lease, value
+                                )
                                 .result,
                             crate::value::OwnDataPropertyWrite::Written
                         )
@@ -539,7 +559,7 @@ fn execute<F: LoopFrame>(
                         let index = Typed::Number(*index);
                         let value = &boxed[value as usize];
                         dense_write_value(array, index, value)
-                            || fill_hole_or_grow_value(vm, array, index, value)
+                            || fill_hole_or_grow_value(vm, &intrinsics, array, index, value)
                     }
                     _ => false,
                 };
@@ -1168,9 +1188,31 @@ fn call_closed_form_leaf<F: LoopFrame>(
 struct Intrinsics {
     array_prototype: std::cell::OnceCell<Option<crate::ObjectRef>>,
     string_prototype: std::cell::OnceCell<Option<crate::ObjectRef>>,
+    /// The last array whose element accesses this entry found plain.
+    plain_array: std::cell::RefCell<Option<crate::ArrayRef>>,
 }
 
 impl Intrinsics {
+    /// `LoopFrame::array_access_is_plain`, remembered for the last array that
+    /// passed: a loop storing into an array with holes asks on every store.
+    /// Sound because no operation changes a prototype link or creates an
+    /// indexed property on an object a chain could hold (module header).
+    fn array_access_is_plain<F: LoopFrame>(&self, vm: &mut F, array: &crate::ArrayRef) -> bool {
+        if self
+            .plain_array
+            .borrow()
+            .as_ref()
+            .is_some_and(|plain| plain.ptr_eq(array))
+        {
+            return true;
+        }
+        let plain = vm.array_access_is_plain(array);
+        if plain {
+            *self.plain_array.borrow_mut() = Some(array.clone());
+        }
+        plain
+    }
+
     fn array_prototype(
         &self,
         env: Option<&crate::context::Context<'_>>,
@@ -1454,6 +1496,7 @@ fn dense_write(array: &crate::ArrayRef, index: Typed, value: Typed) -> bool {
 #[inline(never)]
 fn missing_element_is_undefined<F: LoopFrame>(
     vm: &mut F,
+    intrinsics: &Intrinsics,
     array: &crate::ArrayRef,
     index: Typed,
 ) -> bool {
@@ -1466,7 +1509,7 @@ fn missing_element_is_undefined<F: LoopFrame>(
     if !array.index_is_absent(number as usize) {
         return false;
     }
-    vm.array_access_is_plain(array)
+    intrinsics.array_access_is_plain(vm, array)
 }
 
 /// `dense_write` for a value already boxed.
@@ -1494,11 +1537,13 @@ fn dense_write_value(array: &crate::ArrayRef, index: Typed, value: &Value) -> bo
 #[inline(never)]
 fn dense_write_boxed<F: LoopFrame>(
     vm: &mut F,
+    intrinsics: &Intrinsics,
     array: &crate::ArrayRef,
     index: Typed,
     value: &Value,
 ) -> bool {
-    dense_write_value(array, index, value) || fill_hole_or_grow_value(vm, array, index, value)
+    dense_write_value(array, index, value)
+        || fill_hole_or_grow_value(vm, intrinsics, array, index, value)
 }
 
 /// `fill_hole_or_grow` for a value already boxed.
@@ -1506,6 +1551,7 @@ fn dense_write_boxed<F: LoopFrame>(
 #[inline(never)]
 fn fill_hole_or_grow_value<F: LoopFrame>(
     vm: &mut F,
+    intrinsics: &Intrinsics,
     array: &crate::ArrayRef,
     index: Typed,
     value: &Value,
@@ -1517,7 +1563,7 @@ fn fill_hole_or_grow_value<F: LoopFrame>(
         return false;
     }
     let index = number as usize;
-    if !array.dense_index_store_eligible(index) || !vm.array_access_is_plain(array) {
+    if !array.dense_index_store_eligible(index) || !intrinsics.array_access_is_plain(vm, array) {
         return false;
     }
     array.set(index, value.clone());
@@ -1538,6 +1584,7 @@ fn fill_hole_or_grow_value<F: LoopFrame>(
 #[inline(never)]
 fn fill_hole_or_grow<F: LoopFrame>(
     vm: &mut F,
+    intrinsics: &Intrinsics,
     array: &crate::ArrayRef,
     index: Typed,
     value: Typed,
@@ -1549,7 +1596,7 @@ fn fill_hole_or_grow<F: LoopFrame>(
         return false;
     }
     let index = number as usize;
-    if !array.dense_index_store_eligible(index) || !vm.array_access_is_plain(array) {
+    if !array.dense_index_store_eligible(index) || !intrinsics.array_access_is_plain(vm, array) {
         return false;
     }
     array.set(index, value.to_value());

@@ -109,7 +109,9 @@ impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
             op @ (Op::EnterDisposableScope
             | Op::RegisterDisposable
             | Op::RegisterAsyncDisposable
-            | Op::DisposeScope { .. }) => {
+            | Op::DisposeScope
+            | Op::DisposeAsyncStep
+            | Op::DisposeAsyncRejected) => {
                 self.run_disposal_op(op)?;
             }
             Op::SetComputedFunctionName(kind) => self.set_computed_function_name(*kind)?,
@@ -329,19 +331,21 @@ impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
             Op::EnterTry {
                 catch,
                 finally,
+                end,
                 catch_scope,
                 cleanup_slots,
-            } => self.enter_try(*catch, *finally, catch_scope.clone(), cleanup_slots.clone()),
+            } => self.enter_try(
+                *catch,
+                *finally,
+                *end,
+                catch_scope.clone(),
+                cleanup_slots.clone(),
+            ),
             Op::ExitTry => self.exit_try()?,
+            Op::BeginFinally(end) => self.begin_finally(*end),
             Op::EndFinally => {
                 if let Some(value) = self.end_finally()? {
                     return Ok(Some(FrameExit::Completed(Completion::Return(value))));
-                }
-            }
-            Op::DiscardPendingAbrupt => {
-                if let Some(cold) = self.cold.as_deref_mut() {
-                    cold.pending_throw = None;
-                    cold.pending_return = None;
                 }
             }
             Op::Throw => {

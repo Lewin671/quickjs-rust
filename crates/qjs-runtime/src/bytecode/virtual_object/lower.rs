@@ -762,14 +762,13 @@ fn fuse_binary_assignments(
         let Op::Binary(op) = &code[ip] else {
             continue;
         };
-        // A compound assignment is followed by the statement-completion stores
-        // its context needs: both the block and loop result slots where a
-        // completion value is observable, and only the block slot where just
-        // the block's value is. Repeating the single slot keeps one fused
-        // opcode shape for both, since storing the same value twice to one slot
-        // is indistinguishable from storing it once. A statement whose value
-        // nobody observes drops the duplication entirely and assigns straight
-        // to the target, which is the same shape with the target repeated.
+        // A compound assignment statement is followed by the store into the
+        // completion register where a completion value is observable (script
+        // and eval code), and by nothing where it is not. Repeating the single
+        // slot keeps one fused opcode shape for both, since storing the same
+        // value twice to one slot is indistinguishable from storing it once; a
+        // discarded statement assigns straight to the target, which is the
+        // same shape with the target repeated.
         let (target, stores, skip) = match (
             code.get(ip + 1),
             code.get(ip + 2),

@@ -1396,6 +1396,58 @@ fn a_hole_that_is_not_an_ordinary_store_is_left_to_the_interpreter() {
 }
 
 #[test]
+fn a_plain_array_does_not_vouch_for_another_array_in_the_same_loop() {
+    // An entry remembers the last array whose holes it found plain. A second
+    // array whose prototype supplies index 1 must still be asked about,
+    // whichever of the two the loop touches first: the read of `b` here
+    // follows a plain read of `a` in the same iteration.
+    let source = "var proto = Object.create(Array.prototype); proto[1] = 5;\
+         function holey() { var b = new Array(3); Object.setPrototypeOf(b, proto); return b; }\
+         function read(a, b, n) { var total = 0;\
+           for (var i = 0; i < n; i++) { total = total + (a[i] | 0) + (b[i] | 0) * 100; }\
+           return total; }\
+         function fill(a, b, n) {\
+           for (var i = 0; i < n; i++) { a[i] = i; b[i] = i; }\
+           return a.join() + '/' + b.hasOwnProperty(1) + b[1]; }";
+    assert_eq!(
+        eval(&format!(
+            "{source} read(new Array(3), holey(), 3) + ':' + read(holey(), new Array(3), 3);"
+        )),
+        Ok(Value::string_from_utf8("500:5"))
+    );
+    assert_eq!(
+        eval(&format!("{source} fill(new Array(3), holey(), 3);")),
+        Ok(Value::string_from_utf8("0,1,2/true1"))
+    );
+}
+
+#[test]
+fn a_loop_that_gives_a_prototype_an_index_reads_holes_through_it() {
+    // The hole read `a[3]` finds the chain plain in the first iterations;
+    // the fourth `p[k] = 9` then creates "3" on Object.prototype, and every
+    // later read must find it. The `try` keeps `f` in the interpreter frame,
+    // whose executor remembers the plain array; without it the wide tier runs
+    // the loop and its frame remembers the chain.
+    for prefix in ["try {} catch (e) {}", ""] {
+        let source = format!(
+            "function f(a, os, k, n) {{ {prefix} var t = 0, p;\
+               for (var i = 0; i < n; i++) {{ t = t + (a[3] | 0); p = os[i]; p[k] = 9; }}\
+               return t; }}\
+             var os = [{{}}, {{}}, {{}}, Object.prototype, {{}}, {{}}, {{}}, {{}}];\
+             var r = f(new Array(5), os, '3', 8);\
+             var own = Object.prototype.hasOwnProperty('3');\
+             delete Object.prototype[3];\
+             r + ':' + own + ':' + os[0][3] + ':' + new Array(5)[3];"
+        );
+        assert_eq!(
+            eval(&source),
+            Ok(Value::string_from_utf8("36:true:9:undefined")),
+            "{prefix:?}"
+        );
+    }
+}
+
+#[test]
 fn a_break_leaves_the_region_instead_of_declining_it() {
     // A `break` is an unconditional jump past the backedge. It used to
     // decline the whole loop; `Leave` gives it the same one-instruction
@@ -1765,10 +1817,9 @@ fn typed_loops_write_boxed_locals_into_dense_elements() {
 }
 
 /// A function body's statement completion values are unobservable, so the
-/// temporaries carrying them are read as `undefined` and never written: the
-/// arms of an `if`/`else if` chain leave different completion temporaries on
-/// the stack -- one boxed, one scalar -- and their join used to decline the
-/// whole region (ai-astar's neighbor loop).
+/// compiler keeps none: the arms of an `if`/`else if` chain used to leave
+/// different completion temporaries on the stack -- one boxed, one scalar --
+/// and their join declined the whole region (ai-astar's neighbor loop).
 #[test]
 fn typed_loops_join_arms_that_leave_different_completion_values() {
     let source = "function run(items, heuristic) {

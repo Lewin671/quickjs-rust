@@ -264,10 +264,9 @@ pub(super) struct ColdFrame {
         Option<Vec<super::vm_numeric_mutation_loop::NumericMutationLoopPlan>>,
     pub(super) sloppy_global_names: Vec<String>,
     pub(super) try_stack: Vec<TryFrame>,
-    pub(super) pending_throw: Option<Value>,
-    pub(super) pending_return: Option<Value>,
-    /// Target IP for a break/continue routed through a finally block.
-    pub(super) pending_jump: Option<usize>,
+    pub(super) finally_stack: Vec<super::vm_try::FinallyFrame>,
+    /// Completion handed to the next BeginFinally; active finalizers own theirs.
+    pub(super) pending_abrupt: Option<super::vm_try::PendingAbrupt>,
     /// Staged resume for a generator body suspended inside `yield*`.
     pub(super) resume_mode: Option<ResumeMode>,
     /// Explicit prototype required only for arrays created in a synthetic
@@ -277,7 +276,7 @@ pub(super) struct ColdFrame {
     pub(super) with_stack: Vec<Value>,
     /// Active `using` disposal scopes (innermost last); each block's resources,
     /// disposed LIFO when the scope exits via the block's implicit finally.
-    pub(super) disposable_scopes: Vec<Vec<super::vm_dispose::DisposeResource>>,
+    pub(super) disposable_scopes: Vec<super::vm_dispose::DisposableScope>,
     /// Set for a frame continuing a wide activation from a probed backedge:
     /// `Some(None)` while it may hand a loop back to the tier, and
     /// `Some(Some(backedge))` once it has (`vm/wide_resume.rs`).
@@ -298,10 +297,12 @@ impl ColdFrame {
             )
             .saturating_add(self.sloppy_global_names.capacity() * size_of::<String>())
             .saturating_add(self.try_stack.capacity() * size_of::<TryFrame>())
+            .saturating_add(
+                self.finally_stack.capacity() * size_of::<super::vm_try::FinallyFrame>(),
+            )
             .saturating_add(self.with_stack.capacity() * size_of::<Value>())
             .saturating_add(
-                self.disposable_scopes.capacity()
-                    * size_of::<Vec<super::vm_dispose::DisposeResource>>(),
+                self.disposable_scopes.capacity() * size_of::<super::vm_dispose::DisposableScope>(),
             )
     }
 
@@ -315,9 +316,8 @@ impl ColdFrame {
         self.numeric_mutation_loop_plans = None;
         self.sloppy_global_names.clear();
         self.try_stack.clear();
-        self.pending_throw = None;
-        self.pending_return = None;
-        self.pending_jump = None;
+        self.finally_stack.clear();
+        self.pending_abrupt = None;
         self.resume_mode = None;
         self.array_literal_prototype_override = None;
         self.with_stack.clear();
@@ -373,41 +373,10 @@ impl<'a> FrameState<'a> {
     }
 
     #[inline]
-    pub(super) fn take_pending_throw(&mut self) -> Option<Value> {
-        self.cold
-            .as_deref_mut()
-            .and_then(|cold| cold.pending_throw.take())
-    }
-
-    #[inline]
-    pub(super) fn take_pending_return(&mut self) -> Option<Value> {
-        self.cold
-            .as_deref_mut()
-            .and_then(|cold| cold.pending_return.take())
-    }
-
-    #[inline]
-    pub(super) fn take_pending_jump(&mut self) -> Option<usize> {
-        self.cold
-            .as_deref_mut()
-            .and_then(|cold| cold.pending_jump.take())
-    }
-
-    #[inline]
     pub(super) fn take_resume_mode(&mut self) -> Option<ResumeMode> {
         self.cold
             .as_deref_mut()
             .and_then(|cold| cold.resume_mode.take())
-    }
-
-    /// Drops every staged abrupt completion without materializing cold state.
-    #[inline]
-    pub(super) fn clear_pending_abrupt(&mut self) {
-        if let Some(cold) = self.cold.as_deref_mut() {
-            cold.pending_throw = None;
-            cold.pending_return = None;
-            cold.pending_jump = None;
-        }
     }
 }
 

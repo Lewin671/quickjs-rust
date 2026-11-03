@@ -314,18 +314,7 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
     };
     let references = &bytecode.binding_plan.references;
     let has_exit = exit_backedges || code.iter().any(is_exit_safe);
-    // Nothing in an admitted body -- a function body -- observes a statement
-    // completion value, but the interpreter's loop accelerators type-guard
-    // the completion temporaries of the loops an exit hands them; keep those
-    // written where an exit can reach them.
-    let completion_is_dead = |slot: usize| {
-        !has_exit
-            && bytecode
-                .locals
-                .get(slot)
-                .is_some_and(|local| local.is_completion_temporary())
-    };
-    let folds = fold_local_binaries(code, &entry_depth, &completion_is_dead, |slot| {
+    let folds = fold_local_binaries(code, &entry_depth, |slot| {
         slot < local_count
             && slot < u128::BITS as usize
             && upvalue_slots & (1_u128 << slot) == 0
@@ -517,7 +506,6 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
             }
             Op::StoreLocal(slot) | Op::AssignLocal(slot)
                 if plain_local(*slot)
-                    && !completion_is_dead(*slot)
                     && folds[ip] == LocalFold::None
                     && bytecode
                         .locals
@@ -899,18 +887,6 @@ pub(super) fn compile_traced(bytecode: &Bytecode, trace: &mut Decline) -> Option
                     dst,
                     src: register(depth.checked_sub(1)?),
                 });
-            }
-            // A store into a dead completion temporary only releases the
-            // value.
-            Op::StoreLocal(slot) | Op::AssignLocal(slot) if completion_is_dead(*slot) => {
-                let src = register(depth.checked_sub(1)?);
-                if sole_op_of_previous(ip, &jump_targets, &compact_index, &ops)
-                    && matches!(ops.last(), Some(WideOp::LoadConst { dst, .. }) if *dst == src)
-                {
-                    ops.pop();
-                } else {
-                    ops.push(WideOp::Drop { src });
-                }
             }
             Op::AssignLocal(slot)
                 if *slot < u128::BITS as usize && upvalue_slots & (1_u128 << *slot) != 0 =>
@@ -1357,14 +1333,11 @@ enum LocalFold {
 /// - a discarded `x++` or `x--`: `LoadLocal(x) ToNumeric Dup Update
 ///   Store(x) Pop` becomes one update of the local, which applies the same
 ///   single numeric conversion.
-/// - `LoadLocal(c) Store(d)` between two dead completion temporaries: a
-///   statement value no function body can observe.
 ///
 /// No jump may land inside a folded shape.
 fn fold_local_binaries(
     code: &[Op],
     entry_depth: &[Option<u16>],
-    completion: &impl Fn(usize) -> bool,
     plain_local: impl Fn(usize) -> bool,
 ) -> Vec<LocalFold> {
     let mut folds = vec![LocalFold::None; code.len()];
@@ -1377,15 +1350,10 @@ fn fold_local_binaries(
         }
     }
     let store_to = |ip: usize| match code.get(ip) {
-        Some(Op::StoreLocal(slot) | Op::AssignLocal(slot)) if !completion(*slot) => Some(*slot),
+        Some(Op::StoreLocal(slot) | Op::AssignLocal(slot)) => Some(*slot),
         _ => None,
     };
-    // A store into a completion temporary discards the value as `Pop` does.
-    let discards = |ip: usize| match code.get(ip) {
-        Some(Op::Pop) => true,
-        Some(Op::StoreLocal(slot) | Op::AssignLocal(slot)) => completion(*slot),
-        _ => false,
-    };
+    let discards = |ip: usize| matches!(code.get(ip), Some(Op::Pop));
     let free = |range: std::ops::RangeInclusive<usize>, folds: &[LocalFold]| {
         range
             .clone()
@@ -1424,12 +1392,6 @@ fn fold_local_binaries(
                     folds[load..=store + 1].fill(LocalFold::Elided);
                     folds[ip] = LocalFold::Update(slot_u16);
                 }
-            }
-            Op::LoadLocal(from)
-                if completion(*from) && discards(ip + 1) && free(ip..=ip + 1, &folds) =>
-            {
-                folds[ip] = LocalFold::Elided;
-                folds[ip + 1] = LocalFold::Elided;
             }
             Op::Binary(_) => fold_binary(
                 code,

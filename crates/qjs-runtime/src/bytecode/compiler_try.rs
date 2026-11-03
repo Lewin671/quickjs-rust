@@ -5,7 +5,7 @@ use crate::RuntimeError;
 use super::compiler::Compiler;
 use super::compiler_lexical::{annex_b_blocked_names, catch_param_annex_b_blocked_names};
 use super::ir::{CatchScope, Op};
-use super::util::stmt_updates_statement_list_completion;
+use super::util::{stmts_contain_break_or_continue, stmts_write_completion_first};
 
 /// Whether a block directly declares a `using`/`await using` resource (so its
 /// scope needs an implicit disposal try/finally).
@@ -34,42 +34,26 @@ pub(super) fn block_has_await_using(body: &[Stmt]) -> bool {
 }
 
 impl Compiler {
-    /// Compiles a block body in its own lexical scope, leaving the block's
-    /// completion value on the stack. Shared by plain and disposable blocks.
+    pub(super) fn finish_try(&mut self, enter: usize, region_end: usize) {
+        if let Op::EnterTry { end, .. } = &mut self.code[enter] {
+            *end = region_end;
+        }
+    }
+
+    /// Compiles a block body in its own lexical scope. A block shares the
+    /// enclosing completion register, so an empty block (or one of only
+    /// declarations) leaves the previous statement's value in place.
     pub(super) fn compile_block_body(&mut self, body: &[Stmt]) -> Result<(), RuntimeError> {
         self.with_lexical_scope(|compiler| {
             let blocked = annex_b_blocked_names(body, compiler.strict);
             compiler.with_annex_b_blocked_function_names(&blocked, |compiler| {
                 compiler.instantiate_block_declarations(body, &blocked)?;
-                if body.is_empty() {
-                    compiler.emit_load_undefined();
-                    return Ok(());
-                }
-                let result_slot = compiler.temp_local("block_result");
-                if compiler.tracks_completion_values {
-                    compiler.emit_load_undefined();
-                    compiler.emit(Op::StoreLocal(result_slot));
-                }
-                // When nothing observes the completion value the slot only has
-                // to keep the operand-stack contract, so the two-instruction
-                // "seed with undefined" prologue is dead work. Reading the
-                // compiler temporary before any statement writes it yields
-                // `undefined` rather than a TDZ error, so an empty completion
-                // path stays well defined.
                 for stmt in body {
-                    if !compiler.compile_statement_list_entry(stmt)? {
-                        continue;
-                    }
-                    if stmt_updates_statement_list_completion(stmt) {
-                        compiler.store_statement_list_completion(result_slot);
-                    } else {
-                        compiler.emit(Op::Pop);
-                    }
+                    compiler.compile_stmt(stmt)?;
                 }
                 for slot in compiler.current_lexical_slots_for_names(&blocked) {
                     compiler.emit(Op::ClearLocal(slot));
                 }
-                compiler.emit(Op::LoadLocal(result_slot));
                 Ok(())
             })
         })
@@ -100,99 +84,101 @@ impl Compiler {
     /// runs the body inside an implicit try whose finally disposes the
     /// resources LIFO on every completion path.
     pub(super) fn compile_disposable_block(&mut self, body: &[Stmt]) -> Result<(), RuntimeError> {
-        self.emit(Op::EnterDisposableScope);
-        let result_slot = self.temp_local("using_result");
-        self.emit_load_undefined();
-        self.emit(Op::StoreLocal(result_slot));
-
-        let loop_depth = self.loop_stack_depth();
-        self.push_try_result_slot(result_slot, loop_depth, false);
-
-        let enter = self.emit(Op::EnterTry {
-            catch: None,
-            finally: None,
-            catch_scope: None,
-            cleanup_slots: Vec::new(),
-        });
-        self.disposable_scope_depth += 1;
-        let body_result = self.compile_block_body(body);
-        self.disposable_scope_depth -= 1;
-        body_result?;
-        self.emit(Op::StoreLocal(result_slot));
-        self.emit(Op::ExitTry);
-        let normal_jump = self.emit(Op::Jump(usize::MAX));
-
-        self.pop_try_result_slot();
-
-        let finally_target = self.compile_dispose_finally(block_has_await_using(body));
-        if let Op::EnterTry { finally, .. } = &mut self.code[enter] {
-            *finally = Some(finally_target);
-        }
-        self.patch_jump(normal_jump, finally_target);
-        self.emit(Op::LoadLocal(result_slot));
-        Ok(())
+        self.compile_disposal_region(block_has_await_using(body), |compiler| {
+            compiler.compile_block_body(body)
+        })
     }
 
-    /// Compiles a statement list (a function/generator body — no new lexical
+    /// Compiles a statement list (a script or function body -- no new lexical
     /// scope) wrapped in a disposal try/finally so its top-level `using`
     /// resources are disposed when the body exits on any path.
     pub(super) fn compile_statements_with_disposal(
         &mut self,
         body: &[Stmt],
     ) -> Result<(), RuntimeError> {
+        self.compile_disposal_region(block_has_await_using(body), |compiler| {
+            body.iter().try_for_each(|stmt| compiler.compile_stmt(stmt))
+        })
+    }
+
+    /// Opens a disposal scope and runs `body` inside the protected region
+    /// whose finally disposes the scope's resources.
+    pub(super) fn compile_disposal_region(
+        &mut self,
+        await_async: bool,
+        body: impl FnOnce(&mut Self) -> Result<(), RuntimeError>,
+    ) -> Result<(), RuntimeError> {
         self.emit(Op::EnterDisposableScope);
-        let result_slot = self.temp_local("body_using_result");
-        let loop_depth = self.loop_stack_depth();
-        self.push_try_result_slot(result_slot, loop_depth, false);
         let enter = self.emit(Op::EnterTry {
             catch: None,
             finally: None,
+            end: usize::MAX,
             catch_scope: None,
             cleanup_slots: Vec::new(),
         });
         self.disposable_scope_depth += 1;
-        let mut body_result = Ok(());
-        for stmt in body {
-            if let Err(error) = self.compile_stmt(stmt) {
-                body_result = Err(error);
-                break;
-            }
-        }
+        let body_result = body(self);
         self.disposable_scope_depth -= 1;
         body_result?;
         self.emit(Op::ExitTry);
         let normal_jump = self.emit(Op::Jump(usize::MAX));
-        self.pop_try_result_slot();
-        let finally_target = self.compile_dispose_finally(block_has_await_using(body));
+        let finally_target = self.compile_dispose_finally(await_async);
         if let Op::EnterTry { finally, .. } = &mut self.code[enter] {
             *finally = Some(finally_target);
         }
         self.patch_jump(normal_jump, finally_target);
+        self.finish_try(enter, finally_target);
         Ok(())
     }
 
     /// Emits the disposal finally body and returns its entry IP.
     pub(super) fn compile_dispose_finally(&mut self, await_async: bool) -> usize {
-        let finally_result_slot = self.temp_local("dispose_result");
-        let loop_depth = self.loop_stack_depth();
-        self.push_try_result_slot(finally_result_slot, loop_depth, true);
         let target = self.code.len();
-        self.emit(Op::DisposeScope { await_async });
+        let begin = self.emit(Op::BeginFinally(usize::MAX));
         if await_async {
-            let skip_await = self.emit(Op::JumpIfFalse(usize::MAX));
-            self.emit(Op::Pop);
-            self.emit(Op::Await);
-            let done = self.emit(Op::Jump(usize::MAX));
-            let skip_target = self.code.len();
-            self.emit(Op::Pop);
-            self.emit(Op::Pop);
-            let done_target = self.code.len();
-            self.patch_jump(skip_await, skip_target);
-            self.patch_jump(done, done_target);
+            self.compile_async_disposal_loop();
+        } else {
+            self.emit(Op::DisposeScope);
         }
-        self.pop_try_result_slot();
         self.emit(Op::EndFinally);
+        let end = self.code.len();
+        self.patch_finally_end(begin, end);
         target
+    }
+
+    /// Disposes an `await using` scope one await at a time: each async
+    /// dispose result is awaited before the next resource is disposed, and
+    /// the await sits in its own catch region so a rejection is chained into
+    /// the finalizer's completion while disposal carries on.
+    fn compile_async_disposal_loop(&mut self) {
+        let awaited = self.temp_local("dispose_awaited");
+        let step = self.emit(Op::DisposeAsyncStep);
+        let done = self.emit(Op::JumpIfFalse(usize::MAX));
+        self.emit(Op::Pop);
+        self.emit(Op::StoreLocal(awaited));
+        let enter = self.emit(Op::EnterTry {
+            catch: None,
+            finally: None,
+            end: usize::MAX,
+            catch_scope: None,
+            cleanup_slots: Vec::new(),
+        });
+        self.emit(Op::LoadLocal(awaited));
+        self.emit(Op::Await);
+        self.emit(Op::Pop);
+        self.emit(Op::ExitTry);
+        self.emit(Op::Jump(step));
+        let catch_target = self.code.len();
+        self.emit(Op::DisposeAsyncRejected);
+        self.emit(Op::ExitTry);
+        self.emit(Op::Jump(step));
+        let done_target = self.code.len();
+        self.emit(Op::Pop);
+        if let Op::EnterTry { catch, .. } = &mut self.code[enter] {
+            *catch = Some(catch_target);
+        }
+        self.finish_try(enter, done_target);
+        self.patch_jump(done, done_target);
     }
 
     pub(super) fn compile_try(
@@ -201,16 +187,17 @@ impl Compiler {
         handler: Option<&CatchClause>,
         finalizer: Option<&[Stmt]>,
     ) -> Result<(), RuntimeError> {
-        let result_slot = self.temp_local("try_result");
-        self.emit_load_undefined();
-        self.emit(Op::StoreLocal(result_slot));
-
-        let loop_depth = self.loop_stack_depth();
-        self.push_try_result_slot(result_slot, loop_depth, false);
-
+        // The try statement's completion is UpdateEmpty(B or C, undefined)
+        // (ES2025 14.15.3), so the protected block and the catch block share
+        // the enclosing register after resetting it. Only the finally block,
+        // whose normal completion must not replace that value, gets its own.
+        if !stmts_write_completion_first(block) {
+            self.reset_completion();
+        }
         let enter = self.emit(Op::EnterTry {
             catch: None,
             finally: None,
+            end: usize::MAX,
             catch_scope: None,
             cleanup_slots: Vec::new(),
         });
@@ -218,22 +205,19 @@ impl Compiler {
         let mut cleanup_slots = Vec::new();
         if block_has_using(block) {
             self.compile_disposable_block(block)?;
-            self.emit(Op::StoreLocal(result_slot));
         } else {
-            self.with_lexical_scope(|compiler| compiler.compile_try_body(block, result_slot))?;
+            self.with_lexical_scope(|compiler| compiler.compile_try_body(block))?;
             cleanup_slots = self.lexical_cleanup_slots_since(cleanup_start);
         }
         self.emit(Op::ExitTry);
 
         let normal_jump = self.emit(Op::Jump(usize::MAX));
         let (catch_target, catch_scope) = if let Some(handler) = handler {
-            let (target, scope) = self.compile_catch(handler, result_slot)?;
+            let (target, scope) = self.compile_catch(handler)?;
             (Some(target), scope)
         } else {
             (None, None)
         };
-
-        self.pop_try_result_slot();
 
         let finally_target = if let Some(finalizer) = finalizer {
             Some(self.compile_finally(finalizer)?)
@@ -247,6 +231,7 @@ impl Compiler {
             finally,
             catch_scope: scope,
             cleanup_slots: slots,
+            ..
         } = &mut self.code[enter]
         {
             *catch = catch_target;
@@ -255,17 +240,16 @@ impl Compiler {
             *slots = cleanup_slots;
         }
         self.patch_jump(normal_jump, finally_target.unwrap_or(after));
-        self.emit(Op::LoadLocal(result_slot));
+        self.finish_try(enter, finally_target.unwrap_or(after));
         Ok(())
     }
 
-    fn compile_try_body(&mut self, body: &[Stmt], result_slot: usize) -> Result<(), RuntimeError> {
+    fn compile_try_body(&mut self, body: &[Stmt]) -> Result<(), RuntimeError> {
         let blocked = annex_b_blocked_names(body, self.strict);
         self.with_annex_b_blocked_function_names(&blocked, |compiler| {
             compiler.instantiate_block_declarations(body, &blocked)?;
             for stmt in body {
                 compiler.compile_stmt(stmt)?;
-                compiler.emit(Op::StoreLocal(result_slot));
             }
             Ok(())
         })
@@ -287,34 +271,32 @@ impl Compiler {
     fn compile_catch(
         &mut self,
         handler: &CatchClause,
-        result_slot: usize,
     ) -> Result<(usize, Option<CatchScope>), RuntimeError> {
         let target = self.code.len();
-        // Reset the try result slot at catch entry: the catch clause starts a
-        // fresh completion sequence, so values from the try body before the
-        // throw must not leak through an abrupt exit (break/continue) from the
-        // catch block. Per spec, UpdateEmpty on the catch clause's break with
-        // empty value produces undefined, matching this reset.
-        self.emit_load_undefined();
-        self.emit(Op::StoreLocal(result_slot));
+        // The catch block's completion replaces the protected block's, so
+        // the shared register starts over from `undefined` once the thrown
+        // value is bound.
+        let reset = !stmts_write_completion_first(&handler.body);
         if let Some(param) = &handler.param {
             let slots = self.with_scope_kind(crate::binding::ScopeKind::Catch, |compiler| {
                 let slots = compiler.compile_catch_param(param)?;
+                if reset {
+                    compiler.reset_completion();
+                }
                 let blocked = catch_param_annex_b_blocked_names(Some(param));
                 compiler.with_annex_b_blocked_function_names(&blocked, |compiler| {
-                    compiler.compile_block_body(&handler.body)?;
-                    compiler.emit(Op::StoreLocal(result_slot));
-                    Ok(())
+                    compiler.compile_block_body(&handler.body)
                 })?;
                 compiler.emit(Op::ExitTry);
                 Ok(slots)
             })?;
             return Ok((target, Some(CatchScope::Clear { slots })));
-        } else {
-            self.emit(Op::Pop);
-            self.compile_block_body(&handler.body)?;
-            self.emit(Op::StoreLocal(result_slot));
         }
+        self.emit(Op::Pop);
+        if reset {
+            self.reset_completion();
+        }
+        self.compile_block_body(&handler.body)?;
         self.emit(Op::ExitTry);
         Ok((target, None))
     }
@@ -333,27 +315,22 @@ impl Compiler {
     }
 
     fn compile_finally(&mut self, finalizer: &[Stmt]) -> Result<usize, RuntimeError> {
-        // The finally block needs its own result slot to track the statement
-        // list completion value. When a break/continue exits from a finally
-        // block, this slot provides the UpdateEmpty'd completion value.
-        let finally_result_slot = self.temp_local("finally_result");
-
-        let loop_depth = self.loop_stack_depth();
-        self.push_try_result_slot(finally_result_slot, loop_depth, true);
-
+        // A finally block that completes normally yields the completion it
+        // interrupted, so its statements must not touch the shared register.
+        // Its own value matters only to a break/continue leaving it, which
+        // carries it from a register of its own to the jump's target.
+        let register = (self.completion.is_some() && stmts_contain_break_or_continue(finalizer))
+            .then(|| self.temp_local("finally_result"));
         let target = self.code.len();
-        // Initialize the finally result slot at the start of the finally block
-        // (inside the target) so it's reset regardless of how finally is entered
-        // (normal flow, exception, or abrupt completion from try/catch).
-        self.emit_load_undefined();
-        self.emit(Op::StoreLocal(finally_result_slot));
-        self.with_lexical_scope(|compiler| {
-            compiler.compile_try_body(finalizer, finally_result_slot)
+        let begin = self.emit(Op::BeginFinally(usize::MAX));
+        self.with_completion(register, |compiler| {
+            // Every entry (normal, thrown, returned or jumped) starts over.
+            compiler.reset_completion();
+            compiler.with_lexical_scope(|compiler| compiler.compile_try_body(finalizer))
         })?;
-
-        self.pop_try_result_slot();
-
         self.emit(Op::EndFinally);
+        let end = self.code.len();
+        self.patch_finally_end(begin, end);
         Ok(target)
     }
 }

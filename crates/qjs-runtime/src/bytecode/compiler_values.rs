@@ -35,7 +35,6 @@ impl Compiler {
         for stmt in body {
             if let Stmt::FunctionDecl { .. } = stmt {
                 self.compile_function_decl(stmt)?;
-                self.emit(Op::Pop);
             }
         }
         Ok(())
@@ -646,7 +645,6 @@ impl Compiler {
             let slot = self.local_slot(name, true);
             self.emit(Op::StoreLocal(slot));
         }
-        self.emit_load_undefined();
         Ok(())
     }
 
@@ -719,7 +717,6 @@ impl Compiler {
         // Annex B's outer-var copy belongs to evaluation of the declaration
         // statement, which may never be reached after an abrupt completion.
         self.emit(Op::StoreLocal(lexical_slot));
-        self.emit_load_undefined();
         Ok(())
     }
 }

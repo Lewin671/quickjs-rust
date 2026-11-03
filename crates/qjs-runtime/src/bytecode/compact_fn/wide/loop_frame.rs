@@ -37,8 +37,8 @@ pub(super) struct WideLoopFrame<'a, 's> {
     pub(super) iterations: Option<u64>,
     declined: u128,
     /// The realm's `Array.prototype` and whether its chain has an indexed
-    /// property, resolved on the first element access that needs them: a
-    /// program runs no user code, so neither changes while it runs.
+    /// property, resolved on the first element access that needs them. No
+    /// typed loop operation changes either (`typed_loop` module header).
     array_prototype: Option<Option<(ObjectRef, bool)>>,
 }
 
@@ -94,6 +94,10 @@ impl LoopFrame for WideLoopFrame<'_, '_> {
     }
 
     fn direct_eval_with_stack(&self) -> bool {
+        false
+    }
+
+    fn runs_numeric_mutation_plans(&self) -> bool {
         false
     }
 

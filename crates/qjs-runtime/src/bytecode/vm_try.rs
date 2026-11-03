@@ -1,9 +1,25 @@
+//! Abrupt completions unwind protected regions only when their destination exits
+//! the region. Each running finalizer owns a separate completion, so nested
+//! catches/finalizers and suspension cannot consume or overwrite an outer one.
 use crate::{RuntimeError, Value, error_value};
 
 use super::{ir::CatchScope, vm::Vm};
 
 #[derive(Clone)]
+struct CodeRegion {
+    start: usize,
+    end: usize,
+}
+
+impl CodeRegion {
+    fn contains(&self, target: usize) -> bool {
+        self.start <= target && target < self.end
+    }
+}
+
+#[derive(Clone)]
 pub(super) struct TryFrame {
+    region: CodeRegion,
     catch: Option<usize>,
     finally: Option<usize>,
     catch_scope: Option<CatchScope>,
@@ -16,19 +32,36 @@ pub(super) struct TryFrame {
     class_depth: usize,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub(super) enum PendingAbrupt {
+    Throw(Value),
+    Return(Value),
+    Jump(usize),
+}
+
+#[derive(Clone)]
+pub(super) struct FinallyFrame {
+    region: CodeRegion,
+    pub(super) completion: Option<PendingAbrupt>,
+}
+
 impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
     pub(super) fn enter_try(
         &mut self,
         catch: Option<usize>,
         finally: Option<usize>,
+        end: usize,
         catch_scope: Option<CatchScope>,
         cleanup_slots: Vec<usize>,
     ) {
+        debug_assert!(end != usize::MAX, "unpatched protected region");
+        let start = self.ip;
         let stack_depth = self.stack.len();
         let cold = self.cold_mut();
         let with_depth = cold.with_stack.len();
         let class_depth = cold.class_regions.len();
         cold.try_stack.push(TryFrame {
+            region: CodeRegion { start, end },
             catch,
             finally,
             catch_scope,
@@ -42,17 +75,36 @@ impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
 
     pub(super) fn exit_try(&mut self) -> Result<(), RuntimeError> {
         if let Some(frame) = self.cold_mut().try_stack.pop() {
+            // Statements leave nothing on the operand stack, so a region
+            // exits at the depth it was entered with. The one exception is a
+            // handler that leaves its region to rethrow: for-of's iterator
+            // close keeps the caught value to throw after `ExitTry`.
+            debug_assert!(
+                self.stack.len() == frame.stack_depth
+                    || (frame.catch_scope_active && self.stack.len() == frame.stack_depth + 1),
+                "protected region exits at operand-stack depth {} (entered at {})",
+                self.stack.len(),
+                frame.stack_depth
+            );
             self.cleanup_catch_scope(frame.catch_scope_active, frame.catch_scope)?;
         }
         Ok(())
     }
 
+    /// Stages a fresh abrupt completion for the finalizer about to begin,
+    /// which takes it in `BeginFinally`.
+    fn stage_abrupt(&mut self, completion: PendingAbrupt) {
+        let cold = self.cold_mut();
+        debug_assert!(
+            cold.pending_abrupt.is_none(),
+            "an abrupt completion is already staged"
+        );
+        cold.pending_abrupt = Some(completion);
+    }
+
     pub(super) fn throw_value(&mut self, value: Value) -> Result<(), RuntimeError> {
-        // A fresh throw supersedes any abrupt completion deferred by an
-        // in-flight finally (e.g. an inner `finally { throw }` overriding the
-        // exception/break/return it interrupted), so the stale pending
-        // completion must not be re-raised later by an enclosing EndFinally.
-        self.clear_pending_abrupt();
+        // Fresh abrupt state is staged separately from active finalizers;
+        // only routing outside a finalizer discards its saved completion.
         if !self.try_stack_is_empty() {
             let (stack_depth, with_depth, class_depth, catch, cleanup_slots) = {
                 let frame = self
@@ -83,6 +135,7 @@ impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
                         .expect("catch frames must retain their cleanup slots"),
                 )?;
                 self.stack.push(value);
+                self.unwind_finalizers(catch);
                 self.ip = catch;
                 return Ok(());
             }
@@ -95,13 +148,15 @@ impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
             self.cleanup_slots(&frame.cleanup_slots)?;
             self.cleanup_catch_scope(frame.catch_scope_active, frame.catch_scope)?;
             if let Some(finally) = frame.finally {
-                self.cold_mut().pending_throw = Some(value);
+                self.stage_abrupt(PendingAbrupt::Throw(value));
+                self.unwind_finalizers(finally);
                 self.ip = finally;
             } else {
                 self.throw_value(value)?;
             }
             return Ok(());
         }
+        self.discard_finalizers();
         Err(RuntimeError {
             thrown: Some(Box::new(value.clone())),
             message: format!("throw statement executed: {}", error_value(value)),
@@ -120,45 +175,96 @@ impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
             self.cleanup_slots(&frame.cleanup_slots)?;
             self.cleanup_catch_scope(frame.catch_scope_active, frame.catch_scope)?;
             if let Some(finally) = frame.finally {
-                self.cold_mut().pending_return = Some(value);
+                self.stage_abrupt(PendingAbrupt::Return(value));
+                self.unwind_finalizers(finally);
                 self.ip = finally;
                 return Ok(None);
             }
         }
+        self.discard_finalizers();
         Ok(Some(value))
     }
 
-    /// Routes a break/continue jump through finally blocks. Pops the current
-    /// try frame and, if it has a finally clause, defers the jump until after
-    /// the finally block executes. Otherwise jumps directly.
-    /// Unlike throw/return, the operand stack is not truncated because the
-    /// break/continue target expects its completion value on top.
+    /// Resume jumps through every exited region, retaining enclosing regions
+    /// whose body/catch still contains the target (e.g. a loop inside a try).
     pub(super) fn abrupt_jump(&mut self, target: usize) -> Result<(), RuntimeError> {
-        if let Some(frame) = self
-            .cold
-            .as_deref_mut()
-            .and_then(|cold| cold.try_stack.pop())
-        {
+        loop {
+            let exits = self
+                .cold
+                .as_deref()
+                .and_then(|cold| cold.try_stack.last())
+                .is_some_and(|frame| !frame.region.contains(target));
+            if !exits {
+                break;
+            }
+            let frame = self.cold_mut().try_stack.pop().expect("exited region");
+            // A jump (break/continue) leaves from statement level, where the
+            // operand stack is back at each enclosing region's entry depth;
+            // unlike a throw or return it has no stack to truncate.
+            debug_assert_eq!(
+                self.stack.len(),
+                frame.stack_depth,
+                "abrupt jump leaves a protected region at a different operand-stack depth"
+            );
+            self.cold_mut().with_stack.truncate(frame.with_depth);
             self.restore_class_depth(frame.class_depth);
             self.cleanup_slots(&frame.cleanup_slots)?;
             self.cleanup_catch_scope(frame.catch_scope_active, frame.catch_scope)?;
             if let Some(finally) = frame.finally {
-                self.cold_mut().pending_jump = Some(target);
+                self.stage_abrupt(PendingAbrupt::Jump(target));
+                self.unwind_finalizers(finally);
                 self.ip = finally;
                 return Ok(());
             }
         }
+        self.unwind_finalizers(target);
         self.ip = target;
         Ok(())
     }
 
+    /// Drops the finalizers whose region does not contain `target`: their
+    /// saved completions are superseded by the abrupt completion routed there.
+    fn unwind_finalizers(&mut self, target: usize) {
+        if let Some(cold) = self.cold.as_deref_mut() {
+            while cold
+                .finally_stack
+                .last()
+                .is_some_and(|frame| !frame.region.contains(target))
+            {
+                cold.finally_stack.pop();
+            }
+        }
+    }
+
+    /// Drops every running finalizer's saved completion: the abrupt
+    /// completion leaves the frame.
+    fn discard_finalizers(&mut self) {
+        if let Some(cold) = self.cold.as_deref_mut() {
+            cold.finally_stack.clear();
+        }
+    }
+
+    pub(super) fn begin_finally(&mut self, end: usize) {
+        debug_assert!(end != usize::MAX, "unpatched finalizer region");
+        let completion = self.cold_mut().pending_abrupt.take();
+        let start = self.ip;
+        self.cold_mut().finally_stack.push(FinallyFrame {
+            region: CodeRegion { start, end },
+            completion,
+        });
+    }
+
     pub(super) fn end_finally(&mut self) -> Result<Option<Value>, RuntimeError> {
-        if let Some(value) = self.take_pending_throw() {
-            self.throw_value(value)?;
-        } else if let Some(value) = self.take_pending_return() {
-            return self.return_value(value);
-        } else if let Some(target) = self.take_pending_jump() {
-            self.ip = target;
+        let completion = self
+            .cold_mut()
+            .finally_stack
+            .pop()
+            .and_then(|frame| frame.completion);
+        match completion {
+            Some(PendingAbrupt::Throw(value)) => self.throw_value(value)?,
+            Some(PendingAbrupt::Return(value)) => return self.return_value(value),
+            Some(PendingAbrupt::Jump(target)) => self.abrupt_jump(target)?,
+            None => {}
         }
         Ok(None)
     }

@@ -63,6 +63,7 @@ mod compiler_lexical;
 mod compiler_params;
 mod compiler_pattern;
 mod compiler_references;
+mod compiler_regions;
 mod compiler_try;
 mod compiler_values;
 mod enumerate_keys_cache;

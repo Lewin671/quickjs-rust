@@ -148,20 +148,98 @@ pub(super) fn unsupported_module_item() -> RuntimeError {
     }
 }
 
-/// Whether `stmt`'s value updates a statement list's completion value (used to
-/// decide between storing and popping the result of each statement).
-pub(super) fn stmt_updates_statement_list_completion(stmt: &Stmt) -> bool {
-    if let Stmt::Block { body, .. } = stmt {
-        return body.iter().any(stmt_updates_statement_list_completion);
+/// Whether evaluating `stmt` stores a value in the completion register before
+/// it can complete normally or by `break`/`continue`, so a statement that
+/// would first reset the register to `undefined` may skip the reset. Every
+/// statement whose completion is never empty writes the register on entry or
+/// first; a block does when its first statement that is not a declaration
+/// does.
+pub(super) fn stmt_writes_completion_first(stmt: &Stmt) -> bool {
+    match stmt {
+        Stmt::Expr(_)
+        | Stmt::If { .. }
+        | Stmt::With { .. }
+        | Stmt::While { .. }
+        | Stmt::DoWhile { .. }
+        | Stmt::For { .. }
+        | Stmt::ForIn { .. }
+        | Stmt::ForOf { .. }
+        | Stmt::Switch { .. }
+        | Stmt::Try { .. } => true,
+        Stmt::Block { body, .. } => stmts_write_completion_first(body),
+        Stmt::Labelled { body, .. } => stmt_writes_completion_first(body),
+        _ => false,
     }
-    !matches!(
-        stmt,
-        Stmt::Debugger { .. }
-            | Stmt::Empty
-            | Stmt::FunctionDecl { .. }
-            | Stmt::ClassDecl { .. }
-            | Stmt::VarDecl { .. }
-    )
+}
+
+/// `stmt_writes_completion_first` for a statement list.
+pub(super) fn stmts_write_completion_first(body: &[Stmt]) -> bool {
+    for stmt in body {
+        if stmt_writes_completion_first(stmt) {
+            return true;
+        }
+        // Declarations complete empty and cannot jump.
+        if !matches!(
+            stmt,
+            Stmt::VarDecl { .. }
+                | Stmt::FunctionDecl { .. }
+                | Stmt::ClassDecl { .. }
+                | Stmt::Empty
+                | Stmt::Debugger { .. }
+        ) {
+            return false;
+        }
+    }
+    false
+}
+
+/// Whether a statement list contains a `break` or `continue` outside nested
+/// functions -- the only way a `finally` block's own completion value can
+/// escape it.
+pub(super) fn stmts_contain_break_or_continue(body: &[Stmt]) -> bool {
+    body.iter().any(stmt_contains_break_or_continue)
+}
+
+fn stmt_contains_break_or_continue(stmt: &Stmt) -> bool {
+    match stmt {
+        Stmt::Break { .. } | Stmt::Continue { .. } => true,
+        Stmt::Block { body, .. } => stmts_contain_break_or_continue(body),
+        Stmt::If {
+            consequent,
+            alternate,
+            ..
+        } => {
+            stmt_contains_break_or_continue(consequent)
+                || alternate
+                    .as_deref()
+                    .is_some_and(stmt_contains_break_or_continue)
+        }
+        Stmt::While { body, .. }
+        | Stmt::DoWhile { body, .. }
+        | Stmt::For { body, .. }
+        | Stmt::ForIn { body, .. }
+        | Stmt::ForOf { body, .. }
+        | Stmt::Labelled { body, .. }
+        | Stmt::With { body, .. } => stmt_contains_break_or_continue(body),
+        Stmt::Switch { cases, .. } => cases
+            .iter()
+            .any(|case| stmts_contain_break_or_continue(&case.consequent)),
+        Stmt::Try {
+            block,
+            handler,
+            finalizer,
+            ..
+        } => {
+            stmts_contain_break_or_continue(block)
+                || handler
+                    .as_ref()
+                    .is_some_and(|handler| stmts_contain_break_or_continue(&handler.body))
+                || finalizer
+                    .as_deref()
+                    .is_some_and(stmts_contain_break_or_continue)
+        }
+        _ => false,
+    }
 }
 
 /// Whether a pending label may attach directly to `stmt` (the iteration and

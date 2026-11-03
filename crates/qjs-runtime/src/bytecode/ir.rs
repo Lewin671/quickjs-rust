@@ -178,13 +178,17 @@ pub(super) enum Op {
     /// Registers an `await using` initializer result in the current scope:
     /// resolves `Symbol.asyncDispose` first, falling back to `Symbol.dispose`.
     RegisterAsyncDisposable,
-    /// Closes the current disposal scope, disposing its resources LIFO. A
-    /// dispose failure while a throw is already propagating is wrapped in a
-    /// `SuppressedError`. Async scopes leave the final awaited value on the
-    /// stack so the finally body can suspend before completing.
-    DisposeScope {
-        await_async: bool,
-    },
+    /// Closes the current (sync) disposal scope, disposing its resources
+    /// LIFO. A dispose failure while a throw is already propagating is
+    /// wrapped in a `SuppressedError`.
+    DisposeScope,
+    /// Advances the current `await using` scope's disposal to its next await.
+    /// Pushes `[value, true]` when the finally must await `value` before
+    /// stepping again, or `[false]` once the scope is disposed and closed.
+    DisposeAsyncStep,
+    /// Pops the error an awaited async dispose rejected with and chains it
+    /// into the enclosing finalizer's completion like a sync dispose failure.
+    DisposeAsyncRejected,
     /// Names an anonymous object-literal function/accessor from its computed
     /// key. Stack (unchanged): `[..., key, function]`. A symbol key yields
     /// `[description]`; accessors are prefixed with `get `/`set `.
@@ -404,29 +408,32 @@ pub(super) enum Op {
     JumpIfFalse(usize),
     JumpIfTrue(usize),
     JumpIfNotNullish(usize),
-    /// A break/continue that must route through a finally block before
-    /// reaching its target. The VM pops the try frame, sets a pending jump
-    /// target, and transfers control to the finally block. EndFinally then
-    /// resumes the jump.
+    /// A break/continue that leaves at least one protected region (every
+    /// other one becomes a plain `Jump` when the code is finalized). It
+    /// carries no value and is emitted at statement level, so the operand
+    /// stack is at each exited region's entry depth. The VM pops the exited
+    /// regions up to the first with a finally block, stages the jump for it,
+    /// and `EndFinally` resumes the jump.
     AbruptJump(usize),
     /// Creates fresh upvalue cells for per-iteration bindings in
     /// `for (let/const ...)` loops. Closures created after this point capture
     /// independent copies of the listed slots, so each iteration has its own
     /// binding.
     FreshIterationScope(Vec<usize>),
-    /// Starts a try frame after loop setup.
+    /// Starts a protected region at the operand-stack depth it records.
+    /// `end` is exclusive and includes its catch body; abrupt jumps retaining
+    /// this region must not pop its handler. Regions nest properly.
     EnterTry {
         catch: Option<usize>,
         finally: Option<usize>,
+        end: usize,
         catch_scope: Option<CatchScope>,
         cleanup_slots: Vec<usize>,
     },
     ExitTry,
+    /// Opens a finalizer with its own pending completion, retained on suspension.
+    BeginFinally(usize),
     EndFinally,
-    /// Clears any pending throw or return when an abrupt completion (break,
-    /// continue, or return) exits a finally block. Without this the stale
-    /// pending state would be picked up by the next `EndFinally`.
-    DiscardPendingAbrupt,
     Return,
     Throw,
     /// Throws a `ReferenceError` with the given message at runtime, without
@@ -655,35 +662,6 @@ impl Local {
     pub(super) fn is_received_upvalue(&self) -> bool {
         self.from_env && !self.parameter && !self.hoisted
     }
-
-    /// Whether this compiler temporary only ever accumulates a statement
-    /// completion value (a block, loop, switch, or label result slot). The
-    /// compiler names each temporary after its purpose, so the name is the
-    /// classification.
-    pub(super) fn is_completion_temporary(&self) -> bool {
-        const COMPLETION_TEMPORARIES: [&str; 8] = [
-            "block_result",
-            "loop_result",
-            "switch_result",
-            "label_result",
-            "for_in_result",
-            "for_of_result",
-            "for_await_result",
-            "try_result",
-        ];
-        if !self.compiler_temporary {
-            return false;
-        }
-        let Some(name) = self.name.strip_prefix("\0\0") else {
-            return false;
-        };
-        COMPLETION_TEMPORARIES.iter().any(|prefix| {
-            name.strip_prefix(prefix).is_some_and(|rest| {
-                rest.strip_prefix('_')
-                    .is_some_and(|n| n.bytes().all(|b| b.is_ascii_digit()))
-            })
-        })
-    }
 }
 
 /// Compiled bytecode for a script.
@@ -700,8 +678,9 @@ pub struct Bytecode {
     /// directly: such a body has no observable effect besides its result.
     constant_return: Option<Value>,
     /// Compiled local slot for each positional parameter. Function bytecode
-    /// preserves duplicate parameter positions so direct-call seeding can use
-    /// this vector without repeating name-table lookups.
+    /// routes shadowed duplicate positions to hidden compiler temporaries;
+    /// only the last occurrence seeds the visible binding. Every executor uses
+    /// these positional routes without repeating name-table lookups.
     parameter_slots: Vec<usize>,
     /// Entry-only vectors stay out of the bytecode's hot payload. This one
     /// allocation belongs to the body, not to any of its activations.
@@ -733,13 +712,6 @@ pub struct Bytecode {
     /// `this` resolves to the realm global; function bodies resolve `this`
     /// from their own frame.
     pub(super) global_scope: bool,
-    /// Compiler temporaries that only ever hold a statement completion value
-    /// in a function body, where no completion value is observable. They are
-    /// dead stores: the typed loop reads one as `undefined` and discards a
-    /// store into one, and the string append fast path may drop a value they
-    /// hold so the appended string stays uniquely owned. Empty for script and
-    /// eval code.
-    pub(super) dead_completion_slots: Vec<usize>,
     /// Whether this bytecode was compiled in strict mode after applying any
     /// source prologue. Direct eval needs this to choose the correct
     /// declaration instantiation environment.
@@ -816,18 +788,6 @@ impl Bytecode {
         parameter_slots: Option<Vec<usize>>,
         scope_plan: Option<(crate::binding::ScopePlanBuilder, bool)>,
     ) -> Self {
-        // Only a function body arrives with explicit parameter slots; script
-        // and eval bodies derive them, and their completion values are
-        // observable.
-        let dead_completion_slots = if parameter_slots.is_some() {
-            locals
-                .iter()
-                .enumerate()
-                .filter_map(|(slot, local)| local.is_completion_temporary().then_some(slot))
-                .collect()
-        } else {
-            Vec::new()
-        };
         let parameter_slots = parameter_slots.unwrap_or_else(|| {
             locals
                 .iter()
@@ -875,7 +835,6 @@ impl Bytecode {
             global_lexical_names,
             sloppy_global_assignment_names: collect_sloppy_global_assignment_names(&code),
             global_scope,
-            dead_completion_slots,
             strict,
             code,
             property_names,

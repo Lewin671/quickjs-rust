@@ -18,6 +18,13 @@ pub(in crate::bytecode) trait LoopFrame {
     /// Whether the frame evaluates direct eval code with a live operand
     /// stack, which no program may enter.
     fn direct_eval_with_stack(&self) -> bool;
+    /// Whether this frame also runs the numeric mutation plans, so a plan
+    /// enclosing a loop may be part-way through replaying it. The wide
+    /// compact tier never runs them: a region it reaches is its own.
+    #[inline]
+    fn runs_numeric_mutation_plans(&self) -> bool {
+        true
+    }
     /// The programs this frame has stopped entering, one bit per program.
     fn declined_typed_loop_programs(&self) -> u128;
     fn decline_typed_loop_program(&mut self, bit: u128);
