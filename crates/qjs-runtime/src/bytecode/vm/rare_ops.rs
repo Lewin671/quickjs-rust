@@ -109,7 +109,9 @@ impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
             op @ (Op::EnterDisposableScope
             | Op::RegisterDisposable
             | Op::RegisterAsyncDisposable
-            | Op::DisposeScope { .. }) => {
+            | Op::DisposeScope
+            | Op::DisposeAsyncStep
+            | Op::DisposeAsyncRejected) => {
                 self.run_disposal_op(op)?;
             }
             Op::SetComputedFunctionName(kind) => self.set_computed_function_name(*kind)?,

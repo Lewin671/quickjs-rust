@@ -424,6 +424,56 @@ fn await_using_block_registers_async_disposables() {
 }
 
 #[test]
+fn await_using_awaits_each_dispose_before_the_next_and_chains_errors() {
+    let prelude = "let log = []; \
+         function fmt(e) { return e && e.constructor === SuppressedError \
+           ? 'S(' + fmt(e.error) + ',' + fmt(e.suppressed) + ')' : String(e); } \
+         function A(n, t) { return { async [Symbol.asyncDispose]() { \
+           log.push(n + '1'); await null; log.push(n + '2'); if (t) throw 'E' + n; } }; } \
+         function run(f) { f().then(v => log.push('ok:' + v), e => log.push('err:' + fmt(e))); } ";
+    // Each async dispose finishes before the next starts; every rejection
+    // is kept, the later one suppressing the earlier.
+    assert_eq!(
+        eval_log(&format!(
+            "{prelude} run(async function () {{ await using a = A('a', 1), b = A('b', 1); }}); log;"
+        )),
+        "b1,b2,a1,a2,err:S(Ea,Eb)"
+    );
+    // A rejection overrides a pending return and suppresses a body throw.
+    assert_eq!(
+        eval_log(&format!(
+            "{prelude} run(async function () {{ await using a = A('a', 1), b = A('b'); return 1; }}); \
+             run(async function () {{ await using a = A('c', 1); throw 'body'; }}); log;"
+        )),
+        "b1,c1,b2,c2,a1,a2,err:S(Ec,body),err:Ea"
+    );
+    // A skipped `await using null` awaits before a later sync dispose runs,
+    // and a `Symbol.dispose` fallback throw surfaces after its await.
+    assert_eq!(
+        eval_log(&format!(
+            "{prelude} run(async function () {{ \
+               {{ using s = {{ [Symbol.dispose]() {{ log.push('s'); }} }}; await using n = null; }} \
+               await using f = {{ [Symbol.dispose]() {{ log.push('f'); throw 'Ef'; }} }}, a = A('a', 1); \
+             }}); \
+             Promise.resolve().then(() => log.push('t0')).then(() => log.push('t1')); log;"
+        )),
+        "s,a1,t0,a2,t1,f,err:S(Ef,Ea)"
+    );
+    // With nothing skipped, a sync dispose owes no await, so the following
+    // async dispose starts in the same job: DisposeResources awaits before a
+    // sync-dispose resource only when needsAwait is set. Node agrees; NG
+    // defers `a1`.
+    assert_eq!(
+        eval_log(&format!(
+            "{prelude} (async function () {{ await using a = A('a'); \
+               using s = {{ [Symbol.dispose]() {{ log.push('s'); }} }}; }})(); \
+             log.push('sync'); log;"
+        )),
+        "s,a1,sync,a2"
+    );
+}
+
+#[test]
 fn await_using_null_disposal_suspends_async_function() {
     assert_eq!(
         eval_log(

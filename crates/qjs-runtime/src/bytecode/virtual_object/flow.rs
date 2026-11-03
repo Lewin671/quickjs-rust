@@ -688,7 +688,9 @@ impl<'a> Analyzer<'a> {
             | Op::EnterDisposableScope
             | Op::RegisterDisposable
             | Op::RegisterAsyncDisposable
-            | Op::DisposeScope { .. }
+            | Op::DisposeScope
+            | Op::DisposeAsyncStep
+            | Op::DisposeAsyncRejected
             | Op::SetComputedFunctionName(_)
             | Op::DefineObjectProperty(_)
             | Op::CopyObjectSpread

@@ -276,7 +276,7 @@ pub(super) struct ColdFrame {
     pub(super) with_stack: Vec<Value>,
     /// Active `using` disposal scopes (innermost last); each block's resources,
     /// disposed LIFO when the scope exits via the block's implicit finally.
-    pub(super) disposable_scopes: Vec<Vec<super::vm_dispose::DisposeResource>>,
+    pub(super) disposable_scopes: Vec<super::vm_dispose::DisposableScope>,
     /// Set for a frame continuing a wide activation from a probed backedge:
     /// `Some(None)` while it may hand a loop back to the tier, and
     /// `Some(Some(backedge))` once it has (`vm/wide_resume.rs`).
@@ -302,8 +302,7 @@ impl ColdFrame {
             )
             .saturating_add(self.with_stack.capacity() * size_of::<Value>())
             .saturating_add(
-                self.disposable_scopes.capacity()
-                    * size_of::<Vec<super::vm_dispose::DisposeResource>>(),
+                self.disposable_scopes.capacity() * size_of::<super::vm_dispose::DisposableScope>(),
             )
     }
 

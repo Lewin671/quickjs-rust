@@ -178,13 +178,17 @@ pub(super) enum Op {
     /// Registers an `await using` initializer result in the current scope:
     /// resolves `Symbol.asyncDispose` first, falling back to `Symbol.dispose`.
     RegisterAsyncDisposable,
-    /// Closes the current disposal scope, disposing its resources LIFO. A
-    /// dispose failure while a throw is already propagating is wrapped in a
-    /// `SuppressedError`. Async scopes leave the final awaited value on the
-    /// stack so the finally body can suspend before completing.
-    DisposeScope {
-        await_async: bool,
-    },
+    /// Closes the current (sync) disposal scope, disposing its resources
+    /// LIFO. A dispose failure while a throw is already propagating is
+    /// wrapped in a `SuppressedError`.
+    DisposeScope,
+    /// Advances the current `await using` scope's disposal to its next await.
+    /// Pushes `[value, true]` when the finally must await `value` before
+    /// stepping again, or `[false]` once the scope is disposed and closed.
+    DisposeAsyncStep,
+    /// Pops the error an awaited async dispose rejected with and chains it
+    /// into the enclosing finalizer's completion like a sync dispose failure.
+    DisposeAsyncRejected,
     /// Names an anonymous object-literal function/accessor from its computed
     /// key. Stack (unchanged): `[..., key, function]`. A symbol key yields
     /// `[description]`; accessors are prefixed with `get `/`set `.

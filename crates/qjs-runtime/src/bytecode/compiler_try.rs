@@ -135,24 +135,50 @@ impl Compiler {
     pub(super) fn compile_dispose_finally(&mut self, await_async: bool) -> usize {
         let target = self.code.len();
         let begin = self.emit(Op::BeginFinally(usize::MAX));
-        self.emit(Op::DisposeScope { await_async });
         if await_async {
-            let skip_await = self.emit(Op::JumpIfFalse(usize::MAX));
-            self.emit(Op::Pop);
-            self.emit(Op::Await);
-            self.emit(Op::Pop);
-            let done = self.emit(Op::Jump(usize::MAX));
-            let skip_target = self.code.len();
-            self.emit(Op::Pop);
-            self.emit(Op::Pop);
-            let done_target = self.code.len();
-            self.patch_jump(skip_await, skip_target);
-            self.patch_jump(done, done_target);
+            self.compile_async_disposal_loop();
+        } else {
+            self.emit(Op::DisposeScope);
         }
         self.emit(Op::EndFinally);
         let end = self.code.len();
         self.patch_finally_end(begin, end);
         target
+    }
+
+    /// Disposes an `await using` scope one await at a time: each async
+    /// dispose result is awaited before the next resource is disposed, and
+    /// the await sits in its own catch region so a rejection is chained into
+    /// the finalizer's completion while disposal carries on.
+    fn compile_async_disposal_loop(&mut self) {
+        let awaited = self.temp_local("dispose_awaited");
+        let step = self.emit(Op::DisposeAsyncStep);
+        let done = self.emit(Op::JumpIfFalse(usize::MAX));
+        self.emit(Op::Pop);
+        self.emit(Op::StoreLocal(awaited));
+        let enter = self.emit(Op::EnterTry {
+            catch: None,
+            finally: None,
+            end: usize::MAX,
+            catch_scope: None,
+            cleanup_slots: Vec::new(),
+        });
+        self.emit(Op::LoadLocal(awaited));
+        self.emit(Op::Await);
+        self.emit(Op::Pop);
+        self.emit(Op::ExitTry);
+        self.emit(Op::Jump(step));
+        let catch_target = self.code.len();
+        self.emit(Op::DisposeAsyncRejected);
+        self.emit(Op::ExitTry);
+        self.emit(Op::Jump(step));
+        let done_target = self.code.len();
+        self.emit(Op::Pop);
+        if let Op::EnterTry { catch, .. } = &mut self.code[enter] {
+            *catch = Some(catch_target);
+        }
+        self.finish_try(enter, done_target);
+        self.patch_jump(done, done_target);
     }
 
     pub(super) fn compile_try(

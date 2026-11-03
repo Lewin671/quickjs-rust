@@ -177,7 +177,9 @@ impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
             | Op::EnterDisposableScope
             | Op::RegisterDisposable
             | Op::RegisterAsyncDisposable
-            | Op::DisposeScope { .. }
+            | Op::DisposeScope
+            | Op::DisposeAsyncStep
+            | Op::DisposeAsyncRejected
             | Op::SetComputedFunctionName(_)
             | Op::CopyObjectSpread
             | Op::GetIterator
