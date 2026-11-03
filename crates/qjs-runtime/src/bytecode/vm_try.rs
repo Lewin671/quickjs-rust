@@ -75,6 +75,17 @@ impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
 
     pub(super) fn exit_try(&mut self) -> Result<(), RuntimeError> {
         if let Some(frame) = self.cold_mut().try_stack.pop() {
+            // Statements leave nothing on the operand stack, so a region
+            // exits at the depth it was entered with. The one exception is a
+            // handler that leaves its region to rethrow: for-of's iterator
+            // close keeps the caught value to throw after `ExitTry`.
+            debug_assert!(
+                self.stack.len() == frame.stack_depth
+                    || (frame.catch_scope_active && self.stack.len() == frame.stack_depth + 1),
+                "protected region exits at operand-stack depth {} (entered at {})",
+                self.stack.len(),
+                frame.stack_depth
+            );
             self.cleanup_catch_scope(frame.catch_scope_active, frame.catch_scope)?;
         }
         Ok(())
@@ -176,6 +187,14 @@ impl<'a, F: crate::bytecode::vm::VmFrame<'a>> Vm<'a, '_, F> {
                 break;
             }
             let frame = self.cold_mut().try_stack.pop().expect("exited region");
+            // A jump (break/continue) leaves from statement level, where the
+            // operand stack is back at each enclosing region's entry depth;
+            // unlike a throw or return it has no stack to truncate.
+            debug_assert_eq!(
+                self.stack.len(),
+                frame.stack_depth,
+                "abrupt jump leaves a protected region at a different operand-stack depth"
+            );
             self.cold_mut().with_stack.truncate(frame.with_depth);
             self.restore_class_depth(frame.class_depth);
             self.cleanup_slots(&frame.cleanup_slots)?;

@@ -34,6 +34,20 @@ fn repeated_using_loop_exits_leave_no_deferred_resources() {
     );
 }
 
+/// Statements leave nothing on the operand stack, so every region exit --
+/// normal, break, a finally's break overriding another, `with` and `using`
+/// scopes -- leaves at the depth it entered with. Debug builds assert that
+/// depth at each `ExitTry` and at each region an abrupt jump leaves.
+#[test]
+fn region_exits_leave_the_operand_stack_at_its_entry_depth() {
+    assert_eq!(
+        eval(include_str!(
+            "../../../../tests/fixtures/compare-qjs/for-using-exit-stack-balance.js"
+        )),
+        Ok(text("1000,2000,4000,1001,6000"))
+    );
+}
+
 #[test]
 fn suspended_with_finalizers_keep_their_object_until_completion() {
     assert_eq!(

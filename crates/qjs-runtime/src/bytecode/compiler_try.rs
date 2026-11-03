@@ -140,6 +140,7 @@ impl Compiler {
             let skip_await = self.emit(Op::JumpIfFalse(usize::MAX));
             self.emit(Op::Pop);
             self.emit(Op::Await);
+            self.emit(Op::Pop);
             let done = self.emit(Op::Jump(usize::MAX));
             let skip_target = self.code.len();
             self.emit(Op::Pop);

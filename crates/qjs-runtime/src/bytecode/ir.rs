@@ -404,18 +404,21 @@ pub(super) enum Op {
     JumpIfFalse(usize),
     JumpIfTrue(usize),
     JumpIfNotNullish(usize),
-    /// A break/continue that must route through a finally block before
-    /// reaching its target. The VM pops the try frame, sets a pending jump
-    /// target, and transfers control to the finally block. EndFinally then
-    /// resumes the jump.
+    /// A break/continue that leaves at least one protected region (every
+    /// other one becomes a plain `Jump` when the code is finalized). It
+    /// carries no value and is emitted at statement level, so the operand
+    /// stack is at each exited region's entry depth. The VM pops the exited
+    /// regions up to the first with a finally block, stages the jump for it,
+    /// and `EndFinally` resumes the jump.
     AbruptJump(usize),
     /// Creates fresh upvalue cells for per-iteration bindings in
     /// `for (let/const ...)` loops. Closures created after this point capture
     /// independent copies of the listed slots, so each iteration has its own
     /// binding.
     FreshIterationScope(Vec<usize>),
-    /// Starts a protected region. `end` is exclusive and includes its catch
-    /// body; abrupt jumps retaining this region must not pop its handler.
+    /// Starts a protected region at the operand-stack depth it records.
+    /// `end` is exclusive and includes its catch body; abrupt jumps retaining
+    /// this region must not pop its handler.
     EnterTry {
         catch: Option<usize>,
         finally: Option<usize>,

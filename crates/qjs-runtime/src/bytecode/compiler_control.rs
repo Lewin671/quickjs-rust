@@ -616,7 +616,10 @@ impl Compiler {
     }
 
     pub(super) fn compile_with(&mut self, object: &Expr, body: &Stmt) -> Result<(), RuntimeError> {
-        self.compile_expr(object)?;
+        // The region opens before the object is evaluated so its recorded
+        // operand-stack depth is the statement's own; EnterWith consumes the
+        // object, and an abrupt exit truncates the with stack to the depth
+        // recorded here.
         let enter = self.emit(Op::EnterTry {
             catch: None,
             finally: None,
@@ -624,6 +627,7 @@ impl Compiler {
             catch_scope: None,
             cleanup_slots: Vec::new(),
         });
+        self.compile_expr(object)?;
         self.emit(Op::EnterWith);
         // The completion is UpdateEmpty(C, undefined) (ES2025 14.11.2).
         if !stmt_writes_completion_first(body) {
